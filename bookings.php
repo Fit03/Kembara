@@ -322,7 +322,7 @@ $tabs = ['All' => 'Semua', 'Pending' => 'Menunggu', 'Approved' => 'Diluluskan', 
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, shrink-to-fit=no" />
-    <title>e-Kenderaan - Tempahan</title>
+    <title>Kembara - Tempahan</title>
 
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700&display=swap" rel="stylesheet" />
@@ -490,8 +490,8 @@ $tabs = ['All' => 'Semua', 'Pending' => 'Menunggu', 'Approved' => 'Diluluskan', 
     <aside id="sidenav-main" class="fixed inset-y-0 left-0 z-[70] w-64 hidden xl:flex xl:flex-col overflow-y-auto ta-sidebar">
         <div class="h-16 flex items-center px-6 border-b" style="border-color:var(--ta-border)">
             <a class="flex items-center gap-2.5" href="dashboard.php">
-            <img src="assets/img/logo.png" alt="Logo e-Kenderaan" class="h-8 w-auto object-contain shrink-0" />
-            <span class="font-bold tracking-tight text-[1.05rem]">e-Kenderaan</span>
+            <img src="assets/img/logo.png" alt="Logo Kembara" class="h-8 w-auto object-contain shrink-0" />
+            <span class="font-bold tracking-tight text-[1.05rem]">Kembara</span>
             </a>
         </div>
 
@@ -848,7 +848,7 @@ $tabs = ['All' => 'Semua', 'Pending' => 'Menunggu', 'Approved' => 'Diluluskan', 
 
         <footer class="pt-6 pb-2">
           <div class="text-sm leading-normal text-center text-slate-400">
-            © <?= date('Y') ?> e-Kenderaan &middot; Perbendaharaan Negeri Selangor
+            © <?= date('Y') ?> Kembara &middot; Perbendaharaan Negeri Selangor
           </div>
         </footer>
       </div>
