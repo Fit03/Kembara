@@ -117,6 +117,61 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $stmt = $pdo->prepare("SELECT fullname FROM users WHERE user_id = ?");
             $stmt->execute([$uid]);
             $victimName = $stmt->fetchColumn();
+            if (!$victimName) {
+                throw new RuntimeException('Pengguna tidak ditemui.');
+            }
+
+            $related = [];
+
+            $checkStmt = $pdo->prepare("SELECT COUNT(*) FROM vehicle_bookings WHERE user_id = ?");
+            $checkStmt->execute([$uid]);
+            if ((int)$checkStmt->fetchColumn() > 0) {
+                $related[] = 'tempahan';
+            }
+
+            $checkStmt = $pdo->prepare("SELECT COUNT(*) FROM vehicle_bookings WHERE approved_by = ?");
+            $checkStmt->execute([$uid]);
+            if ((int)$checkStmt->fetchColumn() > 0) {
+                $related[] = 'pengesahan tempahan';
+            }
+
+            $checkStmt = $pdo->prepare("SELECT COUNT(*) FROM booking_history WHERE action_by = ?");
+            $checkStmt->execute([$uid]);
+            if ((int)$checkStmt->fetchColumn() > 0) {
+                $related[] = 'sejarah tempahan';
+            }
+
+            $checkStmt = $pdo->prepare("SELECT COUNT(*) FROM notifications WHERE user_id = ?");
+            $checkStmt->execute([$uid]);
+            if ((int)$checkStmt->fetchColumn() > 0) {
+                $related[] = 'notifikasi';
+            }
+
+            $driverId = null;
+            $checkStmt = $pdo->prepare("SELECT driver_id FROM drivers WHERE user_id = ?");
+            $checkStmt->execute([$uid]);
+            $driverId = $checkStmt->fetchColumn();
+            if ($driverId !== false && $driverId !== null) {
+                $checkStmt = $pdo->prepare("SELECT COUNT(*) FROM vehicles WHERE driver_id = ?");
+                $checkStmt->execute([$driverId]);
+                if ((int)$checkStmt->fetchColumn() > 0) {
+                    $related[] = 'kenderaan ditugaskan kepada pemandu ini';
+                }
+
+                $checkStmt = $pdo->prepare("SELECT COUNT(*) FROM vehicle_bookings WHERE driver_id = ?");
+                $checkStmt->execute([$driverId]);
+                if ((int)$checkStmt->fetchColumn() > 0) {
+                    $related[] = 'tempahan ditugaskan kepada pemandu ini';
+                }
+            }
+
+            if (!empty($related)) {
+                throw new RuntimeException('Pengguna ini tidak boleh dipadam kerana mempunyai rekod berkaitan: ' . implode(', ', $related) . '. Sila semak dan kemas kini rekod tersebut terlebih dahulu.');
+            }
+
+            if ($driverId !== false && $driverId !== null) {
+                $pdo->prepare("DELETE FROM drivers WHERE driver_id = ?")->execute([$driverId]);
+            }
 
             $del = $pdo->prepare("DELETE FROM users WHERE user_id = ?");
             $del->execute([$uid]);
