@@ -355,8 +355,7 @@ $pendingApprovals = $pdo->query("SELECT COUNT(*) FROM vehicle_bookings WHERE sta
                 <label class="text-xs font-medium block mb-1">Jenis Perjalanan</label>
                 <select name="trip_type" id="trip-type" class="select select-bordered w-full" onchange="toggleReturnField()">
                   <option value="One Way">Sehala</option>
-                  <option value="Return">Pergi Balik</option>
-                  <option value="Both">Kedua-dua</option>
+                  <option value="Return">Pergi & Balik</option>
                 </select>
               </div>
             </div>
