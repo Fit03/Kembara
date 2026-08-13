@@ -781,6 +781,13 @@ $tabs = ['All' => 'Semua', 'Pending' => 'Menunggu', 'Approved' => 'Diluluskan', 
                       <span class="ta-badge <?= $statusBadge($b['status']) ?>"><?= htmlspecialchars($statusLabel($b['status'])) ?></span>
                     </td>
                     <td class="px-3 py-3 text-sm border-b text-center whitespace-nowrap" style="border-color:var(--ta-border)">
+                      <?php
+                        $lastActionStmt = $pdo->prepare(
+                          "SELECT bh.action, u.fullname FROM booking_history bh JOIN users u ON u.user_id = bh.action_by WHERE bh.booking_id = ? ORDER BY bh.action_datetime DESC LIMIT 1"
+                        );
+                        $lastActionStmt->execute([(int)$b['booking_id']]);
+                        $lastAct = $lastActionStmt->fetch(PDO::FETCH_ASSOC) ?: [];
+                      ?>
                       <button type="button" class="btn btn-ghost btn-xs" title="Lihat Butiran"
                         onclick='openViewModal(<?= json_encode([
                             "booking_no"       => $b["booking_no"],
@@ -795,7 +802,10 @@ $tabs = ['All' => 'Semua', 'Pending' => 'Menunggu', 'Approved' => 'Diluluskan', 
                             "vehicle"          => $b["plate_no"] ? trim(($b["vehicle_name"] ?: '') . ' (' . $b["plate_no"] . ')') : 'Belum ditugaskan',
                             "driver"           => $b["driver_name"] ?: 'Tiada',
                             "status"           => $statusLabel($b["status"]),
+                            "status_raw"       => $b["status"],
                             "approved_by"      => $b["approved_by_name"] ?: '—',
+                            "last_action"      => $lastAct['action'] ?? null,
+                            "last_action_by"   => $lastAct['fullname'] ?? null,
                         ], JSON_UNESCAPED_UNICODE | JSON_HEX_APOS | JSON_HEX_QUOT) ?>)'>
                         <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178z" /><path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
                       </button>
@@ -924,7 +934,7 @@ $tabs = ['All' => 'Semua', 'Pending' => 'Menunggu', 'Approved' => 'Diluluskan', 
           <div><p class="text-xs text-slate-400 mb-0.5">Kenderaan</p><p class="font-medium" id="view-vehicle"></p></div>
           <div><p class="text-xs text-slate-400 mb-0.5">Pemandu</p><p class="font-medium" id="view-driver"></p></div>
           <div class="col-span-2"><p class="text-xs text-slate-400 mb-0.5">Tujuan</p><p class="font-medium" id="view-purpose"></p></div>
-          <div class="col-span-2"><p class="text-xs text-slate-400 mb-0.5">Diluluskan Oleh</p><p class="font-medium" id="view-approved-by"></p></div>
+          <div class="col-span-2"><p id="view-action-label" class="text-xs text-slate-400 mb-0.5">Tindakan Oleh</p><p class="font-medium" id="view-approved-by"></p></div>
         </div>
         <div class="modal-action mt-4">
           <button type="button" class="btn btn-ghost" onclick="document.getElementById('modal-view').close()">Tutup</button>
@@ -978,7 +988,18 @@ $tabs = ['All' => 'Semua', 'Pending' => 'Menunggu', 'Approved' => 'Diluluskan', 
             document.getElementById('view-vehicle').textContent      = b.vehicle;
             document.getElementById('view-driver').textContent       = b.driver;
             document.getElementById('view-purpose').textContent      = b.purpose;
-            document.getElementById('view-approved-by').textContent  = b.approved_by;
+            // Determine label and actor depending on raw status or last action
+            const statusRaw = b.status_raw || '';
+            let actionLabel = 'Tindakan Oleh';
+            if (statusRaw === 'Approved') actionLabel = 'Diluluskan Oleh';
+            else if (statusRaw === 'Rejected') actionLabel = 'Ditolak Oleh';
+            else if (statusRaw === 'Cancelled') actionLabel = 'Dibatalkan Oleh';
+            else if (statusRaw === 'Completed') actionLabel = 'Ditamatkan Oleh';
+
+            document.getElementById('view-action-label').textContent = actionLabel;
+
+            const actor = b.last_action_by || b.approved_by || '—';
+            document.getElementById('view-approved-by').textContent  = actor;
             document.getElementById('modal-view').showModal();
         }
 
