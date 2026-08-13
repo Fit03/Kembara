@@ -154,7 +154,7 @@ if ($search !== '') {
     $totalRows = (int)$countStmt->fetchColumn();
 
     $stmt = $pdo->prepare(
-        "SELECT dr.driver_id, dr.license, dr.status, u.user_id, u.fullname, u.email, u.phone_no,
+        "SELECT dr.driver_id, dr.license, dr.status, u.user_id, u.fullname, u.email, u.phone_no, u.profile_picture,
                 GROUP_CONCAT(DISTINCT v.plate_no SEPARATOR ', ') AS assigned_vehicles
          $baseFrom
          WHERE u.fullname LIKE :like1 OR dr.license LIKE :like2
@@ -171,7 +171,7 @@ if ($search !== '') {
     $totalRows = (int)$pdo->query("SELECT COUNT(*) FROM drivers")->fetchColumn();
 
     $stmt = $pdo->prepare(
-        "SELECT dr.driver_id, dr.license, dr.status, u.user_id, u.fullname, u.email, u.phone_no,
+        "SELECT dr.driver_id, dr.license, dr.status, u.user_id, u.fullname, u.email, u.phone_no, u.profile_picture,
                 GROUP_CONCAT(DISTINCT v.plate_no SEPARATOR ', ') AS assigned_vehicles
          $baseFrom
          GROUP BY dr.driver_id
@@ -635,9 +635,19 @@ $pendingApprovals = $pdo->query(
                   <tr class="hover:bg-slate-50/70 transition-colors">
                     <td class="px-3 py-3 text-sm border-b whitespace-nowrap" style="border-color:var(--ta-border)">
                       <div class="flex items-center gap-2.5">
-                        <div class="rounded-full w-8 h-8 flex items-center justify-center font-bold text-xs uppercase text-white shrink-0" style="background:var(--ta-brand)">
-                          <?= htmlspecialchars(substr($d['fullname'], 0, 1)) ?>
-                        </div>
+                        <?php
+                          $avatarPath = $d['profile_picture'] ?? null;
+                          $avatarExists = $avatarPath && is_file(__DIR__ . '/' . $avatarPath);
+                        ?>
+                        <?php if ($avatarExists): ?>
+                          <div class="rounded-full w-8 h-8 overflow-hidden shrink-0">
+                            <img src="<?= htmlspecialchars($avatarPath) ?>?v=<?= time() ?>" alt="Avatar" class="w-full h-full object-cover" />
+                          </div>
+                        <?php else: ?>
+                          <div class="rounded-full w-8 h-8 flex items-center justify-center font-bold text-xs uppercase text-white shrink-0" style="background:var(--ta-brand)">
+                            <?= htmlspecialchars(substr($d['fullname'], 0, 1)) ?>
+                          </div>
+                        <?php endif; ?>
                         <div class="min-w-0">
                           <p class="mb-0 font-medium truncate"><?= htmlspecialchars($d['fullname']) ?></p>
                           <p class="mb-0 text-xs text-slate-400 truncate"><?= htmlspecialchars($d['email']) ?></p>
@@ -681,14 +691,12 @@ $pendingApprovals = $pdo->query(
               <a href="<?= $page > 1 ? htmlspecialchars(buildDriversPageUrl($page - 1, $search)) : '#' ?>"
                  class="join-item btn btn-sm <?= $page <= 1 ? 'btn-disabled opacity-40' : '' ?>">
                 <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.2"><path stroke-linecap="round" stroke-linejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" /></svg>
-                Sebelum
               </a>
               <span class="join-item btn btn-sm btn-disabled !bg-transparent !border-none font-semibold" style="color:var(--ta-ink)">
                 <?= $page ?> / <?= $totalPages ?>
               </span>
               <a href="<?= $page < $totalPages ? htmlspecialchars(buildDriversPageUrl($page + 1, $search)) : '#' ?>"
                  class="join-item btn btn-sm <?= $page >= $totalPages ? 'btn-disabled opacity-40' : '' ?>">
-                Seterus
                 <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.2"><path stroke-linecap="round" stroke-linejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" /></svg>
               </a>
             </div>
