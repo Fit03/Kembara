@@ -49,18 +49,34 @@ $pendingApprovals = $pdo->query(
     "SELECT COUNT(*) FROM vehicle_bookings WHERE status = 'Pending'"
 )->fetchColumn();
 
-$vehicleCounts = $pdo->query(
-    "SELECT status, COUNT(*) AS total FROM vehicles GROUP BY status"
+$rawVehicleCounts = $pdo->query(
+  "SELECT status, COUNT(*) AS total FROM vehicles GROUP BY status"
 )->fetchAll(PDO::FETCH_KEY_PAIR);
+
+// Normalize vehicle status keys coming from DB (trim + ucfirst of lowercase)
+$vehicleCounts = [];
+foreach ($rawVehicleCounts as $k => $v) {
+  $normalized = ucfirst(strtolower(trim((string)$k)));
+  $vehicleCounts[$normalized] = (int)$v;
+}
+
 $totalVehicles     = array_sum($vehicleCounts);
 $availableVehicles = $vehicleCounts['Available'] ?? 0;
 
 $totalUsers = $pdo->query("SELECT COUNT(*) FROM users")->fetchColumn();
 
 // -- Pecahan status tempahan (untuk carta donat) ------------------
-$bookingStatusRows = $pdo->query(
-    "SELECT status, COUNT(*) AS total FROM vehicle_bookings GROUP BY status"
+$rawBookingStatusRows = $pdo->query(
+  "SELECT status, COUNT(*) AS total FROM vehicle_bookings GROUP BY status"
 )->fetchAll(PDO::FETCH_KEY_PAIR);
+
+// Normalize booking status keys (handle different casing/whitespace from DB)
+$bookingStatusRows = [];
+foreach ($rawBookingStatusRows as $k => $v) {
+  $normalized = ucfirst(strtolower(trim((string)$k)));
+  $bookingStatusRows[$normalized] = (int)$v;
+}
+
 $bookingStatusLabels = ['Pending', 'Approved', 'Rejected', 'Cancelled', 'Completed'];
 $bookingStatusData   = array_map(fn($s) => (int)($bookingStatusRows[$s] ?? 0), $bookingStatusLabels);
 
@@ -188,10 +204,10 @@ $statusBadge = fn(string $status) => match ($status) {
 
         * { font-family: 'Outfit', ui-sans-serif, system-ui, sans-serif; }
 
-        body { 
-            background: var(--ta-canvas); 
-            color: var(--ta-ink); 
-            zoom: 110%; /* Global zoom adjustment */
+        body {
+            background: var(--ta-canvas);
+            color: var(--ta-ink);
+            zoom: 110%;
             transition: background-color 0.2s ease, color 0.2s ease;
         }
 
@@ -710,7 +726,7 @@ $statusBadge = fn(string $status) => match ($status) {
         const bookingStatusLabels = rawBookingLabels.map(label => bookingTranslationMap[label] || label);
         const vehicleStatusLabels = rawVehicleLabels.map(label => vehicleTranslationMap[label] || label);
 
-        // Carta Status Tempahan
+        // Skrip Penyediaan Carta ApexCharts Bahasa Melayu
         var bookingOptions = {
           series: bookingStatusData,
           chart: {
@@ -756,7 +772,6 @@ $statusBadge = fn(string $status) => match ($status) {
         var bookingChart = new ApexCharts(document.querySelector("#chart-booking-status"), bookingOptions);
         bookingChart.render();
 
-        // Carta Status Kenderaan
         var vehicleOptions = {
           series: vehicleStatusData,
           chart: {
@@ -827,14 +842,38 @@ $statusBadge = fn(string $status) => match ($status) {
                 .getPropertyValue('--color-base-content').trim();
 
             if (typeof bookingChart !== 'undefined' && typeof vehicleChart !== 'undefined') {
-                bookingChart.updateOptions({
-                    title: { style: { color: textColor } },
-                    legend: { labels: { colors: textColor } }
-                });
-                vehicleChart.updateOptions({
-                    title: { style: { color: textColor } },
-                    legend: { labels: { colors: textColor } }
-                });
+              const bg = getComputedStyle(document.documentElement).getPropertyValue('--color-base-100').trim();
+              // Update ApexCharts title and legend colors to match theme
+              bookingChart.updateOptions({
+                title: { style: { color: textColor } },
+                legend: { labels: { colors: textColor } },
+                plotOptions: {
+                  pie: {
+                    donut: {
+                      labels: {
+                        name: { color: textColor },
+                        value: { color: textColor },
+                        total: { color: textColor }
+                      }
+                    }
+                  }
+                }
+              });
+              vehicleChart.updateOptions({
+                title: { style: { color: textColor } },
+                legend: { labels: { colors: textColor } },
+                plotOptions: {
+                  pie: {
+                    donut: {
+                      labels: {
+                        name: { color: textColor },
+                        value: { color: textColor },
+                        total: { color: textColor }
+                      }
+                    }
+                  }
+                }
+              });
             }
         }
 
