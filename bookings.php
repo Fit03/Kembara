@@ -432,6 +432,11 @@ $tabs = ['All' => 'Semua', 'Pending' => 'Menunggu', 'Approved' => 'Diluluskan', 
         ::-webkit-scrollbar { width: 8px; height: 8px; }
         ::-webkit-scrollbar-thumb { background: var(--ta-border); border-radius: 999px; }
 
+        /* Clickable card helpers — clickable only; zoom on hover */
+        .ta-card.clickable, .card.clickable { cursor: pointer; transition: transform .14s ease, box-shadow .14s ease; }
+        .ta-card.clickable:active, .card.clickable:active { transform: translateY(1px); }
+        .ta-card.clickable:hover, .card.clickable:hover { transform: translateY(-4px) scale(1.02); box-shadow: 0 8px 20px rgba(2,6,23,0.06); }
+
         #toast-alert {
             position: fixed;
             top: 1.25rem;
@@ -688,7 +693,7 @@ $tabs = ['All' => 'Semua', 'Pending' => 'Menunggu', 'Approved' => 'Diluluskan', 
 
         <!-- Baris 1: Kad Statistik -->
         <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-5">
-          <div class="ta-card p-5">
+          <div class="ta-card p-5" data-href="bookings.php">
             <div class="ta-icon-box mb-4">
               <svg xmlns="http://www.w3.org/2000/svg" class="h-5.5 w-5.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.6"><path stroke-linecap="round" stroke-linejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 012.25-2.25h13.5A2.25 2.25 0 0121 7.5v11.25m-18 0A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75m-18 0v-7.5A2.25 2.25 0 015.25 9h13.5A2.25 2.25 0 0121 11.25v7.5" /></svg>
             </div>
@@ -696,7 +701,7 @@ $tabs = ['All' => 'Semua', 'Pending' => 'Menunggu', 'Approved' => 'Diluluskan', 
             <h5 class="text-2xl font-bold"><?= $totalBookings ?></h5>
           </div>
 
-          <div class="ta-card p-5">
+          <div class="ta-card p-5" data-href="bookings.php?status=Pending" data-priority="warning">
             <div class="ta-icon-box mb-4">
               <svg xmlns="http://www.w3.org/2000/svg" class="h-5.5 w-5.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.6"><path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
             </div>
@@ -704,7 +709,7 @@ $tabs = ['All' => 'Semua', 'Pending' => 'Menunggu', 'Approved' => 'Diluluskan', 
             <h5 class="text-2xl font-bold"><?= $pendingCount ?></h5>
           </div>
 
-          <div class="ta-card p-5">
+          <div class="ta-card p-5" data-href="bookings.php?status=Approved">
             <div class="ta-icon-box mb-4">
               <svg xmlns="http://www.w3.org/2000/svg" class="h-5.5 w-5.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.6"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
             </div>
@@ -712,7 +717,7 @@ $tabs = ['All' => 'Semua', 'Pending' => 'Menunggu', 'Approved' => 'Diluluskan', 
             <h5 class="text-2xl font-bold"><?= $approvedCount ?></h5>
           </div>
 
-          <div class="ta-card p-5">
+          <div class="ta-card p-5" data-href="bookings.php?status=Completed">
             <div class="ta-icon-box mb-4">
               <svg xmlns="http://www.w3.org/2000/svg" class="h-5.5 w-5.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.6"><path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5" /></svg>
             </div>
@@ -1057,5 +1062,22 @@ $tabs = ['All' => 'Semua', 'Pending' => 'Menunggu', 'Approved' => 'Diluluskan', 
     </script>
 
     <script src="./assets/js/plugins/perfect-scrollbar.min.js" async></script>
+    <script>
+    (function(){
+      document.querySelectorAll('.card, .ta-card').forEach(function(card){
+        var href = card.dataset.href;
+        if (href) {
+          card.classList.add('clickable');
+          card.addEventListener('click', function(e){
+            if (e.target.closest('a, button, input, select, textarea')) return;
+            window.location.href = href;
+          });
+          card.setAttribute('tabindex','0');
+          card.addEventListener('keypress', function(e){ if (e.key === 'Enter') card.click(); });
+        }
+        // no automatic warning styling — cards are clickable only
+      });
+    })();
+    </script>
 </body>
 </html>

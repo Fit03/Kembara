@@ -320,6 +320,11 @@ $pendingApprovals = $pdo->query(
         ::-webkit-scrollbar { width: 8px; height: 8px; }
         ::-webkit-scrollbar-thumb { background: var(--ta-border); border-radius: 999px; }
 
+        /* Clickable card helpers — clickable only; zoom on hover */
+        .ta-card.clickable, .card.clickable { cursor: pointer; transition: transform .14s ease, box-shadow .14s ease; }
+        .ta-card.clickable:active, .card.clickable:active { transform: translateY(1px); }
+        .ta-card.clickable:hover, .card.clickable:hover { transform: translateY(-4px) scale(1.02); box-shadow: 0 8px 20px rgba(2,6,23,0.06); }
+
         /* ===== Toast alert — Apple-style spring pop + settle ===== */
         #toast-alert {
             position: fixed;
@@ -575,7 +580,7 @@ $pendingApprovals = $pdo->query(
 
         <!-- Baris 1: Kad Statistik -->
         <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-5">
-          <div class="card p-5">
+          <div class="card p-5" data-href="vehicles.php">
             <div class="ta-icon-box mb-4">
               <svg xmlns="http://www.w3.org/2000/svg" class="h-5.5 w-5.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.6"><path stroke-linecap="round" stroke-linejoin="round" d="M8.25 18.75a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m3 0h6m-9 0H3.375a1.125 1.125 0 01-1.125-1.125V14.25m17.25 4.5a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m3 0h1.125c.621 0 1.129-.504 1.09-1.124a17.902 17.902 0 00-3.213-9.193 2.056 2.056 0 00-1.58-.86H14.25M16.5 18.75h-2.25m0-11.177v-.958c0-.568-.422-1.048-.987-1.106a48.554 48.554 0 00-10.026 0 1.106 1.106 0 00-.987 1.106v7.635m12-6.677v6.677m0 0h-12" /></svg>
             </div>
@@ -583,7 +588,7 @@ $pendingApprovals = $pdo->query(
             <h5 class="text-2xl font-bold"><?= $totalVehicles ?></h5>
           </div>
 
-          <div class="card p-5">
+          <div class="card p-5" data-href="vehicles.php?status=Available">
             <div class="ta-icon-box mb-4">
               <svg xmlns="http://www.w3.org/2000/svg" class="h-5.5 w-5.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.6"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
             </div>
@@ -591,7 +596,7 @@ $pendingApprovals = $pdo->query(
             <h5 class="text-2xl font-bold"><?= $availableCount ?></h5>
           </div>
 
-          <div class="card p-5">
+          <div class="card p-5" data-href="vehicles.php?status=Booked">
             <div class="ta-icon-box mb-4">
               <svg xmlns="http://www.w3.org/2000/svg" class="h-5.5 w-5.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.6"><path stroke-linecap="round" stroke-linejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 012.25-2.25h13.5A2.25 2.25 0 0121 7.5v11.25m-18 0A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75m-18 0v-7.5A2.25 2.25 0 015.25 9h13.5A2.25 2.25 0 0121 11.25v7.5" /></svg>
             </div>
@@ -599,7 +604,7 @@ $pendingApprovals = $pdo->query(
             <h5 class="text-2xl font-bold"><?= $bookedCount ?></h5>
           </div>
 
-          <div class="card p-5">
+          <div class="card p-5" data-href="vehicles.php?status=Maintenance">
             <div class="ta-icon-box mb-4">
               <svg xmlns="http://www.w3.org/2000/svg" class="h-5.5 w-5.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.6"><path stroke-linecap="round" stroke-linejoin="round" d="M11.42 15.17L17.25 21A2.652 2.652 0 0021 17.25l-5.877-5.877M11.42 15.17l2.496-3.03c.317-.384.74-.626 1.208-.766M11.42 15.17l-4.655 5.653a2.548 2.548 0 11-3.586-3.586l6.837-5.63m5.108-.233c.55-.164 1.163-.188 1.743-.14a4.5 4.5 0 004.486-6.336l-3.276 3.277a3.004 3.004 0 01-2.25-2.25l3.276-3.276a4.5 4.5 0 00-6.336 4.486c.091 1.076-.071 2.264-.904 2.95l-.102.085m-1.745 1.437L5.909 7.5H4.5L2.25 3.75l1.5-1.5L7.5 4.5v1.409l4.26 4.26m-1.745 1.437l1.745-1.437m6.615 8.206L15.75 15.75M4.867 19.125h.008v.008h-.008v-.008z" /></svg>
             </div>
@@ -969,5 +974,22 @@ $pendingApprovals = $pdo->query(
     </script>
 
     <script src="./assets/js/plugins/perfect-scrollbar.min.js" async></script>
+    <script>
+    (function(){
+      document.querySelectorAll('.card, .ta-card').forEach(function(card){
+        var href = card.dataset.href;
+        if (href) {
+          card.classList.add('clickable');
+          card.addEventListener('click', function(e){
+            if (e.target.closest('a, button, input, select, textarea')) return;
+            window.location.href = href;
+          });
+          card.setAttribute('tabindex','0');
+          card.addEventListener('keypress', function(e){ if (e.key === 'Enter') card.click(); });
+        }
+        // no automatic warning styling — cards are clickable only
+      });
+    })();
+    </script>
 </body>
 </html>

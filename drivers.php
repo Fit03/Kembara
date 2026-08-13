@@ -307,6 +307,11 @@ $pendingApprovals = $pdo->query(
         ::-webkit-scrollbar { width: 8px; height: 8px; }
         ::-webkit-scrollbar-thumb { background: var(--ta-border); border-radius: 999px; }
 
+        /* Clickable card helpers — clickable only; zoom on hover */
+        .ta-card.clickable, .card.clickable { cursor: pointer; transition: transform .14s ease, box-shadow .14s ease; }
+        .ta-card.clickable:active, .card.clickable:active { transform: translateY(1px); }
+        .ta-card.clickable:hover, .card.clickable:hover { transform: translateY(-4px) scale(1.02); box-shadow: 0 8px 20px rgba(2,6,23,0.06); }
+
         /* ===== Toast alert — Apple-style spring pop + settle ===== */
         #toast-alert {
             position: fixed;
@@ -566,7 +571,7 @@ $pendingApprovals = $pdo->query(
 
         <!-- Baris 1: Kad Statistik -->
         <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-5">
-          <div class="ta-card p-5">
+          <div class="ta-card p-5" data-href="drivers.php">
             <div class="ta-icon-box mb-4">
               <svg xmlns="http://www.w3.org/2000/svg" class="h-5.5 w-5.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.6"><path stroke-linecap="round" stroke-linejoin="round" d="M2.25 8.25h19.5M2.25 9h19.5m-16.5 5.25h6m-6 2.25h3m-3.75 3h15a2.25 2.25 0 002.25-2.25V6.75A2.25 2.25 0 0019.5 4.5h-15a2.25 2.25 0 00-2.25 2.25v10.5A2.25 2.25 0 004.5 19.5z" /></svg>
             </div>
@@ -574,7 +579,7 @@ $pendingApprovals = $pdo->query(
             <h5 class="text-2xl font-bold"><?= $totalDrivers ?></h5>
           </div>
 
-          <div class="ta-card p-5">
+          <div class="ta-card p-5" data-href="drivers.php?status=Available">
             <div class="ta-icon-box mb-4">
               <svg xmlns="http://www.w3.org/2000/svg" class="h-5.5 w-5.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.6"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
             </div>
@@ -582,7 +587,7 @@ $pendingApprovals = $pdo->query(
             <h5 class="text-2xl font-bold"><?= $availableCount ?></h5>
           </div>
 
-          <div class="ta-card p-5">
+          <div class="ta-card p-5" data-href="drivers.php?status=Leave">
             <div class="ta-icon-box mb-4">
               <svg xmlns="http://www.w3.org/2000/svg" class="h-5.5 w-5.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.6"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
             </div>
@@ -590,7 +595,7 @@ $pendingApprovals = $pdo->query(
             <h5 class="text-2xl font-bold"><?= $leaveCount ?></h5>
           </div>
 
-          <div class="ta-card p-5">
+          <div class="ta-card p-5" data-href="drivers.php?status=Inactive">
             <div class="ta-icon-box mb-4">
               <svg xmlns="http://www.w3.org/2000/svg" class="h-5.5 w-5.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.6"><path stroke-linecap="round" stroke-linejoin="round" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" /></svg>
             </div>
@@ -870,5 +875,22 @@ $pendingApprovals = $pdo->query(
     </script>
 
     <script src="./assets/js/plugins/perfect-scrollbar.min.js" async></script>
+    <script>
+    (function(){
+      document.querySelectorAll('.card, .ta-card').forEach(function(card){
+        var href = card.dataset.href;
+        if (href) {
+          card.classList.add('clickable');
+          card.addEventListener('click', function(e){
+            if (e.target.closest('a, button, input, select, textarea')) return;
+            window.location.href = href;
+          });
+          card.setAttribute('tabindex','0');
+          card.addEventListener('keypress', function(e){ if (e.key === 'Enter') card.click(); });
+        }
+        // no automatic warning styling — cards are clickable only
+      });
+    })();
+    </script>
 </body>
 </html>
