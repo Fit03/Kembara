@@ -50,7 +50,6 @@ $statusLabel = fn(string $s) => match ($s) {
 $tripTypeLabel = fn(string $t) => match ($t) {
     'One Way' => 'Sehala',
     'Return'  => 'Pergi Balik',
-    'Both'    => 'Kedua-dua',
     default   => $t,
 };
 
