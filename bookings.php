@@ -272,8 +272,8 @@ $stmt = $pdo->prepare(
     "SELECT vb.*, u.fullname AS requester_name, v.plate_no, v.vehicle_name,
             du.fullname AS driver_name, ap.fullname AS approved_by_name
      FROM vehicle_bookings vb
-     JOIN users u ON u.user_id = vb.user_id
-     JOIN vehicles v ON v.vehicle_id = vb.vehicle_id
+    JOIN users u ON u.user_id = vb.user_id
+    LEFT JOIN vehicles v ON v.vehicle_id = vb.vehicle_id
      LEFT JOIN drivers dr ON dr.driver_id = vb.driver_id
      LEFT JOIN users du ON du.user_id = dr.user_id
      LEFT JOIN users ap ON ap.user_id = vb.approved_by
