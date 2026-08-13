@@ -21,6 +21,11 @@ if (!$email) {
     $email = $stmt->fetchColumn() ?: 'tiada-emel@selangor.gov.my';
 }
 
+$avatarStmt = $pdo->prepare("SELECT profile_picture FROM users WHERE user_id = ?");
+$avatarStmt->execute([$currentUserId]);
+$profilePicture = $avatarStmt->fetchColumn();
+$hasPhoto = $profilePicture && is_file(__DIR__ . '/' . $profilePicture);
+
 $badgeColor = match($role) {
     'SuperAdmin' => 'badge-soft-error',
     'Admin'      => 'badge-soft-warning',
@@ -246,7 +251,7 @@ $pendingApprovals = $pdo->query(
             transition: background-color 0.2s ease, color 0.2s ease;
         }
 
-        .card, .ta-sidebar, nav {
+        .ta-card, .ta-sidebar, nav {
             background: var(--ta-surface) !important;
             border-color: var(--ta-border) !important;
             color: var(--ta-ink) !important;
@@ -490,7 +495,7 @@ $pendingApprovals = $pdo->query(
                             </span>
                         <?php endif; ?>
                     </div>
-                    <div tabindex="0" class="dropdown-content z-[99] menu p-0 shadow-xl card rounded-2xl w-80 mt-2 border" style="border-color: var(--ta-border);">
+                    <div tabindex="0" class="dropdown-content z-[99] menu p-0 shadow-xl ta-card rounded-2xl w-80 mt-2 border" style="border-color: var(--ta-border);">
                         <div class="px-4 py-3 border-b flex items-center justify-between" style="border-color: var(--ta-border);">
                             <span class="font-bold text-sm">Notifikasi</span>
                         </div>
@@ -514,14 +519,18 @@ $pendingApprovals = $pdo->query(
 
                 <div class="dropdown dropdown-end">
                     <div tabindex="0" role="button" class="btn btn-ghost rounded-full pl-1 pr-2 py-1 flex items-center gap-2 h-auto min-h-0">
-                        <div class="avatar placeholder">
-                            <div class="rounded-full w-8 h-8 flex items-center justify-center font-bold text-xs uppercase text-white" style="background:var(--ta-brand)">
-                                <?= htmlspecialchars(substr($fullname, 0, 1)) ?>
-                            </div>
+                        <div class="avatar <?= $hasPhoto ? '' : 'placeholder' ?>">
+                            <?php if ($hasPhoto): ?>
+                                <div class="rounded-full w-8 h-8"><img src="<?= htmlspecialchars($profilePicture) ?>" alt="Avatar" /></div>
+                            <?php else: ?>
+                                <div class="rounded-full w-8 h-8 flex items-center justify-center font-bold text-xs uppercase text-white" style="background:var(--ta-brand)">
+                                    <?= htmlspecialchars(substr($fullname, 0, 1)) ?>
+                                </div>
+                            <?php endif; ?>
                         </div>
                         <span class="text-sm font-semibold hidden sm:inline-block"><?= htmlspecialchars($fullname) ?></span>
                     </div>
-                    <ul tabindex="0" class="dropdown-content z-[99] menu p-3 shadow-lg card rounded-2xl w-64 mt-2 border" style="border-color: var(--ta-border);">
+                    <ul tabindex="0" class="dropdown-content z-[99] menu p-3 shadow-lg ta-card rounded-2xl w-64 mt-2 border" style="border-color: var(--ta-border);">
                         <li class="px-3 py-2 border-b mb-1" style="border-color:var(--ta-border)">
                             <div class="flex items-center justify-between gap-2">
                                 <p class="font-bold text-sm truncate"><?= htmlspecialchars($fullname) ?></p>
@@ -540,7 +549,7 @@ $pendingApprovals = $pdo->query(
       <div class="w-full px-4 sm:px-6 py-6 mx-auto">
 
         <?php if ($flash): ?>
-          <div id="toast-alert" class="card shadow-2xl px-4 py-3.5 rounded-2xl flex items-center gap-3 border" style="border-color: var(--color-<?= $flash['type'] === 'success' ? 'success' : 'error' ?>); max-width: 26rem; backdrop-filter: blur(16px);">
+          <div id="toast-alert" class="ta-card shadow-2xl px-4 py-3.5 rounded-2xl flex items-center gap-3 border" style="border-color: var(--color-<?= $flash['type'] === 'success' ? 'success' : 'error' ?>); max-width: 26rem; backdrop-filter: blur(16px);">
             <div class="p-1.5 rounded-full shrink-0 <?= $flash['type'] === 'success' ? 'bg-success/15 text-success' : 'bg-error/15 text-error' ?>">
               <?php if ($flash['type'] === 'success'): ?>
                 <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5" /></svg>
@@ -557,7 +566,7 @@ $pendingApprovals = $pdo->query(
 
         <!-- Baris 1: Kad Statistik -->
         <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-5">
-          <div class="card p-5">
+          <div class="ta-card p-5">
             <div class="ta-icon-box mb-4">
               <svg xmlns="http://www.w3.org/2000/svg" class="h-5.5 w-5.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.6"><path stroke-linecap="round" stroke-linejoin="round" d="M2.25 8.25h19.5M2.25 9h19.5m-16.5 5.25h6m-6 2.25h3m-3.75 3h15a2.25 2.25 0 002.25-2.25V6.75A2.25 2.25 0 0019.5 4.5h-15a2.25 2.25 0 00-2.25 2.25v10.5A2.25 2.25 0 004.5 19.5z" /></svg>
             </div>
@@ -565,7 +574,7 @@ $pendingApprovals = $pdo->query(
             <h5 class="text-2xl font-bold"><?= $totalDrivers ?></h5>
           </div>
 
-          <div class="card p-5">
+          <div class="ta-card p-5">
             <div class="ta-icon-box mb-4">
               <svg xmlns="http://www.w3.org/2000/svg" class="h-5.5 w-5.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.6"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
             </div>
@@ -573,7 +582,7 @@ $pendingApprovals = $pdo->query(
             <h5 class="text-2xl font-bold"><?= $availableCount ?></h5>
           </div>
 
-          <div class="card p-5">
+          <div class="ta-card p-5">
             <div class="ta-icon-box mb-4">
               <svg xmlns="http://www.w3.org/2000/svg" class="h-5.5 w-5.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.6"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
             </div>
@@ -581,7 +590,7 @@ $pendingApprovals = $pdo->query(
             <h5 class="text-2xl font-bold"><?= $leaveCount ?></h5>
           </div>
 
-          <div class="card p-5">
+          <div class="ta-card p-5">
             <div class="ta-icon-box mb-4">
               <svg xmlns="http://www.w3.org/2000/svg" class="h-5.5 w-5.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.6"><path stroke-linecap="round" stroke-linejoin="round" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" /></svg>
             </div>
@@ -591,7 +600,7 @@ $pendingApprovals = $pdo->query(
         </div>
 
         <!-- Baris 2: Jadual Pemandu -->
-        <div class="card p-5 mt-5">
+        <div class="ta-card p-5 mt-5">
           <div class="flex items-center justify-between gap-3 mb-4 flex-wrap">
             <div>
               <h6 class="font-semibold">Senarai Pemandu</h6>
@@ -672,12 +681,14 @@ $pendingApprovals = $pdo->query(
               <a href="<?= $page > 1 ? htmlspecialchars(buildDriversPageUrl($page - 1, $search)) : '#' ?>"
                  class="join-item btn btn-sm <?= $page <= 1 ? 'btn-disabled opacity-40' : '' ?>">
                 <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.2"><path stroke-linecap="round" stroke-linejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" /></svg>
+                Sebelum
               </a>
               <span class="join-item btn btn-sm btn-disabled !bg-transparent !border-none font-semibold" style="color:var(--ta-ink)">
                 <?= $page ?> / <?= $totalPages ?>
               </span>
               <a href="<?= $page < $totalPages ? htmlspecialchars(buildDriversPageUrl($page + 1, $search)) : '#' ?>"
                  class="join-item btn btn-sm <?= $page >= $totalPages ? 'btn-disabled opacity-40' : '' ?>">
+                Seterus
                 <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.2"><path stroke-linecap="round" stroke-linejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" /></svg>
               </a>
             </div>
@@ -696,7 +707,7 @@ $pendingApprovals = $pdo->query(
     <?php if ($canManage): ?>
     <!-- Modal: Tambah Pemandu -->
     <dialog id="modal-add" class="modal">
-      <div class="modal-box card max-w-md">
+      <div class="modal-box ta-card max-w-md">
         <form method="dialog"><button class="btn btn-sm btn-circle btn-ghost absolute right-3 top-3">✕</button></form>
         <h3 class="font-bold text-lg mb-4">Tambah Pemandu Baharu</h3>
         <?php if (empty($eligibleUsers)): ?>
@@ -740,7 +751,7 @@ $pendingApprovals = $pdo->query(
 
     <!-- Modal: Kemaskini Pemandu -->
     <dialog id="modal-edit" class="modal">
-      <div class="modal-box card max-w-md">
+      <div class="modal-box ta-card max-w-md">
         <form method="dialog"><button class="btn btn-sm btn-circle btn-ghost absolute right-3 top-3">✕</button></form>
         <h3 class="font-bold text-lg mb-1">Kemaskini Pemandu</h3>
         <p class="text-sm text-slate-400 mb-4" id="edit-driver-name"></p>
@@ -770,7 +781,7 @@ $pendingApprovals = $pdo->query(
 
     <!-- Modal: Sahkan Padam -->
     <dialog id="modal-delete" class="modal">
-      <div class="modal-box card max-w-sm">
+      <div class="modal-box ta-card max-w-sm">
         <h3 class="font-bold text-lg mb-2">Padam Pemandu?</h3>
         <p class="text-sm text-slate-400 mb-4">Anda pasti mahu memadam rekod pemandu <span id="delete-driver-name" class="font-semibold text-slate-600"></span>? Tindakan ini tidak boleh diundur.</p>
         <form action="drivers.php<?= $search !== '' ? '?q=' . urlencode($search) : '' ?>" method="POST" class="flex justify-end gap-2">

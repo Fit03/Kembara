@@ -26,6 +26,11 @@ if (!$email) {
     $email = $stmt->fetchColumn() ?: 'tiada-emel@selangor.gov.my';
 }
 
+$avatarStmt = $pdo->prepare("SELECT profile_picture FROM users WHERE user_id = ?");
+$avatarStmt->execute([$currentUserId]);
+$profilePicture = $avatarStmt->fetchColumn();
+$hasPhoto = $profilePicture && is_file(__DIR__ . '/' . $profilePicture);
+
 $badgeColor = match($role) {
     'SuperAdmin' => 'badge-soft-error',
     'Admin'      => 'badge-soft-warning',
@@ -117,61 +122,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $stmt = $pdo->prepare("SELECT fullname FROM users WHERE user_id = ?");
             $stmt->execute([$uid]);
             $victimName = $stmt->fetchColumn();
-            if (!$victimName) {
-                throw new RuntimeException('Pengguna tidak ditemui.');
-            }
-
-            $related = [];
-
-            $checkStmt = $pdo->prepare("SELECT COUNT(*) FROM vehicle_bookings WHERE user_id = ?");
-            $checkStmt->execute([$uid]);
-            if ((int)$checkStmt->fetchColumn() > 0) {
-                $related[] = 'tempahan';
-            }
-
-            $checkStmt = $pdo->prepare("SELECT COUNT(*) FROM vehicle_bookings WHERE approved_by = ?");
-            $checkStmt->execute([$uid]);
-            if ((int)$checkStmt->fetchColumn() > 0) {
-                $related[] = 'pengesahan tempahan';
-            }
-
-            $checkStmt = $pdo->prepare("SELECT COUNT(*) FROM booking_history WHERE action_by = ?");
-            $checkStmt->execute([$uid]);
-            if ((int)$checkStmt->fetchColumn() > 0) {
-                $related[] = 'sejarah tempahan';
-            }
-
-            $checkStmt = $pdo->prepare("SELECT COUNT(*) FROM notifications WHERE user_id = ?");
-            $checkStmt->execute([$uid]);
-            if ((int)$checkStmt->fetchColumn() > 0) {
-                $related[] = 'notifikasi';
-            }
-
-            $driverId = null;
-            $checkStmt = $pdo->prepare("SELECT driver_id FROM drivers WHERE user_id = ?");
-            $checkStmt->execute([$uid]);
-            $driverId = $checkStmt->fetchColumn();
-            if ($driverId !== false && $driverId !== null) {
-                $checkStmt = $pdo->prepare("SELECT COUNT(*) FROM vehicles WHERE driver_id = ?");
-                $checkStmt->execute([$driverId]);
-                if ((int)$checkStmt->fetchColumn() > 0) {
-                    $related[] = 'kenderaan ditugaskan kepada pemandu ini';
-                }
-
-                $checkStmt = $pdo->prepare("SELECT COUNT(*) FROM vehicle_bookings WHERE driver_id = ?");
-                $checkStmt->execute([$driverId]);
-                if ((int)$checkStmt->fetchColumn() > 0) {
-                    $related[] = 'tempahan ditugaskan kepada pemandu ini';
-                }
-            }
-
-            if (!empty($related)) {
-                throw new RuntimeException('Pengguna ini tidak boleh dipadam kerana mempunyai rekod berkaitan: ' . implode(', ', $related) . '. Sila semak dan kemas kini rekod tersebut terlebih dahulu.');
-            }
-
-            if ($driverId !== false && $driverId !== null) {
-                $pdo->prepare("DELETE FROM drivers WHERE driver_id = ?")->execute([$driverId]);
-            }
 
             $del = $pdo->prepare("DELETE FROM users WHERE user_id = ?");
             $del->execute([$uid]);
@@ -318,7 +268,7 @@ $pendingApprovals = $pdo->query(
             transition: background-color 0.2s ease, color 0.2s ease;
         }
 
-        .card, .ta-sidebar, nav {
+        .ta-card, .ta-sidebar, nav {
             background: var(--ta-surface) !important;
             border-color: var(--ta-border) !important;
             color: var(--ta-ink) !important;
@@ -558,7 +508,7 @@ $pendingApprovals = $pdo->query(
                             </span>
                         <?php endif; ?>
                     </div>
-                    <div tabindex="0" class="dropdown-content z-[99] menu p-0 shadow-xl card rounded-2xl w-80 mt-2 border" style="border-color: var(--ta-border);">
+                    <div tabindex="0" class="dropdown-content z-[99] menu p-0 shadow-xl ta-card rounded-2xl w-80 mt-2 border" style="border-color: var(--ta-border);">
                         <div class="px-4 py-3 border-b flex items-center justify-between" style="border-color: var(--ta-border);">
                             <span class="font-bold text-sm">Notifikasi</span>
                         </div>
@@ -582,14 +532,18 @@ $pendingApprovals = $pdo->query(
 
                 <div class="dropdown dropdown-end">
                     <div tabindex="0" role="button" class="btn btn-ghost rounded-full pl-1 pr-2 py-1 flex items-center gap-2 h-auto min-h-0">
-                        <div class="avatar placeholder">
-                            <div class="rounded-full w-8 h-8 flex items-center justify-center font-bold text-xs uppercase text-white" style="background:var(--ta-brand)">
-                                <?= htmlspecialchars(substr($fullname, 0, 1)) ?>
-                            </div>
+                        <div class="avatar <?= $hasPhoto ? '' : 'placeholder' ?>">
+                            <?php if ($hasPhoto): ?>
+                                <div class="rounded-full w-8 h-8"><img src="<?= htmlspecialchars($profilePicture) ?>" alt="Avatar" /></div>
+                            <?php else: ?>
+                                <div class="rounded-full w-8 h-8 flex items-center justify-center font-bold text-xs uppercase text-white" style="background:var(--ta-brand)">
+                                    <?= htmlspecialchars(substr($fullname, 0, 1)) ?>
+                                </div>
+                            <?php endif; ?>
                         </div>
                         <span class="text-sm font-semibold hidden sm:inline-block"><?= htmlspecialchars($fullname) ?></span>
                     </div>
-                    <ul tabindex="0" class="dropdown-content z-[99] menu p-3 shadow-lg card rounded-2xl w-64 mt-2 border" style="border-color: var(--ta-border);">
+                    <ul tabindex="0" class="dropdown-content z-[99] menu p-3 shadow-lg ta-card rounded-2xl w-64 mt-2 border" style="border-color: var(--ta-border);">
                         <li class="px-3 py-2 border-b mb-1" style="border-color:var(--ta-border)">
                             <div class="flex items-center justify-between gap-2">
                                 <p class="font-bold text-sm truncate"><?= htmlspecialchars($fullname) ?></p>
@@ -608,7 +562,7 @@ $pendingApprovals = $pdo->query(
       <div class="w-full px-4 sm:px-6 py-6 mx-auto">
 
         <?php if ($flash): ?>
-          <div id="toast-alert" class="card shadow-2xl px-4 py-3.5 rounded-2xl flex items-center gap-3 border" style="border-color: var(--color-<?= $flash['type'] === 'success' ? 'success' : 'error' ?>); max-width: 26rem; backdrop-filter: blur(16px);">
+          <div id="toast-alert" class="ta-card shadow-2xl px-4 py-3.5 rounded-2xl flex items-center gap-3 border" style="border-color: var(--color-<?= $flash['type'] === 'success' ? 'success' : 'error' ?>); max-width: 26rem; backdrop-filter: blur(16px);">
             <div class="p-1.5 rounded-full shrink-0 <?= $flash['type'] === 'success' ? 'bg-success/15 text-success' : 'bg-error/15 text-error' ?>">
               <?php if ($flash['type'] === 'success'): ?>
                 <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5" /></svg>
@@ -625,7 +579,7 @@ $pendingApprovals = $pdo->query(
 
         <!-- Baris 1: Kad Statistik -->
         <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-5">
-          <div class="card p-5">
+          <div class="ta-card p-5">
             <div class="ta-icon-box mb-4">
               <svg xmlns="http://www.w3.org/2000/svg" class="h-5.5 w-5.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.6"><path stroke-linecap="round" stroke-linejoin="round" d="M15 19.128a9.38 9.38 0 002.625.372 9.337 9.337 0 004.121-.952 4.125 4.125 0 00-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 018.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0111.964-3.07M12 6.375a3.375 3.375 0 11-6.75 0 3.375 3.375 0 016.75 0zm8.25 2.25a2.625 2.625 0 11-5.25 0 2.625 2.625 0 015.25 0z" /></svg>
             </div>
@@ -633,7 +587,7 @@ $pendingApprovals = $pdo->query(
             <h5 class="text-2xl font-bold"><?= (int)$totalUsers ?></h5>
           </div>
 
-          <div class="card p-5">
+          <div class="ta-card p-5">
             <div class="ta-icon-box mb-4">
               <svg xmlns="http://www.w3.org/2000/svg" class="h-5.5 w-5.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.6"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75m5.25 2.25a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
             </div>
@@ -641,7 +595,7 @@ $pendingApprovals = $pdo->query(
             <h5 class="text-2xl font-bold"><?= $totalSuperAdmin ?></h5>
           </div>
 
-          <div class="card p-5">
+          <div class="ta-card p-5">
             <div class="ta-icon-box mb-4">
               <svg xmlns="http://www.w3.org/2000/svg" class="h-5.5 w-5.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.6"><path stroke-linecap="round" stroke-linejoin="round" d="M9.75 3.104v5.714a2.25 2.25 0 01-.659 1.591L5 14.5M9.75 3.104c-.251.023-.501.05-.75.082m.75-.082a24.301 24.301 0 014.5 0m0 0v5.714c0 .597.237 1.17.659 1.591L19.8 15.3M14.25 3.104c.251.023.501.05.75.082M19.8 15.3l-1.57.393A9.065 9.065 0 0112 15a9.065 9.065 0 00-6.23-.693L5 14.5m14.8.8l1.402 1.402c1.232 1.232.65 3.318-1.067 3.611A48.309 48.309 0 0112 21c-2.773 0-5.491-.235-8.135-.687-1.718-.293-2.3-2.379-1.067-3.61L5 14.5" /></svg>
             </div>
@@ -649,7 +603,7 @@ $pendingApprovals = $pdo->query(
             <h5 class="text-2xl font-bold"><?= $totalAdmin ?></h5>
           </div>
 
-          <div class="card p-5">
+          <div class="ta-card p-5">
             <div class="ta-icon-box mb-4">
               <svg xmlns="http://www.w3.org/2000/svg" class="h-5.5 w-5.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.6"><path stroke-linecap="round" stroke-linejoin="round" d="M17.982 18.725A7.488 7.488 0 0012 15.75a7.488 7.488 0 00-5.982 2.975m11.963 0a9 9 0 10-11.963 0m11.963 0A8.966 8.966 0 0112 21a8.966 8.966 0 01-5.982-2.275M15 9.75a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
             </div>
@@ -659,7 +613,7 @@ $pendingApprovals = $pdo->query(
         </div>
 
         <!-- Baris 2: Jadual Pengguna -->
-        <div class="card p-5 mt-5">
+        <div class="ta-card p-5 mt-5">
           <div class="flex items-center justify-between gap-3 mb-4 flex-wrap">
             <div>
               <h6 class="font-semibold">Senarai Pengguna</h6>
@@ -740,12 +694,14 @@ $pendingApprovals = $pdo->query(
               <a href="<?= $page > 1 ? htmlspecialchars(buildUsersPageUrl($page - 1, $search)) : '#' ?>"
                  class="join-item btn btn-sm <?= $page <= 1 ? 'btn-disabled opacity-40' : '' ?>">
                 <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.2"><path stroke-linecap="round" stroke-linejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" /></svg>
+                Sebelum
               </a>
               <span class="join-item btn btn-sm btn-disabled !bg-transparent !border-none font-semibold" style="color:var(--ta-ink)">
                 <?= $page ?> / <?= $totalPages ?>
               </span>
               <a href="<?= $page < $totalPages ? htmlspecialchars(buildUsersPageUrl($page + 1, $search)) : '#' ?>"
                  class="join-item btn btn-sm <?= $page >= $totalPages ? 'btn-disabled opacity-40' : '' ?>">
+                Seterus
                 <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.2"><path stroke-linecap="round" stroke-linejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" /></svg>
               </a>
             </div>
@@ -763,7 +719,7 @@ $pendingApprovals = $pdo->query(
 
     <!-- Modal: Tambah Pengguna -->
     <dialog id="modal-add" class="modal">
-      <div class="modal-box card max-w-md">
+      <div class="modal-box ta-card max-w-md">
         <form method="dialog"><button class="btn btn-sm btn-circle btn-ghost absolute right-3 top-3">✕</button></form>
         <h3 class="font-bold text-lg mb-4">Tambah Pengguna Baharu</h3>
         <form action="users.php<?= $search !== '' ? '?q=' . urlencode($search) : '' ?>" method="POST" class="flex flex-col gap-3">
@@ -812,7 +768,7 @@ $pendingApprovals = $pdo->query(
 
     <!-- Modal: Kemaskini Pengguna -->
     <dialog id="modal-edit" class="modal">
-      <div class="modal-box card max-w-md">
+      <div class="modal-box ta-card max-w-md">
         <form method="dialog"><button class="btn btn-sm btn-circle btn-ghost absolute right-3 top-3">✕</button></form>
         <h3 class="font-bold text-lg mb-4">Kemaskini Pengguna</h3>
         <form action="users.php<?= $search !== '' ? '?q=' . urlencode($search) : '' ?>" method="POST" class="flex flex-col gap-3">
@@ -862,7 +818,7 @@ $pendingApprovals = $pdo->query(
 
     <!-- Modal: Sahkan Padam -->
     <dialog id="modal-delete" class="modal">
-      <div class="modal-box card max-w-sm">
+      <div class="modal-box ta-card max-w-sm">
         <h3 class="font-bold text-lg mb-2">Padam Pengguna?</h3>
         <p class="text-sm text-slate-400 mb-4">Anda pasti mahu memadam <span id="delete-user-name" class="font-semibold text-slate-600"></span>? Tindakan ini tidak boleh diundur.</p>
         <form action="users.php<?= $search !== '' ? '?q=' . urlencode($search) : '' ?>" method="POST" class="flex justify-end gap-2">

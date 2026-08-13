@@ -13,24 +13,17 @@ $role          = $_SESSION['role']; // 'SuperAdmin', 'Admin', atau 'User'
 $currentUserId = (int)$_SESSION['user_id'];
 $canManage     = in_array($role, ['SuperAdmin', 'Admin'], true);
 
-// Driver users should see only bookings assigned to them, not every request.
-$driverId = null;
-$driverStmt = $pdo->prepare("SELECT driver_id FROM drivers WHERE user_id = ?");
-$driverStmt->execute([$currentUserId]);
-$driverId = $driverStmt->fetchColumn();
-if ($driverId !== false && $driverId !== null) {
-    $driverId = (int)$driverId;
-} else {
-    $driverId = null;
-}
-$isDriver = $driverId !== null;
-
 $email = $_SESSION['email'] ?? null;
 if (!$email) {
     $stmt = $pdo->prepare("SELECT email FROM users WHERE user_id = ?");
     $stmt->execute([$currentUserId]);
     $email = $stmt->fetchColumn() ?: 'tiada-emel@selangor.gov.my';
 }
+
+$avatarStmt = $pdo->prepare("SELECT profile_picture FROM users WHERE user_id = ?");
+$avatarStmt->execute([$currentUserId]);
+$profilePicture = $avatarStmt->fetchColumn();
+$hasPhoto = $profilePicture && is_file(__DIR__ . '/' . $profilePicture);
 
 $badgeColor = match($role) {
     'SuperAdmin' => 'badge-soft-error',
@@ -253,10 +246,7 @@ function buildBookingsFilterUrl(string $search, string $status): string {
 $where  = [];
 $params = [];
 
-if ($isDriver) {
-    $where[] = 'vb.driver_id = :driverId';
-    $params[':driverId'] = $driverId;
-} elseif ($role === 'User') {
+if ($role === 'User') {
     $where[] = 'vb.user_id = :uid';
     $params[':uid'] = $currentUserId;
 }
@@ -283,7 +273,7 @@ $stmt = $pdo->prepare(
             du.fullname AS driver_name, ap.fullname AS approved_by_name
      FROM vehicle_bookings vb
      JOIN users u ON u.user_id = vb.user_id
-     LEFT JOIN vehicles v ON v.vehicle_id = vb.vehicle_id
+     JOIN vehicles v ON v.vehicle_id = vb.vehicle_id
      LEFT JOIN drivers dr ON dr.driver_id = vb.driver_id
      LEFT JOIN users du ON du.user_id = dr.user_id
      LEFT JOIN users ap ON ap.user_id = vb.approved_by
@@ -298,23 +288,6 @@ $stmt->bindValue(':limit', $perPage, PDO::PARAM_INT);
 $stmt->bindValue(':offset', $offset, PDO::PARAM_INT);
 $stmt->execute();
 $bookings = $stmt->fetchAll(PDO::FETCH_ASSOC);
-
-$bookingHistories = [];
-$bookingIds = array_column($bookings, 'booking_id');
-if (!empty($bookingIds)) {
-    $placeholders = implode(',', array_fill(0, count($bookingIds), '?'));
-    $histStmt = $pdo->prepare(
-        "SELECT bh.booking_id, bh.action, bh.remarks, bh.action_datetime, u.fullname AS action_by
-         FROM booking_history bh
-         LEFT JOIN users u ON u.user_id = bh.action_by
-         WHERE bh.booking_id IN ($placeholders)
-         ORDER BY bh.action_datetime ASC"
-    );
-    $histStmt->execute($bookingIds);
-    while ($row = $histStmt->fetch(PDO::FETCH_ASSOC)) {
-        $bookingHistories[$row['booking_id']][] = $row;
-    }
-}
 
 $totalPages = max(1, (int)ceil($totalRows / $perPage));
 if ($page > $totalPages) {
@@ -333,21 +306,12 @@ $assignableDrivers = $pdo->query(
 )->fetchAll(PDO::FETCH_ASSOC);
 
 // Kiraan statistik (skop mengikut peranan)
-$statFilterSql = '';
-$statParams    = [];
-if ($isDriver) {
-    $statFilterSql = ' WHERE vb.driver_id = :driverId';
-    $statParams = [':driverId' => $driverId];
-} elseif ($role === 'User') {
-    $statFilterSql = ' WHERE vb.user_id = :uid';
-    $statParams = [':uid' => $currentUserId];
-}
 $statCountStmt = $pdo->prepare(
     "SELECT status, COUNT(*) AS total FROM vehicle_bookings vb"
-    . $statFilterSql
+    . ($role === 'User' ? " WHERE vb.user_id = :uid" : "")
     . " GROUP BY status"
 );
-$statCountStmt->execute($statParams);
+$statCountStmt->execute($role === 'User' ? [':uid' => $currentUserId] : []);
 $statusCounts   = $statCountStmt->fetchAll(PDO::FETCH_KEY_PAIR);
 $totalBookings  = (int)array_sum($statusCounts);
 $pendingCount   = (int)($statusCounts['Pending'] ?? 0);
@@ -678,10 +642,14 @@ $tabs = ['All' => 'Semua', 'Pending' => 'Menunggu', 'Approved' => 'Diluluskan', 
 
                 <div class="dropdown dropdown-end">
                     <div tabindex="0" role="button" class="btn btn-ghost rounded-full pl-1 pr-2 py-1 flex items-center gap-2 h-auto min-h-0">
-                        <div class="avatar placeholder">
-                            <div class="rounded-full w-8 h-8 flex items-center justify-center font-bold text-xs uppercase text-white" style="background:var(--ta-brand)">
-                                <?= htmlspecialchars(substr($fullname, 0, 1)) ?>
-                            </div>
+                        <div class="avatar <?= $hasPhoto ? '' : 'placeholder' ?>">
+                            <?php if ($hasPhoto): ?>
+                                <div class="rounded-full w-8 h-8"><img src="<?= htmlspecialchars($profilePicture) ?>" alt="Avatar" /></div>
+                            <?php else: ?>
+                                <div class="rounded-full w-8 h-8 flex items-center justify-center font-bold text-xs uppercase text-white" style="background:var(--ta-brand)">
+                                    <?= htmlspecialchars(substr($fullname, 0, 1)) ?>
+                                </div>
+                            <?php endif; ?>
                         </div>
                         <span class="text-sm font-semibold hidden sm:inline-block"><?= htmlspecialchars($fullname) ?></span>
                     </div>
@@ -828,7 +796,6 @@ $tabs = ['All' => 'Semua', 'Pending' => 'Menunggu', 'Approved' => 'Diluluskan', 
                             "driver"           => $b["driver_name"] ?: 'Tiada',
                             "status"           => $statusLabel($b["status"]),
                             "approved_by"      => $b["approved_by_name"] ?: '—',
-                            "history"          => $bookingHistories[$b['booking_id']] ?? [],
                         ], JSON_UNESCAPED_UNICODE | JSON_HEX_APOS | JSON_HEX_QUOT) ?>)'>
                         <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178z" /><path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
                       </button>
@@ -873,12 +840,14 @@ $tabs = ['All' => 'Semua', 'Pending' => 'Menunggu', 'Approved' => 'Diluluskan', 
               <a href="<?= $page > 1 ? htmlspecialchars(buildBookingsPageUrl($page - 1, $search, $statusFilter)) : '#' ?>"
                  class="join-item btn btn-sm <?= $page <= 1 ? 'btn-disabled opacity-40' : '' ?>">
                 <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.2"><path stroke-linecap="round" stroke-linejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" /></svg>
+                Sebelum
               </a>
               <span class="join-item btn btn-sm btn-disabled !bg-transparent !border-none font-semibold" style="color:var(--ta-ink)">
                 <?= $page ?> / <?= $totalPages ?>
               </span>
               <a href="<?= $page < $totalPages ? htmlspecialchars(buildBookingsPageUrl($page + 1, $search, $statusFilter)) : '#' ?>"
                  class="join-item btn btn-sm <?= $page >= $totalPages ? 'btn-disabled opacity-40' : '' ?>">
+                Seterus
                 <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.2"><path stroke-linecap="round" stroke-linejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" /></svg>
               </a>
             </div>
@@ -958,10 +927,6 @@ $tabs = ['All' => 'Semua', 'Pending' => 'Menunggu', 'Approved' => 'Diluluskan', 
           <div><p class="text-xs text-slate-400 mb-0.5">Pemandu</p><p class="font-medium" id="view-driver"></p></div>
           <div class="col-span-2"><p class="text-xs text-slate-400 mb-0.5">Tujuan</p><p class="font-medium" id="view-purpose"></p></div>
           <div class="col-span-2"><p class="text-xs text-slate-400 mb-0.5">Diluluskan Oleh</p><p class="font-medium" id="view-approved-by"></p></div>
-          <div class="col-span-2">
-            <p class="text-xs text-slate-400 mb-0.5">Sejarah Tempahan</p>
-            <div id="view-history" class="space-y-3"></div>
-          </div>
         </div>
         <div class="modal-action mt-4">
           <button type="button" class="btn btn-ghost" onclick="document.getElementById('modal-view').close()">Tutup</button>
@@ -1016,39 +981,6 @@ $tabs = ['All' => 'Semua', 'Pending' => 'Menunggu', 'Approved' => 'Diluluskan', 
             document.getElementById('view-driver').textContent       = b.driver;
             document.getElementById('view-purpose').textContent      = b.purpose;
             document.getElementById('view-approved-by').textContent  = b.approved_by;
-
-            const historyContainer = document.getElementById('view-history');
-            historyContainer.innerHTML = '';
-            if (Array.isArray(b.history) && b.history.length > 0) {
-                b.history.forEach((item) => {
-                    const entry = document.createElement('div');
-                    entry.className = 'rounded-xl p-3';
-                    entry.style.background = 'var(--ta-canvas)';
-
-                    const title = document.createElement('div');
-                    title.className = 'font-medium';
-                    title.textContent = item.action;
-
-                    const meta = document.createElement('div');
-                    meta.className = 'text-xs text-slate-500 mb-1';
-                    meta.textContent = `${item.action_by || '—'} · ${item.action_datetime}`;
-
-                    const remarks = document.createElement('div');
-                    remarks.className = 'text-xs text-slate-400';
-                    remarks.textContent = item.remarks || 'Tiada maklumat tambahan.';
-
-                    entry.appendChild(title);
-                    entry.appendChild(meta);
-                    entry.appendChild(remarks);
-                    historyContainer.appendChild(entry);
-                });
-            } else {
-                const empty = document.createElement('div');
-                empty.className = 'text-xs text-slate-400 italic';
-                empty.textContent = 'Tiada sejarah untuk tempahan ini.';
-                historyContainer.appendChild(empty);
-            }
-
             document.getElementById('modal-view').showModal();
         }
 
