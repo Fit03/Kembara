@@ -887,7 +887,7 @@ $tabs = ['All' => 'Semua', 'Pending' => 'Menunggu', 'Approved' => 'Diluluskan', 
                       : 'Tiada kenderaan ditugaskan';
                 ?>
                 <option value="<?= (int)$ad['driver_id'] ?>" data-vehicle="<?= htmlspecialchars($vehicleLabel) ?>" <?= !$ad['vehicle_id'] ? 'disabled' : '' ?>>
-                  <?= htmlspecialchars($ad['fullname']) ?> — <?= htmlspecialchars($ad['license']) ?><?= !$ad['vehicle_id'] ? ' (tiada kenderaan)' : '' ?>
+                  <?= htmlspecialchars($ad['fullname']) ?> — <?= htmlspecialchars($ad['vehicle_name'] ?: 'Jenis Kenderaan Tidak Diketahui') ?><?= !$ad['vehicle_id'] ? ' (tiada kenderaan)' : '' ?>
                 </option>
               <?php endforeach; ?>
             </select>
