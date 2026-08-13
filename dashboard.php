@@ -670,24 +670,31 @@ $statusBadge = fn(string $status) => match ($status) {
           </div>
         </div>
 
-        <?php if ($role === 'SuperAdmin' && !empty($emailHealth)): ?>
-        <div class="card p-5 mt-5 flex items-center gap-4 flex-wrap">
-          <h6 class="mb-0 mr-4 font-semibold text-sm flex items-center gap-2">
-            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" style="color:var(--ta-muted)" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M21.75 6.75v10.5a2.25 2.25 0 01-2.25 2.25h-15a2.25 2.25 0 01-2.25-2.25V6.75m19.5 0A2.25 2.25 0 0019.5 4.5h-15a2.25 2.25 0 00-2.25 2.25m19.5 0v.243a2.25 2.25 0 01-1.07 1.916l-7.5 4.615a2.25 2.25 0 01-2.36 0L3.32 8.91a2.25 2.25 0 01-1.07-1.916V6.75" /></svg>
-            Status Penghantaran Notifikasi E-mel
-          </h6>
-          <?php 
-            $emailStatusMap = [
-              'Pending' => 'Belum Dihantar',
-              'Sent'    => 'Berjaya Dihantar',
-              'Failed'  => 'Gagal'
-            ];
-          ?>
-          <?php foreach (['Pending', 'Sent', 'Failed'] as $s): ?>
-            <span class="ta-badge <?= $s === 'Failed' ? 'badge-soft-error' : ($s === 'Pending' ? 'badge-soft-warning' : 'badge-soft-success') ?>">
-              <?= $emailStatusMap[$s] ?>: <?= (int)($emailHealth[$s] ?? 0) ?>
-            </span>
-          <?php endforeach; ?>
+        <?php if ($role === 'SuperAdmin'): ?>
+        <div class="card p-5 mt-5">
+          <div class="flex items-center justify-between gap-4">
+            <h6 class="mb-0 font-semibold text-sm flex items-center gap-2">
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" style="color:var(--ta-muted)" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M21.75 6.75v10.5a2.25 2.25 0 01-2.25 2.25h-15a2.25 2.25 0 01-2.25-2.25V6.75m19.5 0A2.25 2.25 0 0019.5 4.5h-15a2.25 2.25 0 00-2.25 2.25m19.5 0v.243a2.25 2.25 0 01-1.07 1.916l-7.5 4.615a2.25 2.25 0 01-2.36 0L3.32 8.91a2.25 2.25 0 01-1.07-1.916V6.75" /></svg>
+              Status Penghantaran Notifikasi E-mel
+            </h6>
+
+            <?php 
+              $emailStatusMap = [
+                'Pending' => 'Belum Dihantar',
+                'Sent'    => 'Berjaya Dihantar',
+                'Failed'  => 'Gagal'
+              ];
+              $emailStatuses = ['Pending','Sent','Failed'];
+            ?>
+
+            <div class="flex items-center gap-3">
+              <?php foreach ($emailStatuses as $s): ?>
+                <span class="ta-badge <?= $s === 'Failed' ? 'badge-soft-error' : ($s === 'Pending' ? 'badge-soft-warning' : 'badge-soft-success') ?>">
+                  <?= $emailStatusMap[$s] ?>: <?= (int)($emailHealth[$s] ?? 0) ?>
+                </span>
+              <?php endforeach; ?>
+            </div>
+          </div>
         </div>
         <?php endif; ?>
 
