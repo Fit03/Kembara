@@ -76,7 +76,7 @@ $pendingApprovals = $pdo->query("SELECT COUNT(*) FROM vehicle_bookings WHERE sta
             transition: background-color 0.2s ease, color 0.2s ease;
         }
 
-        .ta-card, .ta-sidebar, nav {
+        .card, .ta-sidebar, nav {
             background: var(--ta-surface) !important;
             border-color: var(--ta-border) !important;
             color: var(--ta-ink) !important;
@@ -259,7 +259,7 @@ $pendingApprovals = $pdo->query("SELECT COUNT(*) FROM vehicle_bookings WHERE sta
                         </span>
                     <?php endif; ?>
                 </div>
-                <div tabindex="0" class="dropdown-content z-[99] menu p-0 shadow-xl ta-card rounded-2xl w-80 mt-2 border" style="border-color: var(--ta-border);">
+                <div tabindex="0" class="dropdown-content z-[99] menu p-0 shadow-xl card rounded-2xl w-80 mt-2 border" style="border-color: var(--ta-border);">
                     <div class="px-4 py-3 border-b flex items-center justify-between" style="border-color: var(--ta-border);">
                         <span class="font-bold text-sm">Notifikasi</span>
                     </div>
@@ -294,7 +294,7 @@ $pendingApprovals = $pdo->query("SELECT COUNT(*) FROM vehicle_bookings WHERE sta
                     </div>
                     <span class="text-sm font-semibold hidden sm:inline-block"><?= htmlspecialchars($fullname) ?></span>
                 </div>
-                <ul tabindex="0" class="dropdown-content z-[99] menu p-3 shadow-lg ta-card rounded-2xl w-64 mt-2 border" style="border-color: var(--ta-border);">
+                <ul tabindex="0" class="dropdown-content z-[99] menu p-3 shadow-lg card rounded-2xl w-64 mt-2 border" style="border-color: var(--ta-border);">
                     <li class="px-3 py-2 border-b mb-1" style="border-color:var(--ta-border)">
                         <div class="flex items-center justify-between gap-2">
                             <p class="font-bold text-sm truncate"><?= htmlspecialchars($fullname) ?></p>
@@ -312,7 +312,7 @@ $pendingApprovals = $pdo->query("SELECT COUNT(*) FROM vehicle_bookings WHERE sta
 
       <div class="w-full px-4 sm:px-6 py-6 mx-auto max-w-3xl">
 
-        <div class="ta-card p-5 sm:p-7">
+        <div class="card p-5 sm:p-7">
           <h6 class="font-semibold text-lg mb-1">Maklumat Perjalanan</h6>
           <p class="text-sm mb-5" style="color:var(--ta-muted)">Lengkapkan butiran tempahan kenderaan anda. Pemandu &amp; kenderaan akan ditugaskan oleh pentadbir semasa kelulusan.</p>
 

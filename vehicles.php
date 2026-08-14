@@ -321,9 +321,9 @@ $pendingApprovals = $pdo->query(
         ::-webkit-scrollbar-thumb { background: var(--ta-border); border-radius: 999px; }
 
         /* Clickable card helpers — clickable only; zoom on hover */
-        .ta-card.clickable, .card.clickable { cursor: pointer; transition: transform .14s ease, box-shadow .14s ease; }
-        .ta-card.clickable:active, .card.clickable:active { transform: translateY(1px); }
-        .ta-card.clickable:hover, .card.clickable:hover { transform: translateY(-4px) scale(1.02); box-shadow: 0 8px 20px rgba(2,6,23,0.06); }
+        .card.clickable, .card.clickable { cursor: pointer; transition: transform .14s ease, box-shadow .14s ease; }
+        .card.clickable:active, .card.clickable:active { transform: translateY(1px); }
+        .card.clickable:hover, .card.clickable:hover { transform: translateY(-4px) scale(1.02); box-shadow: 0 8px 20px rgba(2,6,23,0.06); }
 
         /* ===== Toast alert — Apple-style spring pop + settle ===== */
         #toast-alert {
@@ -976,7 +976,7 @@ $pendingApprovals = $pdo->query(
     <script src="./assets/js/plugins/perfect-scrollbar.min.js" async></script>
     <script>
     (function(){
-      document.querySelectorAll('.card, .ta-card').forEach(function(card){
+      document.querySelectorAll('.card, .card').forEach(function(card){
         var href = card.dataset.href;
         if (href) {
           card.classList.add('clickable');
