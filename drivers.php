@@ -27,16 +27,16 @@ $profilePicture = $avatarStmt->fetchColumn();
 $hasPhoto = $profilePicture && is_file(__DIR__ . '/' . $profilePicture);
 
 $badgeColor = match($role) {
-    'SuperAdmin' => 'badge-soft-error',
-    'Admin'      => 'badge-soft-warning',
-    default      => 'badge-soft-info',
+  'SuperAdmin' => 'badge badge-error',
+  'Admin'      => 'badge badge-warning',
+  default      => 'badge badge-info',
 };
 
 $driverStatusBadge = fn(string $s) => match ($s) {
-    'Available' => 'badge-soft-success',
-    'Leave'     => 'badge-soft-warning',
-    'Inactive'  => 'badge-soft-neutral',
-    default     => 'badge-soft-neutral',
+    'Available' => 'badge badge-success',
+    'Leave'     => 'badge badge-warning',
+    'Inactive'  => 'badge badge-ghost',
+    default     => 'badge badge-ghost',
 };
 $driverStatusLabel = fn(string $s) => match ($s) {
     'Available' => 'Boleh Bertugas',

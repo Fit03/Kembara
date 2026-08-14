@@ -22,17 +22,17 @@ if (!$email) {
 }
 
 $badgeColor = match($role) {
-    'SuperAdmin' => 'badge-soft-error',
-    'Admin'      => 'badge-soft-warning',
-    default      => 'badge-soft-info',
+  'SuperAdmin' => 'badge badge-error',
+  'Admin'      => 'badge badge-warning',
+  default      => 'badge badge-info',
 };
 
 $vehicleStatusBadge = fn(string $s) => match ($s) {
-    'Available'   => 'badge-soft-success',
-    'Booked'      => 'badge-soft-info',
-    'Maintenance' => 'badge-soft-warning',
-    'Inactive'    => 'badge-soft-neutral',
-    default       => 'badge-soft-neutral',
+  'Available'   => 'badge badge-success',
+  'Booked'      => 'badge badge-info',
+  'Maintenance' => 'badge badge-warning',
+  'Inactive'    => 'badge badge-ghost',
+  default       => 'badge badge-ghost',
 };
 $vehicleStatusLabel = fn(string $s) => match ($s) {
     'Available'   => 'Sedia Ada',
@@ -668,7 +668,7 @@ $pendingApprovals = $pdo->query(
                     <td class="px-3 py-3 text-sm border-b whitespace-nowrap" style="border-color:var(--ta-border)"><?= htmlspecialchars($v['driver_name'] ?? '—') ?></td>
                     <td class="px-3 py-3 text-sm border-b whitespace-nowrap" style="border-color:var(--ta-border)">
                       <?php if ($soon): ?>
-                        <span class="ta-badge badge-soft-warning">Tamat Tempoh Segera</span>
+                        <span class="ta-badge badge badge-warning">Tamat Tempoh Segera</span>
                       <?php else: ?>
                         <span class="text-slate-400 text-xs">Terkini</span>
                       <?php endif; ?>

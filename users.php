@@ -32,15 +32,15 @@ $profilePicture = $avatarStmt->fetchColumn();
 $hasPhoto = $profilePicture && is_file(__DIR__ . '/' . $profilePicture);
 
 $badgeColor = match($role) {
-    'SuperAdmin' => 'badge-soft-error',
-    'Admin'      => 'badge-soft-warning',
-    default      => 'badge-soft-info',
+  'SuperAdmin' => 'badge badge-error',
+  'Admin'      => 'badge badge-warning',
+  default      => 'badge badge-info',
 };
 
 $roleBadge = fn(string $r) => match ($r) {
-    'SuperAdmin' => 'badge-soft-error',
-    'Admin'      => 'badge-soft-warning',
-    default      => 'badge-soft-info',
+  'SuperAdmin' => 'badge badge-error',
+  'Admin'      => 'badge badge-warning',
+  default      => 'badge badge-info',
 };
 
 /* ==========================================================
@@ -592,7 +592,7 @@ $pendingApprovals = $pdo->query(
             <h5 class="text-2xl font-bold"><?= (int)$totalUsers ?></h5>
           </div>
 
-          <div class="ta-card p-5" data-href="users.php?role=SuperAdmin">
+          <div class="ta-card p-5" data-href="users.php?q=SuperAdmin">
             <div class="ta-icon-box mb-4">
               <svg xmlns="http://www.w3.org/2000/svg" class="h-5.5 w-5.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.6"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75m5.25 2.25a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
             </div>
@@ -600,7 +600,7 @@ $pendingApprovals = $pdo->query(
             <h5 class="text-2xl font-bold"><?= $totalSuperAdmin ?></h5>
           </div>
 
-          <div class="ta-card p-5" data-href="users.php?role=Admin">
+          <div class="ta-card p-5" data-href="users.php?q=Admin">
             <div class="ta-icon-box mb-4">
               <svg xmlns="http://www.w3.org/2000/svg" class="h-5.5 w-5.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.6"><path stroke-linecap="round" stroke-linejoin="round" d="M9.75 3.104v5.714a2.25 2.25 0 01-.659 1.591L5 14.5M9.75 3.104c-.251.023-.501.05-.75.082m.75-.082a24.301 24.301 0 014.5 0m0 0v5.714c0 .597.237 1.17.659 1.591L19.8 15.3M14.25 3.104c.251.023.501.05.75.082M19.8 15.3l-1.57.393A9.065 9.065 0 0112 15a9.065 9.065 0 00-6.23-.693L5 14.5m14.8.8l1.402 1.402c1.232 1.232.65 3.318-1.067 3.611A48.309 48.309 0 0112 21c-2.773 0-5.491-.235-8.135-.687-1.718-.293-2.3-2.379-1.067-3.61L5 14.5" /></svg>
             </div>
@@ -608,7 +608,7 @@ $pendingApprovals = $pdo->query(
             <h5 class="text-2xl font-bold"><?= $totalAdmin ?></h5>
           </div>
 
-          <div class="ta-card p-5" data-href="users.php?role=User">
+          <div class="ta-card p-5" data-href="users.php?q=User">
             <div class="ta-icon-box mb-4">
               <svg xmlns="http://www.w3.org/2000/svg" class="h-5.5 w-5.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.6"><path stroke-linecap="round" stroke-linejoin="round" d="M17.982 18.725A7.488 7.488 0 0012 15.75a7.488 7.488 0 00-5.982 2.975m11.963 0a9 9 0 10-11.963 0m11.963 0A8.966 8.966 0 0112 21a8.966 8.966 0 01-5.982-2.275M15 9.75a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
             </div>
@@ -923,7 +923,9 @@ $pendingApprovals = $pdo->query(
           card.setAttribute('tabindex','0');
           card.addEventListener('keypress', function(e){ if (e.key === 'Enter') card.click(); });
         }
-        // no automatic warning styling — cards are clickable only
+        if (card.dataset.priority === 'warning' || card.querySelector('.badge-warning') || /Menunggu|Pending/i.test(card.textContent)) {
+          card.classList.add('flash-warning');
+        }
       });
     })();
     </script>

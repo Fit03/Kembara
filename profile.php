@@ -12,9 +12,9 @@ $currentUserId = (int)$_SESSION['user_id'];
 $role           = $_SESSION['role'];
 
 $badgeColor = match($role) {
-    'SuperAdmin' => 'badge-soft-error',
-    'Admin'      => 'badge-soft-warning',
-    default      => 'badge-soft-info',
+  'SuperAdmin' => 'badge badge-error',
+  'Admin'      => 'badge badge-warning',
+  default      => 'badge badge-info',
 };
 
 $UPLOAD_DIR = __DIR__ . '/assets/uploads/avatars';

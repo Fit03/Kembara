@@ -26,18 +26,18 @@ $profilePicture = $avatarStmt->fetchColumn();
 $hasPhoto = $profilePicture && is_file(__DIR__ . '/' . $profilePicture);
 
 $badgeColor = match($role) {
-    'SuperAdmin' => 'badge-soft-error',
-    'Admin'      => 'badge-soft-warning',
-    default      => 'badge-soft-info',
+  'SuperAdmin' => 'badge badge-error',
+  'Admin'      => 'badge badge-warning',
+  default      => 'badge badge-info',
 };
 
 $statusBadge = fn(string $s) => match ($s) {
-    'Pending'   => 'badge-soft-warning',
-    'Approved'  => 'badge-soft-info',
-    'Rejected'  => 'badge-soft-error',
-    'Cancelled' => 'badge-soft-neutral',
-    'Completed' => 'badge-soft-success',
-    default     => 'badge-soft-neutral',
+  'Pending'   => 'badge badge-warning',
+  'Approved'  => 'badge badge-info',
+  'Rejected'  => 'badge badge-error',
+  'Cancelled' => 'badge badge-ghost',
+  'Completed' => 'badge badge-success',
+  default     => 'badge badge-ghost',
 };
 $statusLabel = fn(string $s) => match ($s) {
     'Pending'   => 'Menunggu',
@@ -361,7 +361,7 @@ $tabs = ['All' => 'Semua', 'Pending' => 'Menunggu', 'Approved' => 'Diluluskan', 
             transition: background-color 0.2s ease, color 0.2s ease;
         }
 
-        .ta-card, .ta-sidebar, nav {
+        .card, .ta-sidebar, nav {
             background: var(--ta-surface) !important;
             border-color: var(--ta-border) !important;
             color: var(--ta-ink) !important;
@@ -433,9 +433,9 @@ $tabs = ['All' => 'Semua', 'Pending' => 'Menunggu', 'Approved' => 'Diluluskan', 
         ::-webkit-scrollbar-thumb { background: var(--ta-border); border-radius: 999px; }
 
         /* Clickable card helpers — clickable only; zoom on hover */
-        .ta-card.clickable, .card.clickable { cursor: pointer; transition: transform .14s ease, box-shadow .14s ease; }
-        .ta-card.clickable:active, .card.clickable:active { transform: translateY(1px); }
-        .ta-card.clickable:hover, .card.clickable:hover { transform: translateY(-4px) scale(1.02); box-shadow: 0 8px 20px rgba(2,6,23,0.06); }
+        .card.clickable, .card.clickable { cursor: pointer; transition: transform .14s ease, box-shadow .14s ease; }
+        .card.clickable:active, .card.clickable:active { transform: translateY(1px); }
+        .card.clickable:hover, .card.clickable:hover { transform: translateY(-4px) scale(1.02); box-shadow: 0 8px 20px rgba(2,6,23,0.06); }
 
         #toast-alert {
             position: fixed;
@@ -622,7 +622,7 @@ $tabs = ['All' => 'Semua', 'Pending' => 'Menunggu', 'Approved' => 'Diluluskan', 
                             </span>
                         <?php endif; ?>
                     </div>
-                    <div tabindex="0" class="dropdown-content z-[99] menu p-0 shadow-xl ta-card rounded-2xl w-80 mt-2 border" style="border-color: var(--ta-border);">
+                    <div tabindex="0" class="dropdown-content z-[99] menu p-0 shadow-xl card rounded-2xl w-80 mt-2 border" style="border-color: var(--ta-border);">
                         <div class="px-4 py-3 border-b flex items-center justify-between" style="border-color: var(--ta-border);">
                             <span class="font-bold text-sm">Notifikasi</span>
                         </div>
@@ -657,7 +657,7 @@ $tabs = ['All' => 'Semua', 'Pending' => 'Menunggu', 'Approved' => 'Diluluskan', 
                         </div>
                         <span class="text-sm font-semibold hidden sm:inline-block"><?= htmlspecialchars($fullname) ?></span>
                     </div>
-                    <ul tabindex="0" class="dropdown-content z-[99] menu p-3 shadow-lg ta-card rounded-2xl w-64 mt-2 border" style="border-color: var(--ta-border);">
+                    <ul tabindex="0" class="dropdown-content z-[99] menu p-3 shadow-lg card rounded-2xl w-64 mt-2 border" style="border-color: var(--ta-border);">
                         <li class="px-3 py-2 border-b mb-1" style="border-color:var(--ta-border)">
                             <div class="flex items-center justify-between gap-2">
                                 <p class="font-bold text-sm truncate"><?= htmlspecialchars($fullname) ?></p>
@@ -676,7 +676,7 @@ $tabs = ['All' => 'Semua', 'Pending' => 'Menunggu', 'Approved' => 'Diluluskan', 
       <div class="w-full px-4 sm:px-6 py-6 mx-auto">
 
         <?php if ($flash): ?>
-          <div id="toast-alert" class="ta-card shadow-2xl px-4 py-3.5 rounded-2xl flex items-center gap-3 border" style="border-color: var(--color-<?= $flash['type'] === 'success' ? 'success' : 'error' ?>); max-width: 26rem; backdrop-filter: blur(16px);">
+          <div id="toast-alert" class="card shadow-2xl px-4 py-3.5 rounded-2xl flex items-center gap-3 border" style="border-color: var(--color-<?= $flash['type'] === 'success' ? 'success' : 'error' ?>); max-width: 26rem; backdrop-filter: blur(16px);">
             <div class="p-1.5 rounded-full shrink-0 <?= $flash['type'] === 'success' ? 'bg-success/15 text-success' : 'bg-error/15 text-error' ?>">
               <?php if ($flash['type'] === 'success'): ?>
                 <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5" /></svg>
@@ -693,7 +693,7 @@ $tabs = ['All' => 'Semua', 'Pending' => 'Menunggu', 'Approved' => 'Diluluskan', 
 
         <!-- Baris 1: Kad Statistik -->
         <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-5">
-          <div class="ta-card p-5" data-href="bookings.php">
+          <div class="card p-5" data-href="bookings.php">
             <div class="ta-icon-box mb-4">
               <svg xmlns="http://www.w3.org/2000/svg" class="h-5.5 w-5.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.6"><path stroke-linecap="round" stroke-linejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 012.25-2.25h13.5A2.25 2.25 0 0121 7.5v11.25m-18 0A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75m-18 0v-7.5A2.25 2.25 0 015.25 9h13.5A2.25 2.25 0 0121 11.25v7.5" /></svg>
             </div>
@@ -701,7 +701,7 @@ $tabs = ['All' => 'Semua', 'Pending' => 'Menunggu', 'Approved' => 'Diluluskan', 
             <h5 class="text-2xl font-bold"><?= $totalBookings ?></h5>
           </div>
 
-          <div class="ta-card p-5" data-href="bookings.php?status=Pending" data-priority="warning">
+          <div class="card p-5" data-href="bookings.php?status=Pending" data-priority="warning">
             <div class="ta-icon-box mb-4">
               <svg xmlns="http://www.w3.org/2000/svg" class="h-5.5 w-5.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.6"><path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
             </div>
@@ -709,7 +709,7 @@ $tabs = ['All' => 'Semua', 'Pending' => 'Menunggu', 'Approved' => 'Diluluskan', 
             <h5 class="text-2xl font-bold"><?= $pendingCount ?></h5>
           </div>
 
-          <div class="ta-card p-5" data-href="bookings.php?status=Approved">
+          <div class="card p-5" data-href="bookings.php?status=Approved">
             <div class="ta-icon-box mb-4">
               <svg xmlns="http://www.w3.org/2000/svg" class="h-5.5 w-5.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.6"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
             </div>
@@ -717,7 +717,7 @@ $tabs = ['All' => 'Semua', 'Pending' => 'Menunggu', 'Approved' => 'Diluluskan', 
             <h5 class="text-2xl font-bold"><?= $approvedCount ?></h5>
           </div>
 
-          <div class="ta-card p-5" data-href="bookings.php?status=Completed">
+          <div class="card p-5" data-href="bookings.php?status=Completed">
             <div class="ta-icon-box mb-4">
               <svg xmlns="http://www.w3.org/2000/svg" class="h-5.5 w-5.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.6"><path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5" /></svg>
             </div>
@@ -727,7 +727,7 @@ $tabs = ['All' => 'Semua', 'Pending' => 'Menunggu', 'Approved' => 'Diluluskan', 
         </div>
 
         <!-- Baris 2: Jadual Tempahan -->
-        <div class="ta-card p-5 mt-5">
+        <div class="card p-5 mt-5">
           <div class="flex items-center justify-between gap-3 mb-4 flex-wrap">
             <div>
               <h6 class="font-semibold">Senarai Tempahan</h6>
@@ -877,7 +877,7 @@ $tabs = ['All' => 'Semua', 'Pending' => 'Menunggu', 'Approved' => 'Diluluskan', 
 
     <!-- Modal: Luluskan & Tugaskan Pemandu -->
     <dialog id="modal-approve" class="modal">
-      <div class="modal-box ta-card max-w-md">
+      <div class="modal-box card max-w-md">
         <form method="dialog"><button class="btn btn-sm btn-circle btn-ghost absolute right-3 top-3">✕</button></form>
         <h3 class="font-bold text-lg mb-1">Luluskan Tempahan</h3>
         <p class="text-sm text-slate-400 mb-4">No. Tempahan: <span id="approve-booking-no" class="font-semibold"></span></p>
@@ -922,7 +922,7 @@ $tabs = ['All' => 'Semua', 'Pending' => 'Menunggu', 'Approved' => 'Diluluskan', 
 
     <!-- Modal: Lihat Butiran Tempahan -->
     <dialog id="modal-view" class="modal">
-      <div class="modal-box ta-card max-w-lg">
+      <div class="modal-box card max-w-lg">
         <form method="dialog"><button class="btn btn-sm btn-circle btn-ghost absolute right-3 top-3">✕</button></form>
         <h3 class="font-bold text-lg mb-1">Butiran Tempahan</h3>
         <p class="text-sm text-slate-400 mb-4" id="view-booking-no"></p>
@@ -949,7 +949,7 @@ $tabs = ['All' => 'Semua', 'Pending' => 'Menunggu', 'Approved' => 'Diluluskan', 
 
     <!-- Modal: Sahkan Tindakan Status -->
     <dialog id="modal-action" class="modal">
-      <div class="modal-box ta-card max-w-sm">
+      <div class="modal-box card max-w-sm">
         <h3 class="font-bold text-lg mb-2" id="action-modal-title">Sahkan Tindakan</h3>
         <p class="text-sm text-slate-400 mb-4" id="action-modal-text"></p>
         <form action="bookings.php<?= $search !== '' || $statusFilter !== 'All' ? '?' . http_build_query(array_filter(['q' => $search !== '' ? $search : null, 'status' => $statusFilter !== 'All' ? $statusFilter : null])) : '' ?>" method="POST" class="flex justify-end gap-2">
@@ -1064,7 +1064,7 @@ $tabs = ['All' => 'Semua', 'Pending' => 'Menunggu', 'Approved' => 'Diluluskan', 
     <script src="./assets/js/plugins/perfect-scrollbar.min.js" async></script>
     <script>
     (function(){
-      document.querySelectorAll('.card, .ta-card').forEach(function(card){
+      document.querySelectorAll('.card, .card').forEach(function(card){
         var href = card.dataset.href;
         if (href) {
           card.classList.add('clickable');
