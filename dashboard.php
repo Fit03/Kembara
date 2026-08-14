@@ -49,34 +49,18 @@ $pendingApprovals = $pdo->query(
     "SELECT COUNT(*) FROM vehicle_bookings WHERE status = 'Pending'"
 )->fetchColumn();
 
-$rawVehicleCounts = $pdo->query(
-  "SELECT status, COUNT(*) AS total FROM vehicles GROUP BY status"
+$vehicleCounts = $pdo->query(
+    "SELECT status, COUNT(*) AS total FROM vehicles GROUP BY status"
 )->fetchAll(PDO::FETCH_KEY_PAIR);
-
-// Normalize vehicle status keys coming from DB (trim + ucfirst of lowercase)
-$vehicleCounts = [];
-foreach ($rawVehicleCounts as $k => $v) {
-  $normalized = ucfirst(strtolower(trim((string)$k)));
-  $vehicleCounts[$normalized] = (int)$v;
-}
-
 $totalVehicles     = array_sum($vehicleCounts);
 $availableVehicles = $vehicleCounts['Available'] ?? 0;
 
 $totalUsers = $pdo->query("SELECT COUNT(*) FROM users")->fetchColumn();
 
 // -- Pecahan status tempahan (untuk carta donat) ------------------
-$rawBookingStatusRows = $pdo->query(
-  "SELECT status, COUNT(*) AS total FROM vehicle_bookings GROUP BY status"
+$bookingStatusRows = $pdo->query(
+    "SELECT status, COUNT(*) AS total FROM vehicle_bookings GROUP BY status"
 )->fetchAll(PDO::FETCH_KEY_PAIR);
-
-// Normalize booking status keys (handle different casing/whitespace from DB)
-$bookingStatusRows = [];
-foreach ($rawBookingStatusRows as $k => $v) {
-  $normalized = ucfirst(strtolower(trim((string)$k)));
-  $bookingStatusRows[$normalized] = (int)$v;
-}
-
 $bookingStatusLabels = ['Pending', 'Approved', 'Rejected', 'Cancelled', 'Completed'];
 $bookingStatusData   = array_map(fn($s) => (int)($bookingStatusRows[$s] ?? 0), $bookingStatusLabels);
 
@@ -204,10 +188,10 @@ $statusBadge = fn(string $status) => match ($status) {
 
         * { font-family: 'Outfit', ui-sans-serif, system-ui, sans-serif; }
 
-        body {
-            background: var(--ta-canvas);
-            color: var(--ta-ink);
-            zoom: 110%;
+        body { 
+            background: var(--ta-canvas); 
+            color: var(--ta-ink); 
+            zoom: 110%; /* Global zoom adjustment */
             transition: background-color 0.2s ease, color 0.2s ease;
         }
 
@@ -295,10 +279,6 @@ $statusBadge = fn(string $status) => match ($status) {
 
         ::-webkit-scrollbar { width: 8px; height: 8px; }
         ::-webkit-scrollbar-thumb { background: var(--ta-border); border-radius: 999px; }
-        /* Clickable card helpers — clickable only; zoom on hover */
-        .card.clickable { cursor: pointer; transition: transform .14s ease, box-shadow .14s ease; }
-        .card.clickable:active { transform: translateY(1px); }
-        .card.clickable:hover { transform: translateY(-4px) scale(1.02); box-shadow: 0 8px 20px rgba(2,6,23,0.06); }
     </style>
 </head>
 <body class="min-h-screen">
@@ -440,7 +420,7 @@ $statusBadge = fn(string $status) => match ($status) {
                         <?php endif; ?>
                     </div>
 
-                    <div tabindex="0" class="dropdown-content z-[99] menu p-0 shadow-xl card rounded-2xl w-80 mt-2 border" style="border-color: var(--ta-border);">
+                    <div tabindex="0" class="dropdown-content z-[99] menu p-0 shadow-xl card rounded-2xl w-80 max-w-[90vw] mt-2 border" style="border-color: var(--ta-border);">
                         <!-- Header Notifikasi -->
                         <div class="px-4 py-3 border-b flex items-center justify-between" style="border-color: var(--ta-border);">
                             <div class="flex items-center gap-2">
@@ -511,34 +491,34 @@ $statusBadge = fn(string $status) => match ($status) {
       <div class="w-full px-4 sm:px-6 py-6 mx-auto">
 
         <!-- Baris 1: Kad Statistik -->
-        <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-5">
-          <div class="card p-5" data-href="bookings.php">
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+          <div class="card p-5">
             <div class="ta-icon-box mb-4">
-              <svg xmlns="http://www.w3.org/2000/svg" class="h-5.5 w-5.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.6"><path stroke-linecap="round" stroke-linejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 012.25-2.25h13.5A2.25 2.25 0 0121 7.5v11.25m-18 0A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75m-18 0v-7.5A2.25 2.25 0 015.25 9h13.5A2.25 2.25 0 0121 11.25v7.5" /></svg>
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.6"><path stroke-linecap="round" stroke-linejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 012.25-2.25h13.5A2.25 2.25 0 0121 7.5v11.25m-18 0A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75m-18 0v-7.5A2.25 2.25 0 015.25 9h13.5A2.25 2.25 0 0121 11.25v7.5" /></svg>
             </div>
             <p class="text-sm mb-1" style="color:var(--ta-muted)">Tempahan Bulan Ini</p>
             <h5 class="text-2xl font-bold"><?= (int)$totalBookingsThisMonth ?></h5>
           </div>
 
-          <div class="card p-5" data-href="bookings.php?status=Pending" data-priority="warning">
+          <div class="card p-5">
             <div class="ta-icon-box mb-4">
-              <svg xmlns="http://www.w3.org/2000/svg" class="h-5.5 w-5.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.6"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.6"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
             </div>
             <p class="text-sm mb-1" style="color:var(--ta-muted)">Menunggu Kelulusan</p>
             <h5 class="text-2xl font-bold"><?= (int)$pendingApprovals ?></h5>
           </div>
 
-          <div class="card p-5" data-href="vehicles.php?status=Available">
+          <div class="card p-5">
             <div class="ta-icon-box mb-4">
-              <svg xmlns="http://www.w3.org/2000/svg" class="h-5.5 w-5.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.6"><path stroke-linecap="round" stroke-linejoin="round" d="M8.25 18.75a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m3 0h6m-9 0H3.375a1.125 1.125 0 01-1.125-1.125V14.25m17.25 4.5a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m3 0h1.125c.621 0 1.129-.504 1.09-1.124a17.902 17.902 0 00-3.213-9.193 2.056 2.056 0 00-1.58-.86H14.25M16.5 18.75h-2.25m0-11.177v-.958c0-.568-.422-1.048-.987-1.106a48.554 48.554 0 00-10.026 0 1.106 1.106 0 00-.987 1.106v7.635m12-6.677v6.677m0 0h-12" /></svg>
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.6"><path stroke-linecap="round" stroke-linejoin="round" d="M8.25 18.75a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m3 0h6m-9 0H3.375a1.125 1.125 0 01-1.125-1.125V14.25m17.25 4.5a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m3 0h1.125c.621 0 1.129-.504 1.09-1.124a17.902 17.902 0 00-3.213-9.193 2.056 2.056 0 00-1.58-.86H14.25M16.5 18.75h-2.25m0-11.177v-.958c0-.568-.422-1.048-.987-1.106a48.554 48.554 0 00-10.026 0 1.106 1.106 0 00-.987 1.106v7.635m12-6.677v6.677m0 0h-12" /></svg>
             </div>
             <p class="text-sm mb-1" style="color:var(--ta-muted)">Kenderaan Sedia Ada</p>
             <h5 class="text-2xl font-bold"><?= (int)$availableVehicles ?> <span class="text-sm font-medium text-slate-400">/ <?= (int)$totalVehicles ?></span></h5>
           </div>
 
-          <div class="card p-5" data-href="users.php">
+          <div class="card p-5">
             <div class="ta-icon-box mb-4">
-              <svg xmlns="http://www.w3.org/2000/svg" class="h-5.5 w-5.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.6"><path stroke-linecap="round" stroke-linejoin="round" d="M15 19.128a9.38 9.38 0 002.625.372 9.337 9.337 0 004.121-.952 4.125 4.125 0 00-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 018.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0111.964-3.07M12 6.375a3.375 3.375 0 11-6.75 0 3.375 3.375 0 016.75 0zm8.25 2.25a2.625 2.625 0 11-5.25 0 2.625 2.625 0 015.25 0z" /></svg>
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.6"><path stroke-linecap="round" stroke-linejoin="round" d="M15 19.128a9.38 9.38 0 002.625.372 9.337 9.337 0 004.121-.952 4.125 4.125 0 00-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 018.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0111.964-3.07M12 6.375a3.375 3.375 0 11-6.75 0 3.375 3.375 0 016.75 0zm8.25 2.25a2.625 2.625 0 11-5.25 0 2.625 2.625 0 015.25 0z" /></svg>
             </div>
             <p class="text-sm mb-1" style="color:var(--ta-muted)">Jumlah Pengguna</p>
             <h5 class="text-2xl font-bold"><?= (int)$totalUsers ?></h5>
@@ -674,31 +654,24 @@ $statusBadge = fn(string $status) => match ($status) {
           </div>
         </div>
 
-        <?php if ($role === 'SuperAdmin'): ?>
-        <div class="card p-5 mt-5">
-          <div class="flex items-center justify-between gap-4">
-            <h6 class="mb-0 font-semibold text-sm flex items-center gap-2">
-              <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" style="color:var(--ta-muted)" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M21.75 6.75v10.5a2.25 2.25 0 01-2.25 2.25h-15a2.25 2.25 0 01-2.25-2.25V6.75m19.5 0A2.25 2.25 0 0019.5 4.5h-15a2.25 2.25 0 00-2.25 2.25m19.5 0v.243a2.25 2.25 0 01-1.07 1.916l-7.5 4.615a2.25 2.25 0 01-2.36 0L3.32 8.91a2.25 2.25 0 01-1.07-1.916V6.75" /></svg>
-              Status Penghantaran Notifikasi E-mel
-            </h6>
-
-            <?php 
-              $emailStatusMap = [
-                'Pending' => 'Belum Dihantar',
-                'Sent'    => 'Berjaya Dihantar',
-                'Failed'  => 'Gagal'
-              ];
-              $emailStatuses = ['Pending','Sent','Failed'];
-            ?>
-
-            <div class="flex items-center gap-3">
-              <?php foreach ($emailStatuses as $s): ?>
-                <span class="ta-badge <?= $s === 'Failed' ? 'badge-soft-error' : ($s === 'Pending' ? 'badge-soft-warning' : 'badge-soft-success') ?>">
-                  <?= $emailStatusMap[$s] ?>: <?= (int)($emailHealth[$s] ?? 0) ?>
-                </span>
-              <?php endforeach; ?>
-            </div>
-          </div>
+        <?php if ($role === 'SuperAdmin' && !empty($emailHealth)): ?>
+        <div class="card p-5 mt-5 flex items-center gap-4 flex-wrap">
+          <h6 class="mb-0 mr-4 font-semibold text-sm flex items-center gap-2">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" style="color:var(--ta-muted)" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M21.75 6.75v10.5a2.25 2.25 0 01-2.25 2.25h-15a2.25 2.25 0 01-2.25-2.25V6.75m19.5 0A2.25 2.25 0 0019.5 4.5h-15a2.25 2.25 0 00-2.25 2.25m19.5 0v.243a2.25 2.25 0 01-1.07 1.916l-7.5 4.615a2.25 2.25 0 01-2.36 0L3.32 8.91a2.25 2.25 0 01-1.07-1.916V6.75" /></svg>
+            Status Penghantaran Notifikasi E-mel
+          </h6>
+          <?php 
+            $emailStatusMap = [
+              'Pending' => 'Belum Dihantar',
+              'Sent'    => 'Berjaya Dihantar',
+              'Failed'  => 'Gagal'
+            ];
+          ?>
+          <?php foreach (['Pending', 'Sent', 'Failed'] as $s): ?>
+            <span class="ta-badge <?= $s === 'Failed' ? 'badge-soft-error' : ($s === 'Pending' ? 'badge-soft-warning' : 'badge-soft-success') ?>">
+              <?= $emailStatusMap[$s] ?>: <?= (int)($emailHealth[$s] ?? 0) ?>
+            </span>
+          <?php endforeach; ?>
         </div>
         <?php endif; ?>
 
@@ -737,7 +710,7 @@ $statusBadge = fn(string $status) => match ($status) {
         const bookingStatusLabels = rawBookingLabels.map(label => bookingTranslationMap[label] || label);
         const vehicleStatusLabels = rawVehicleLabels.map(label => vehicleTranslationMap[label] || label);
 
-        // Skrip Penyediaan Carta ApexCharts Bahasa Melayu
+        // Carta Status Tempahan
         var bookingOptions = {
           series: bookingStatusData,
           chart: {
@@ -783,6 +756,7 @@ $statusBadge = fn(string $status) => match ($status) {
         var bookingChart = new ApexCharts(document.querySelector("#chart-booking-status"), bookingOptions);
         bookingChart.render();
 
+        // Carta Status Kenderaan
         var vehicleOptions = {
           series: vehicleStatusData,
           chart: {
@@ -853,38 +827,14 @@ $statusBadge = fn(string $status) => match ($status) {
                 .getPropertyValue('--color-base-content').trim();
 
             if (typeof bookingChart !== 'undefined' && typeof vehicleChart !== 'undefined') {
-              const bg = getComputedStyle(document.documentElement).getPropertyValue('--color-base-100').trim();
-              // Update ApexCharts title and legend colors to match theme
-              bookingChart.updateOptions({
-                title: { style: { color: textColor } },
-                legend: { labels: { colors: textColor } },
-                plotOptions: {
-                  pie: {
-                    donut: {
-                      labels: {
-                        name: { color: textColor },
-                        value: { color: textColor },
-                        total: { color: textColor }
-                      }
-                    }
-                  }
-                }
-              });
-              vehicleChart.updateOptions({
-                title: { style: { color: textColor } },
-                legend: { labels: { colors: textColor } },
-                plotOptions: {
-                  pie: {
-                    donut: {
-                      labels: {
-                        name: { color: textColor },
-                        value: { color: textColor },
-                        total: { color: textColor }
-                      }
-                    }
-                  }
-                }
-              });
+                bookingChart.updateOptions({
+                    title: { style: { color: textColor } },
+                    legend: { labels: { colors: textColor } }
+                });
+                vehicleChart.updateOptions({
+                    title: { style: { color: textColor } },
+                    legend: { labels: { colors: textColor } }
+                });
             }
         }
 
@@ -903,23 +853,5 @@ $statusBadge = fn(string $status) => match ($status) {
     </script>
 
     <script src="./assets/js/plugins/perfect-scrollbar.min.js" async></script>
-    <script>
-    // Make cards with data-href clickable and apply flashing to priority cards
-    (function(){
-      document.querySelectorAll('.card').forEach(function(card){
-        var href = card.dataset.href;
-        if (href) {
-          card.classList.add('clickable');
-          card.addEventListener('click', function(e){
-            if (e.target.closest('a, button, input, select, textarea')) return;
-            window.location.href = href;
-          });
-          card.setAttribute('tabindex','0');
-          card.addEventListener('keypress', function(e){ if (e.key === 'Enter') card.click(); });
-        }
-        // no automatic warning styling — cards are clickable only
-      });
-    })();
-    </script>
 </body>
 </html>
