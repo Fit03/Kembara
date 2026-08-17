@@ -512,13 +512,19 @@ $statusBadge = fn(string $status) => match ($status) {
             <h5 class="text-2xl font-bold"><?= (int)$totalBookingsThisMonth ?></h5>
           </div>
 
-          <div class="card p-5" data-href="bookings.php?status=Pending" data-priority="warning">
-            <div class="ta-icon-box mb-4">
-              <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.6"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+          <?php if ($pendingApprovals > 0): ?>
+          <div class="aura aura-dual text-yellow-600 bg-orange-200 duration-3000">
+          <?php endif; ?>
+            <div class="card p-5" data-href="bookings.php?status=Pending" data-priority="warning">
+              <div class="ta-icon-box mb-4">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.6"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+              </div>
+              <p class="text-sm mb-1" style="color:var(--ta-muted)">Menunggu Kelulusan</p>
+              <h5 class="text-2xl font-bold"><?= (int)$pendingApprovals ?></h5>
             </div>
-            <p class="text-sm mb-1" style="color:var(--ta-muted)">Menunggu Kelulusan</p>
-            <h5 class="text-2xl font-bold"><?= (int)$pendingApprovals ?></h5>
+          <?php if ($pendingApprovals > 0): ?>
           </div>
+          <?php endif; ?>
 
           <div class="card p-5" data-href="vehicles.php">
             <div class="ta-icon-box mb-4">
