@@ -322,7 +322,7 @@ $pendingApprovals = $pdo->query("SELECT COUNT(*) FROM vehicle_bookings WHERE sta
 $tabs = ['All' => 'Semua', 'Pending' => 'Menunggu', 'Approved' => 'Diluluskan', 'Rejected' => 'Ditolak', 'Cancelled' => 'Dibatalkan', 'Completed' => 'Selesai'];
 ?>
 <!DOCTYPE html>
-<html lang="ms" data-theme="light">
+<html lang="ms" garden>
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, shrink-to-fit=no" />
