@@ -753,9 +753,17 @@ $statusBadge = fn(string $status) => match ($status) {
                   total: {
                     show: true,
                     label: 'Jumlah Tempahan',
+                    fontSize: '14px',
+                    fontWeight: 600,
+                    color: getComputedStyle(document.documentElement).getPropertyValue('--color-base-content').trim(),
                     formatter: function (w) {
                       return w.globals.seriesTotals.reduce((a, b) => a + b, 0);
                     }
+                  },
+                  value: {
+                    fontSize: '18px',
+                    fontWeight: 700,
+                    color: getComputedStyle(document.documentElement).getPropertyValue('--color-base-content').trim()
                   }
                 }
               }
@@ -767,7 +775,11 @@ $statusBadge = fn(string $status) => match ($status) {
           title: {
             text: 'Status Tempahan Kenderaan',
             align: 'left',
-            style: { fontSize: '14px', fontWeight: '600', color: '#1D2939' }
+            style: { 
+              fontSize: '14px', 
+              fontWeight: '600', 
+              color: getComputedStyle(document.documentElement).getPropertyValue('--color-base-content').trim()
+            }
           },
           responsive: [{
             breakpoint: 480,
@@ -799,9 +811,17 @@ $statusBadge = fn(string $status) => match ($status) {
                   total: {
                     show: true,
                     label: 'Jumlah Kenderaan',
+                    fontSize: '14px',
+                    fontWeight: 600,
+                    color: getComputedStyle(document.documentElement).getPropertyValue('--color-base-content').trim(),
                     formatter: function (w) {
                       return w.globals.seriesTotals.reduce((a, b) => a + b, 0);
                     }
+                  },
+                  value: {
+                    fontSize: '18px',
+                    fontWeight: 700,
+                    color: getComputedStyle(document.documentElement).getPropertyValue('--color-base-content').trim()
                   }
                 }
               }
@@ -813,7 +833,11 @@ $statusBadge = fn(string $status) => match ($status) {
           title: {
             text: 'Status Agihan Kenderaan',
             align: 'left',
-            style: { fontSize: '14px', fontWeight: '600', color: '#1D2939' }
+            style: { 
+              fontSize: '14px', 
+              fontWeight: '600', 
+              color: getComputedStyle(document.documentElement).getPropertyValue('--color-base-content').trim()
+            }
           },
           responsive: [{
             breakpoint: 480,
@@ -851,11 +875,31 @@ $statusBadge = fn(string $status) => match ($status) {
             if (typeof bookingChart !== 'undefined' && typeof vehicleChart !== 'undefined') {
                 bookingChart.updateOptions({
                     title: { style: { color: textColor } },
-                    legend: { labels: { colors: textColor } }
+                    legend: { labels: { colors: textColor } },
+                    plotOptions: {
+                        pie: {
+                            donut: {
+                                labels: {
+                                    total: { color: textColor },
+                                    value: { color: textColor }
+                                }
+                            }
+                        }
+                    }
                 });
                 vehicleChart.updateOptions({
                     title: { style: { color: textColor } },
-                    legend: { labels: { colors: textColor } }
+                    legend: { labels: { colors: textColor } },
+                    plotOptions: {
+                        pie: {
+                            donut: {
+                                labels: {
+                                    total: { color: textColor },
+                                    value: { color: textColor }
+                                }
+                            }
+                        }
+                    }
                 });
             }
         }
