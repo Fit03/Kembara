@@ -31,6 +31,26 @@ $badgeColor = match($role) {
 };
 
 $pendingApprovals = $pdo->query("SELECT COUNT(*) FROM vehicle_bookings WHERE status = 'Pending'")->fetchColumn();
+
+// --- Tarikh Penuh Tempahan (untuk sekat kalendar) ---------------------
+// Andaian: jadual "drivers" menyimpan semua pemandu aktif, dan setiap
+// tempahan (bukan status "Rejected"/"Cancelled") menggunakan 1 pemandu
+// untuk tarikh berangkat (depart_datetime). Sesuaikan nama jadual/lajur
+// mengikut skema sebenar sistem anda jika berbeza.
+$totalDrivers = (int) $pdo->query("SELECT COUNT(*) FROM drivers WHERE status = 'Active'")->fetchColumn();
+
+$fullyBookedDates = [];
+if ($totalDrivers > 0) {
+    $bookedStmt = $pdo->query("
+        SELECT DATE(depart_datetime) AS booking_date, COUNT(*) AS total_bookings
+        FROM vehicle_bookings
+        WHERE status NOT IN ('Rejected', 'Cancelled')
+        GROUP BY DATE(depart_datetime)
+        HAVING COUNT(*) >= {$totalDrivers}
+    ");
+    $fullyBookedDates = $bookedStmt->fetchAll(PDO::FETCH_COLUMN, 0);
+}
+$fullyBookedDatesJson = json_encode(array_values($fullyBookedDates));
 ?>
 <!DOCTYPE html>
 <html lang="ms" garden>
@@ -49,6 +69,10 @@ $pendingApprovals = $pdo->query("SELECT COUNT(*) FROM vehicle_bookings WHERE sta
     <!-- Leaflet (peta sumber terbuka, tiada kunci API diperlukan) -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+    <!-- Flatpickr (kalendar dengan sekatan tarikh) -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
 
     <style>
         :root, [data-theme] {
@@ -129,6 +153,105 @@ $pendingApprovals = $pdo->query("SELECT COUNT(*) FROM vehicle_bookings WHERE sta
 
         #map { z-index: 0; }
         .leaflet-control-attribution { font-size: 10px !important; }
+
+        /* ---------- Kotak carian lokasi (gaya Grab) ---------- */
+        .loc-field { position: relative; }
+
+        .loc-field .loc-icon {
+            position: absolute;
+            left: 0.9rem;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 1.1rem;
+            height: 1.1rem;
+            pointer-events: none;
+            color: var(--ta-muted);
+            transition: color .15s ease;
+        }
+        .loc-field.active .loc-icon { color: var(--ta-brand); }
+
+        .loc-field input.input {
+            padding-left: 2.6rem;
+            border-radius: 0.9rem;
+            border-color: var(--ta-border);
+            background: var(--ta-surface);
+            transition: border-color .15s ease, box-shadow .15s ease;
+        }
+        .loc-field.active input.input {
+            border-color: var(--ta-brand);
+            box-shadow: 0 0 0 3px color-mix(in oklch, var(--ta-brand) 16%, transparent);
+        }
+
+        .loc-suggestions {
+            position: absolute;
+            left: 0; right: 0; top: calc(100% + 6px);
+            z-index: 60;
+            background: var(--ta-surface);
+            border: 1px solid var(--ta-border);
+            border-radius: 1rem;
+            box-shadow: 0 16px 32px -12px rgba(0,0,0,.35);
+            max-height: 240px;
+            overflow-y: auto;
+            padding: 0.35rem;
+            display: none;
+        }
+        .loc-suggestions.open { display: block; }
+
+        .loc-suggestion-item {
+            display: flex;
+            align-items: center;
+            gap: 0.65rem;
+            padding: 0.6rem 0.65rem;
+            border-radius: 0.7rem;
+            font-size: 0.8rem;
+            cursor: pointer;
+            color: var(--ta-ink);
+        }
+        .loc-suggestion-item:hover { background: var(--ta-brand-50); }
+        .loc-suggestion-item .loc-suggestion-pin {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 1.75rem;
+            height: 1.75rem;
+            border-radius: 9999px;
+            background: var(--ta-canvas);
+            color: var(--ta-muted);
+            flex-shrink: 0;
+        }
+        .loc-suggestion-item .loc-suggestion-text { line-height: 1.3; }
+        .loc-suggestion-empty { padding: 0.75rem; font-size: 0.75rem; color: var(--ta-muted); text-align: center; }
+
+        /* ---------- Flatpickr: sepadan dengan tema laman ---------- */
+        .flatpickr-calendar {
+            background: var(--ta-surface) !important;
+            border: 1px solid var(--ta-border) !important;
+            border-radius: 1rem !important;
+            box-shadow: 0 16px 32px -12px rgba(0,0,0,.35) !important;
+            font-family: 'Outfit', ui-sans-serif, system-ui, sans-serif !important;
+        }
+        .flatpickr-months, .flatpickr-weekdays { background: transparent !important; }
+        .flatpickr-current-month .flatpickr-monthDropdown-months,
+        .flatpickr-current-month input.cur-year { color: var(--ta-ink) !important; }
+        .flatpickr-month, .flatpickr-weekday { color: var(--ta-ink) !important; fill: var(--ta-ink) !important; }
+        .flatpickr-day { color: var(--ta-ink) !important; border-radius: 0.6rem !important; }
+        .flatpickr-day.today { border-color: var(--ta-brand) !important; }
+        .flatpickr-day.selected, .flatpickr-day.selected:hover {
+            background: var(--ta-brand) !important;
+            border-color: var(--ta-brand) !important;
+            color: #fff !important;
+        }
+        .flatpickr-day:hover { background: var(--ta-canvas) !important; }
+        .flatpickr-day.flatpickr-disabled, .flatpickr-day.flatpickr-disabled:hover {
+            color: var(--ta-muted) !important;
+            opacity: .4;
+            cursor: not-allowed !important;
+            background: transparent !important;
+        }
+        .flatpickr-day.prevMonthDay, .flatpickr-day.nextMonthDay { color: var(--ta-muted) !important; opacity: .35; }
+        .flatpickr-time input, .flatpickr-time .flatpickr-am-pm { color: var(--ta-ink) !important; }
+        .numInputWrapper span.arrowUp:after { border-bottom-color: var(--ta-ink) !important; }
+        .numInputWrapper span.arrowDown:after { border-top-color: var(--ta-ink) !important; }
 
         ::-webkit-scrollbar { width: 8px; height: 8px; }
         ::-webkit-scrollbar-thumb { background: var(--ta-border); border-radius: 999px; }
@@ -319,37 +442,43 @@ $pendingApprovals = $pdo->query("SELECT COUNT(*) FROM vehicle_bookings WHERE sta
           <form action="bookings.php" method="POST" class="flex flex-col gap-5" id="booking-form">
             <input type="hidden" name="action" value="add_booking" />
 
-            <!-- Pemilih Lokasi Peta -->
+            <!-- Pemilih Lokasi Peta (gaya Grab) -->
             <div>
               <div class="flex items-center justify-between flex-wrap gap-2 mb-3">
                 <label class="text-sm font-semibold">Lokasi Perjalanan</label>
-                <div class="flex items-center gap-2 flex-wrap">
-                  <button type="button" id="mode-origin-btn" class="ta-tab active" onclick="setPinMode('origin')">
-                    <span class="inline-block w-2 h-2 rounded-full mr-1.5" style="background:#16a34a"></span>Asal
-                  </button>
-                  <button type="button" id="mode-dest-btn" class="ta-tab" onclick="setPinMode('destination')">
-                    <span class="inline-block w-2 h-2 rounded-full mr-1.5" style="background:#dc2626"></span>Destinasi
-                  </button>
-                  <button type="button" class="ta-tab" onclick="useCurrentLocation()">
-                    <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5 inline -mt-0.5 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M15 10.5a3 3 0 11-6 0 3 3 0 016 0z" /><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1115 0z" /></svg>
-                    Lokasi Semasa
-                  </button>
+                <button type="button" class="ta-tab" onclick="useCurrentLocation()">
+                  <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5 inline -mt-0.5 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M15 10.5a3 3 0 11-6 0 3 3 0 016 0z" /><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1115 0z" /></svg>
+                  Lokasi Semasa
+                </button>
+              </div>
+
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
+                <div class="loc-field" id="origin-field" data-mode="origin">
+                  <label class="text-xs font-medium block mb-1">
+                    <span class="inline-block w-2 h-2 rounded-full mr-1" style="background:#16a34a"></span>Asal (Origin)
+                  </label>
+                  <div class="relative">
+                    <svg class="loc-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M15 10.5a3 3 0 11-6 0 3 3 0 016 0z" /><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1115 0z" /></svg>
+                    <input type="text" name="origin" id="origin-input" required autocomplete="off"
+                           class="input input-bordered w-full" placeholder="Cari lokasi atau klik pada peta" />
+                  </div>
+                  <div class="loc-suggestions" id="origin-suggestions"></div>
+                </div>
+                <div class="loc-field" id="destination-field" data-mode="destination">
+                  <label class="text-xs font-medium block mb-1">
+                    <span class="inline-block w-2 h-2 rounded-full mr-1" style="background:#dc2626"></span>Destinasi
+                  </label>
+                  <div class="relative">
+                    <svg class="loc-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M15 10.5a3 3 0 11-6 0 3 3 0 016 0z" /><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1115 0z" /></svg>
+                    <input type="text" name="destination" id="destination-input" required autocomplete="off"
+                           class="input input-bordered w-full" placeholder="Cari lokasi atau klik pada peta" />
+                  </div>
+                  <div class="loc-suggestions" id="destination-suggestions"></div>
                 </div>
               </div>
 
               <div id="map" class="rounded-2xl overflow-hidden border" style="height:360px; border-color:var(--ta-border)"></div>
-              <p class="text-xs text-slate-400 mt-2">Klik pada peta untuk menetapkan lokasi <span id="pin-mode-label" class="font-semibold">Asal</span>. Alamat akan diisi secara automatik, dan boleh diedit jika perlu.</p>
-
-              <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-3">
-                <div>
-                  <label class="text-xs font-medium block mb-1">Asal (Origin)</label>
-                  <input type="text" name="origin" id="origin-input" required class="input input-bordered w-full" placeholder="Klik pada peta atau taip manual" />
-                </div>
-                <div>
-                  <label class="text-xs font-medium block mb-1">Destinasi</label>
-                  <input type="text" name="destination" id="destination-input" required class="input input-bordered w-full" placeholder="Klik pada peta atau taip manual" />
-                </div>
-              </div>
+              <p class="text-xs text-slate-400 mt-2">Taip untuk mencari lokasi, pilih dari cadangan, atau klik terus pada peta. Medan <span id="pin-mode-label" class="font-semibold">Asal</span> yang sedang aktif akan dikemaskini.</p>
             </div>
 
             <div class="border-t" style="border-color:var(--ta-border)"></div>
@@ -358,21 +487,22 @@ $pendingApprovals = $pdo->query("SELECT COUNT(*) FROM vehicle_bookings WHERE sta
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
                 <label class="text-xs font-medium block mb-1">Tarikh &amp; Masa Berangkat</label>
-                <input type="datetime-local" name="depart_datetime" required class="input input-bordered w-full" />
+                <input type="text" name="depart_datetime" id="depart-datetime-input" required
+                       class="input input-bordered w-full" placeholder="Pilih tarikh & masa" />
               </div>
               <div>
                 <label class="text-xs font-medium block mb-1">Jenis Perjalanan</label>
                 <select name="trip_type" id="trip-type" class="select select-bordered w-full" onchange="toggleReturnField()">
                   <option value="One Way">Sehala</option>
                   <option value="Return">Pergi Balik</option>
-                  <option value="Both">Kedua-dua</option>
                 </select>
               </div>
             </div>
 
             <div id="return-field-wrap" class="hidden">
               <label class="text-xs font-medium block mb-1">Tarikh &amp; Masa Pulang</label>
-              <input type="datetime-local" name="return_datetime" class="input input-bordered w-full" />
+              <input type="text" name="return_datetime" id="return-datetime-input"
+                     class="input input-bordered w-full" placeholder="Pilih tarikh & masa" />
             </div>
 
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -408,13 +538,29 @@ $pendingApprovals = $pdo->query("SELECT COUNT(*) FROM vehicle_bookings WHERE sta
     </main>
 
     <script>
+        // ===================== Peta & Lokasi (gaya Grab) =====================
         let map, originMarker, destMarker, routeLine;
-        let pinMode = 'origin';
+        let activeMode = 'origin'; // medan yang sedang aktif: 'origin' atau 'destination'
 
-        function setPinMode(mode) {
-            pinMode = mode;
-            document.getElementById('mode-origin-btn').classList.toggle('active', mode === 'origin');
-            document.getElementById('mode-dest-btn').classList.toggle('active', mode === 'destination');
+        const fieldEls = {
+            origin: {
+                field: document.getElementById('origin-field'),
+                input: document.getElementById('origin-input'),
+                suggestions: document.getElementById('origin-suggestions'),
+                color: '#16a34a',
+            },
+            destination: {
+                field: document.getElementById('destination-field'),
+                input: document.getElementById('destination-input'),
+                suggestions: document.getElementById('destination-suggestions'),
+                color: '#dc2626',
+            },
+        };
+
+        function setActiveMode(mode) {
+            activeMode = mode;
+            fieldEls.origin.field.classList.toggle('active', mode === 'origin');
+            fieldEls.destination.field.classList.toggle('active', mode === 'destination');
             document.getElementById('pin-mode-label').textContent = mode === 'origin' ? 'Asal' : 'Destinasi';
         }
 
@@ -427,16 +573,23 @@ $pendingApprovals = $pdo->query("SELECT COUNT(*) FROM vehicle_bookings WHERE sta
             });
         }
 
-        function placePin(lat, lng, mode) {
+        // Letak pin di peta (dari klik peta ATAU dari pilihan cadangan carian)
+        function placePin(lat, lng, mode, label) {
             if (mode === 'origin') {
                 if (originMarker) map.removeLayer(originMarker);
-                originMarker = L.marker([lat, lng], { icon: makeDot('#16a34a') }).addTo(map);
-                reverseGeocode(lat, lng, 'origin-input');
+                originMarker = L.marker([lat, lng], { icon: makeDot(fieldEls.origin.color) }).addTo(map);
             } else {
                 if (destMarker) map.removeLayer(destMarker);
-                destMarker = L.marker([lat, lng], { icon: makeDot('#dc2626') }).addTo(map);
-                reverseGeocode(lat, lng, 'destination-input');
+                destMarker = L.marker([lat, lng], { icon: makeDot(fieldEls.destination.color) }).addTo(map);
             }
+
+            if (label) {
+                fieldEls[mode].input.value = label;
+            } else {
+                reverseGeocode(lat, lng, mode);
+            }
+
+            map.setView([lat, lng], Math.max(map.getZoom(), 15));
             updateRouteLine();
         }
 
@@ -453,8 +606,8 @@ $pendingApprovals = $pdo->query("SELECT COUNT(*) FROM vehicle_bookings WHERE sta
             }
         }
 
-        async function reverseGeocode(lat, lng, inputId) {
-            const input = document.getElementById(inputId);
+        async function reverseGeocode(lat, lng, mode) {
+            const input = fieldEls[mode].input;
             const originalPlaceholder = input.placeholder;
             input.placeholder = 'Mencari alamat...';
             try {
@@ -470,6 +623,60 @@ $pendingApprovals = $pdo->query("SELECT COUNT(*) FROM vehicle_bookings WHERE sta
             }
         }
 
+        // ----- Carian lokasi (autocomplete) untuk medan Asal / Destinasi -----
+        const searchDebounceTimers = {};
+
+        async function searchLocation(mode, query) {
+            const { suggestions } = fieldEls[mode];
+            if (!query || query.trim().length < 3) {
+                suggestions.classList.remove('open');
+                suggestions.innerHTML = '';
+                return;
+            }
+            try {
+                const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&countrycodes=my&addressdetails=1&limit=6`);
+                const results = await res.json();
+                renderSuggestions(mode, results);
+            } catch (e) {
+                suggestions.innerHTML = '<div class="loc-suggestion-empty">Ralat mencari lokasi.</div>';
+                suggestions.classList.add('open');
+            }
+        }
+
+        function renderSuggestions(mode, results) {
+            const { suggestions } = fieldEls[mode];
+            if (!results || results.length === 0) {
+                suggestions.innerHTML = '<div class="loc-suggestion-empty">Tiada lokasi dijumpai.</div>';
+                suggestions.classList.add('open');
+                return;
+            }
+            suggestions.innerHTML = results.map((r, i) => {
+                const parts = r.display_name.split(',').map(s => s.trim());
+                const primary = parts[0];
+                const secondary = parts.slice(1, 4).join(', ');
+                return `<div class="loc-suggestion-item" data-idx="${i}">
+                    <span class="loc-suggestion-pin">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M15 10.5a3 3 0 11-6 0 3 3 0 016 0z" /><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1115 0z" /></svg>
+                    </span>
+                    <span class="loc-suggestion-text">
+                        <span class="block font-medium">${primary}</span>
+                        <span class="block text-[0.7rem]" style="color:var(--ta-muted)">${secondary}</span>
+                    </span>
+                </div>`;
+            }).join('');
+            suggestions.classList.add('open');
+
+            [...suggestions.querySelectorAll('.loc-suggestion-item')].forEach((el) => {
+                el.addEventListener('mousedown', (e) => {
+                    e.preventDefault(); // elak input hilang fokus sebelum klik didaftar
+                    const r = results[Number(el.dataset.idx)];
+                    const label = r.display_name.split(',').slice(0, 4).join(',').trim();
+                    placePin(parseFloat(r.lat), parseFloat(r.lon), mode, label);
+                    suggestions.classList.remove('open');
+                });
+            });
+        }
+
         function useCurrentLocation() {
             if (!navigator.geolocation) {
                 alert('Pelayar anda tidak menyokong pengesanan lokasi.');
@@ -477,8 +684,7 @@ $pendingApprovals = $pdo->query("SELECT COUNT(*) FROM vehicle_bookings WHERE sta
             }
             navigator.geolocation.getCurrentPosition(function (pos) {
                 const { latitude, longitude } = pos.coords;
-                map.setView([latitude, longitude], 15);
-                setPinMode('origin');
+                setActiveMode('origin');
                 placePin(latitude, longitude, 'origin');
             }, function () {
                 alert('Tidak dapat mengesan lokasi semasa anda. Sila benarkan akses lokasi atau tandakan secara manual pada peta.');
@@ -498,12 +704,68 @@ $pendingApprovals = $pdo->query("SELECT COUNT(*) FROM vehicle_bookings WHERE sta
                 maxZoom: 19,
             }).addTo(map);
 
+            // Klik pada peta -> letak pin pada medan yang sedang aktif
             map.on('click', function (e) {
-                placePin(e.latlng.lat, e.latlng.lng, pinMode);
+                placePin(e.latlng.lat, e.latlng.lng, activeMode);
             });
+
+            // Setiap medan (Asal / Destinasi) jadi punca aktif + carian
+            Object.keys(fieldEls).forEach((mode) => {
+                const { input, suggestions } = fieldEls[mode];
+
+                input.addEventListener('focus', () => setActiveMode(mode));
+
+                input.addEventListener('input', () => {
+                    setActiveMode(mode);
+                    clearTimeout(searchDebounceTimers[mode]);
+                    searchDebounceTimers[mode] = setTimeout(() => {
+                        searchLocation(mode, input.value);
+                    }, 400);
+                });
+
+                input.addEventListener('blur', () => {
+                    // beri masa untuk mousedown pada cadangan berjalan dahulu
+                    setTimeout(() => suggestions.classList.remove('open'), 150);
+                });
+            });
+
+            setActiveMode('origin');
         }
 
         document.addEventListener('DOMContentLoaded', initMap);
+
+        // ===================== Kalendar: sekat tarikh lalu & penuh =====================
+        const fullyBookedDates = <?= $fullyBookedDatesJson ?>; // ["2026-08-20", ...] dari pelayan
+
+        function isDateFullyBooked(dateObj, disabledDates) {
+            const y = dateObj.getFullYear();
+            const m = String(dateObj.getMonth() + 1).padStart(2, '0');
+            const d = String(dateObj.getDate()).padStart(2, '0');
+            return disabledDates.includes(`${y}-${m}-${d}`);
+        }
+
+        document.addEventListener('DOMContentLoaded', function () {
+            const sharedDateOptions = {
+                enableTime: true,
+                time_24hr: true,
+                dateFormat: 'Y-m-d\\TH:i', // sepadan dengan format datetime-local asal
+                minDate: 'today',
+                disable: [
+                    function (date) { return isDateFullyBooked(date, fullyBookedDates); }
+                ],
+            };
+
+            const departPicker = flatpickr('#depart-datetime-input', sharedDateOptions);
+
+            // Tarikh pulang tidak boleh sebelum tarikh berangkat
+            flatpickr('#return-datetime-input', Object.assign({}, sharedDateOptions, {
+                onOpen: function (selectedDates, dateStr, instance) {
+                    if (departPicker.selectedDates[0]) {
+                        instance.set('minDate', departPicker.selectedDates[0]);
+                    }
+                },
+            }));
+        });
     </script>
 
     <!-- Skrip Tukar Mod Tema Terang/Gelap -->

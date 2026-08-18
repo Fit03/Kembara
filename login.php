@@ -47,7 +47,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 ?>
 
 <!DOCTYPE html>
-<html lang="en" data-theme="light">
+<html lang="en" data-theme="garden">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -142,7 +142,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
                     <!-- Submit Button -->
                     <div class="form-control mt-4">
-                        <button type="submit" class="btn btn-outline btn-neutral">Log Masuk</button>
+                        <button type="submit" class="btn btn-neutral">Log Masuk</button>
                     </div>
                 </form>
             </div>
