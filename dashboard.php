@@ -12,6 +12,24 @@ if (!isset($_SESSION['user_id'])) {
 $fullname = $_SESSION['fullname'];
 $role = $_SESSION['role']; // Boleh jadi 'SuperAdmin', 'Admin', atau 'User'
 
+// -- Tarikh & ucapan selamat mengikut masa hari --
+$dayNamesMY = ['Ahad', 'Isnin', 'Selasa', 'Rabu', 'Khamis', 'Jumaat', 'Sabtu'];
+$monthNamesMY = ['Januari', 'Februari', 'Mac', 'April', 'Mei', 'Jun', 'Julai', 'Ogos', 'September', 'Oktober', 'November', 'Disember'];
+$now = new DateTime();
+$todayLabel = strtoupper($dayNamesMY[(int)$now->format('w')] . ', ' . $monthNamesMY[(int)$now->format('n') - 1] . ' ' . $now->format('j'));
+
+$hour = (int) $now->format('G');
+if ($hour < 12) {
+    $greeting = 'Selamat Pagi';
+} elseif ($hour < 15) {
+    $greeting = 'Selamat Tengah Hari';
+} elseif ($hour < 19) {
+    $greeting = 'Selamat Petang';
+} else {
+    $greeting = 'Selamat Malam';
+}
+$firstName = trim(explode(' ', $fullname)[0]);
+
 // Semak sama ada e-mel sudah disimpan dalam sesi daripada log masuk
 $email = $_SESSION['email'] ?? null;
 
@@ -135,6 +153,82 @@ $statusBadge = fn(string $status) => match ($status) {
     'Completed' => ['class' => 'badge badge-info',    'label' => 'Selesai'],
     default     => ['class' => 'badge badge-ghost',   'label' => $status],
 };
+
+/* ==========================================================
+   Data Dashboard Admin (turut dipaparkan kepada SuperAdmin,
+   kerana kedua-dua peranan ini boleh meluluskan tempahan)
+   ========================================================== */
+$isApprover = in_array($role, ['Admin', 'SuperAdmin'], true);
+
+if ($isApprover) {
+
+    // -- Kad statistik operasi harian --
+    $tripsDepartingToday = $pdo->query(
+        "SELECT COUNT(*) FROM vehicle_bookings
+         WHERE status = 'Approved' AND DATE(depart_datetime) = CURRENT_DATE()"
+    )->fetchColumn();
+
+    $driversOnLeave = $pdo->query(
+        "SELECT COUNT(*) FROM drivers WHERE status = 'Leave'"
+    )->fetchColumn();
+}
+
+/* ==========================================================
+   Data Dashboard User (kandungan peribadi sahaja, bukan
+   statistik seluruh organisasi)
+   ========================================================== */
+if ($role === 'User') {
+    $uid = $_SESSION['user_id'];
+
+    $myActiveBookingsCount = (function () use ($pdo, $uid) {
+        $s = $pdo->prepare("SELECT COUNT(*) FROM vehicle_bookings WHERE user_id = ? AND status IN ('Pending','Approved')");
+        $s->execute([$uid]);
+        return (int) $s->fetchColumn();
+    })();
+
+    $myPendingCount = (function () use ($pdo, $uid) {
+        $s = $pdo->prepare("SELECT COUNT(*) FROM vehicle_bookings WHERE user_id = ? AND status = 'Pending'");
+        $s->execute([$uid]);
+        return (int) $s->fetchColumn();
+    })();
+
+    $myCompletedThisMonth = (function () use ($pdo, $uid) {
+        $s = $pdo->prepare(
+            "SELECT COUNT(*) FROM vehicle_bookings
+             WHERE user_id = ? AND status = 'Completed'
+               AND MONTH(depart_datetime) = MONTH(CURRENT_DATE())
+               AND YEAR(depart_datetime) = YEAR(CURRENT_DATE())"
+        );
+        $s->execute([$uid]);
+        return (int) $s->fetchColumn();
+    })();
+
+    $myUpcomingStmt = $pdo->prepare(
+        "SELECT vb.booking_no, v.plate_no, v.vehicle_name, vb.destination, vb.depart_datetime, vb.status
+         FROM vehicle_bookings vb
+         JOIN vehicles v ON v.vehicle_id = vb.vehicle_id
+         WHERE vb.user_id = ? AND vb.status IN ('Pending', 'Approved')
+         ORDER BY vb.depart_datetime ASC"
+    );
+    $myUpcomingStmt->execute([$uid]);
+    $myUpcomingTrips = $myUpcomingStmt->fetchAll(PDO::FETCH_ASSOC);
+
+    $myNextTrip = $myUpcomingTrips[0] ?? null;
+    $daysUntilNextTrip = $myNextTrip
+        ? max(0, (int) ceil((strtotime($myNextTrip['depart_datetime']) - time()) / 86400))
+        : null;
+
+    $myHistoryStmt = $pdo->prepare(
+        "SELECT vb.booking_no, v.plate_no, v.vehicle_name, vb.destination, vb.depart_datetime, vb.status
+         FROM vehicle_bookings vb
+         JOIN vehicles v ON v.vehicle_id = vb.vehicle_id
+         WHERE vb.user_id = ?
+         ORDER BY vb.depart_datetime DESC
+         LIMIT 8"
+    );
+    $myHistoryStmt->execute([$uid]);
+    $myBookingHistory = $myHistoryStmt->fetchAll(PDO::FETCH_ASSOC);
+}
 ?>
 <!DOCTYPE html>
 <html lang="ms" garden>
@@ -502,8 +596,117 @@ $statusBadge = fn(string $status) => match ($status) {
 
       <div class="w-full px-4 sm:px-6 py-6 mx-auto">
 
-        <!-- Baris 1: Kad Statistik -->
+        <!-- Ucapan & Tarikh -->
+        <div class="card p-6 mb-5">
+          <p class="text-xs font-semibold tracking-widest mb-2" style="color:var(--ta-muted)"><?= htmlspecialchars($todayLabel) ?></p>
+          <h4 class="text-2xl sm:text-3xl font-bold mb-0">
+            <?= htmlspecialchars($greeting) ?>, <span style="color:var(--ta-brand)"><?= htmlspecialchars($firstName) ?></span>
+          </h4>
+        </div>
+
+        <?php if ($role === 'User'): ?>
+        <!-- ============ Paparan Peribadi (User) ============ -->
+
+        <!-- Kad Statistik Peribadi -->
         <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+          <div class="card p-5" data-href="bookings.php?mine=1">
+            <div class="ta-icon-box mb-4">
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.6"><path stroke-linecap="round" stroke-linejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 012.25-2.25h13.5A2.25 2.25 0 0121 7.5v11.25m-18 0A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75m-18 0v-7.5A2.25 2.25 0 015.25 9h13.5A2.25 2.25 0 0121 11.25v7.5" /></svg>
+            </div>
+            <p class="text-sm mb-1" style="color:var(--ta-muted)">Tempahan Aktif Saya</p>
+            <h5 class="text-2xl font-bold"><?= (int)$myActiveBookingsCount ?></h5>
+          </div>
+
+          <?php if ($myPendingCount > 0): ?>
+          <div class="aura aura-dual text-yellow-600 bg-orange-200 duration-3000">
+          <?php endif; ?>
+            <div class="card p-5" data-href="bookings.php?mine=1&status=Pending" data-priority="warning">
+              <div class="ta-icon-box mb-4">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.6"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+              </div>
+              <p class="text-sm mb-1" style="color:var(--ta-muted)">Menunggu Kelulusan</p>
+              <h5 class="text-2xl font-bold"><?= (int)$myPendingCount ?></h5>
+            </div>
+          <?php if ($myPendingCount > 0): ?>
+          </div>
+          <?php endif; ?>
+
+          <div class="card p-5" data-href="bookings.php?mine=1&status=Completed">
+            <div class="ta-icon-box mb-4">
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.6"><path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5" /></svg>
+            </div>
+            <p class="text-sm mb-1" style="color:var(--ta-muted)">Selesai Bulan Ini</p>
+            <h5 class="text-2xl font-bold"><?= (int)$myCompletedThisMonth ?></h5>
+          </div>
+
+          <div class="card p-5">
+            <div class="ta-icon-box mb-4">
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.6"><path stroke-linecap="round" stroke-linejoin="round" d="M8.25 6.75H15.75M8.25 6.75a2.25 2.25 0 01-2.25-2.25V4.5A2.25 2.25 0 018.25 2.25h7.5A2.25 2.25 0 0118 4.5v.75a2.25 2.25 0 01-2.25 2.25M8.25 6.75v10.5a2.25 2.25 0 002.25 2.25h3a2.25 2.25 0 002.25-2.25V6.75" /></svg>
+            </div>
+            <p class="text-sm mb-1" style="color:var(--ta-muted)">Hari Ke Perjalanan Seterusnya</p>
+            <h5 class="text-2xl font-bold"><?= $daysUntilNextTrip !== null ? (int)$daysUntilNextTrip : '—' ?></h5>
+          </div>
+        </div>
+
+        <!-- CTA Tempah Kenderaan -->
+        <div class="card p-6 mt-5 flex items-center justify-between flex-wrap gap-4" style="background:var(--ta-brand-50)">
+          <div>
+            <h6 class="font-semibold text-lg mb-1">Perlu menempah kenderaan?</h6>
+            <p class="text-sm mb-0" style="color:var(--ta-muted)">Buat tempahan baharu dalam masa beberapa minit sahaja.</p>
+          </div>
+          <a href="book-vehicle.php" class="btn rounded-full border-none text-white" style="background:var(--ta-brand)">
+            Tempah Kenderaan
+          </a>
+        </div>
+
+        <!-- Perjalanan Akan Datang Saya + Sejarah Tempahan Saya -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-5 mt-5">
+          <div class="card p-5">
+            <h6 class="font-semibold mb-4">Perjalanan Akan Datang Saya</h6>
+            <?php if (empty($myUpcomingTrips)): ?>
+              <p class="text-sm text-slate-400">Tiada perjalanan akan datang. <a href="book-vehicle.php" class="text-primary hover:underline">Tempah sekarang</a>.</p>
+            <?php else: ?>
+              <ul class="ta-divide">
+                <?php foreach ($myUpcomingTrips as $t): ?>
+                  <?php $badgeInfo = $statusBadge($t['status']); ?>
+                  <li class="py-3 flex items-center justify-between gap-3">
+                    <div class="min-w-0">
+                      <p class="mb-0 text-sm font-semibold truncate"><?= htmlspecialchars($t['plate_no']) ?> &middot; <?= htmlspecialchars($t['destination'] ?? '—') ?></p>
+                      <p class="mb-0 text-xs text-slate-400"><?= htmlspecialchars(date('d M, H:i', strtotime($t['depart_datetime']))) ?></p>
+                    </div>
+                    <span class="ta-badge shrink-0 <?= $badgeInfo['class'] ?>"><?= htmlspecialchars($badgeInfo['label']) ?></span>
+                  </li>
+                <?php endforeach; ?>
+              </ul>
+            <?php endif; ?>
+          </div>
+
+          <div class="card p-5">
+            <h6 class="font-semibold mb-4">Sejarah Tempahan Saya</h6>
+            <?php if (empty($myBookingHistory)): ?>
+              <p class="text-sm text-slate-400">Tiada sejarah tempahan lagi.</p>
+            <?php else: ?>
+              <ul class="ta-divide">
+                <?php foreach ($myBookingHistory as $h): ?>
+                  <?php $badgeInfo = $statusBadge($h['status']); ?>
+                  <li class="py-3 flex items-center justify-between gap-3">
+                    <div class="min-w-0">
+                      <p class="mb-0 text-sm font-semibold truncate"><?= htmlspecialchars($h['plate_no']) ?> &middot; <?= htmlspecialchars($h['destination'] ?? '—') ?></p>
+                      <p class="mb-0 text-xs text-slate-400"><?= htmlspecialchars(date('d M, H:i', strtotime($h['depart_datetime']))) ?></p>
+                    </div>
+                    <span class="ta-badge shrink-0 <?= $badgeInfo['class'] ?>"><?= htmlspecialchars($badgeInfo['label']) ?></span>
+                  </li>
+                <?php endforeach; ?>
+              </ul>
+            <?php endif; ?>
+          </div>
+        </div>
+
+        <?php else: ?>
+        <!-- ============ Paparan Organisasi (Admin / SuperAdmin) ============ -->
+
+        <!-- Baris 1: Kad Statistik -->
+        <div class="grid grid-cols-2 sm:grid-cols-3 <?= $isApprover ? 'xl:grid-cols-6' : 'lg:grid-cols-4' ?> gap-5">
           <div class="card p-5" data-href="bookings.php">
             <div class="ta-icon-box mb-4">
               <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.6"><path stroke-linecap="round" stroke-linejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 012.25-2.25h13.5A2.25 2.25 0 0121 7.5v11.25m-18 0A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75m-18 0v-7.5A2.25 2.25 0 015.25 9h13.5A2.25 2.25 0 0121 11.25v7.5" /></svg>
@@ -545,7 +748,27 @@ $statusBadge = fn(string $status) => match ($status) {
             <p class="text-sm mb-1" style="color:var(--ta-muted)">Jumlah Pengguna</p>
             <h5 class="text-2xl font-bold"><?= (int)$totalUsers ?></h5>
           </div>
+
+          <?php if ($isApprover): ?>
+          <div class="card p-5" data-href="bookings.php?status=Approved">
+            <div class="ta-icon-box mb-4">
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.6"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+            </div>
+            <p class="text-sm mb-1" style="color:var(--ta-muted)">Perjalanan Bertolak Hari Ini</p>
+            <h5 class="text-2xl font-bold"><?= (int)$tripsDepartingToday ?></h5>
+          </div>
+          <div class="card p-5" data-href="drivers.php?status=Leave">
+            <div class="ta-icon-box mb-4">
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.6"><path stroke-linecap="round" stroke-linejoin="round" d="M2.25 8.25h19.5M2.25 9h19.5m-16.5 5.25h6m-6 2.25h3m-3.75 3h15a2.25 2.25 0 002.25-2.25V6.75A2.25 2.25 0 0019.5 4.5h-15a2.25 2.25 0 00-2.25 2.25v10.5A2.25 2.25 0 004.5 19.5z" /></svg>
+            </div>
+            <p class="text-sm mb-1" style="color:var(--ta-muted)">Pemandu Bercuti</p>
+            <h5 class="text-2xl font-bold"><?= (int)$driversOnLeave ?></h5>
+          </div>
+          <?php endif; ?>
         </div>
+
+        <?php if ($isApprover): ?>
+        <?php endif; ?>
 
         <!-- Baris 2: Carta ApexCharts -->
         <div class="grid grid-cols-1 lg:grid-cols-2 gap-5 mt-5">
@@ -676,6 +899,8 @@ $statusBadge = fn(string $status) => match ($status) {
           </div>
         </div>
 
+        <?php endif; // tutup paparan User / Admin-SuperAdmin ?>
+
         <?php if ($role === 'SuperAdmin' && !empty($emailHealth)): ?>
         <div class="card p-5 mt-5 flex items-center gap-4 flex-wrap">
           <h6 class="mb-0 mr-4 font-semibold text-sm flex items-center gap-2">
@@ -732,13 +957,24 @@ $statusBadge = fn(string $status) => match ($status) {
         const bookingStatusLabels = rawBookingLabels.map(label => bookingTranslationMap[label] || label);
         const vehicleStatusLabels = rawVehicleLabels.map(label => vehicleTranslationMap[label] || label);
 
+        // Carta hanya wujud pada paparan Admin / SuperAdmin (bukan paparan peribadi User)
+        var bookingChart, vehicleChart;
+        if (document.querySelector("#chart-booking-status") && document.querySelector("#chart-vehicle-status")) {
+
         // Carta Status Tempahan
         var bookingOptions = {
           series: bookingStatusData,
           chart: {
             type: 'donut',
             height: 320,
-            fontFamily: "'Outfit', sans-serif"
+            fontFamily: "'Outfit', sans-serif",
+            events: {
+              dataPointSelection: function(event, chartContext, config) {
+                const rawStatus = rawBookingLabels[config.dataPointIndex];
+                if (!rawStatus) return;
+                window.location.href = 'bookings.php?status=' + encodeURIComponent(rawStatus);
+              }
+            }
           },
           labels: bookingStatusLabels,
           colors: ['#F79009', '#12B76A', '#F04438', '#98A2B3', '#465FFF'],
@@ -787,7 +1023,7 @@ $statusBadge = fn(string $status) => match ($status) {
           }]
         };
 
-        var bookingChart = new ApexCharts(document.querySelector("#chart-booking-status"), bookingOptions);
+        bookingChart = new ApexCharts(document.querySelector("#chart-booking-status"), bookingOptions);
         bookingChart.render();
 
         // Carta Status Kenderaan
@@ -845,8 +1081,9 @@ $statusBadge = fn(string $status) => match ($status) {
           }]
         };
 
-        var vehicleChart = new ApexCharts(document.querySelector("#chart-vehicle-status"), vehicleOptions);
+        vehicleChart = new ApexCharts(document.querySelector("#chart-vehicle-status"), vehicleOptions);
         vehicleChart.render();
+        } // tutup semakan wujud carta
     </script>
 
     <!-- Skrip Tukar Mod Tema Terang/Gelap -->
@@ -872,7 +1109,7 @@ $statusBadge = fn(string $status) => match ($status) {
             const textColor = getComputedStyle(document.documentElement)
                 .getPropertyValue('--color-base-content').trim();
 
-            if (typeof bookingChart !== 'undefined' && typeof vehicleChart !== 'undefined') {
+            if (bookingChart && vehicleChart) {
                 bookingChart.updateOptions({
                     title: { style: { color: textColor } },
                     legend: { labels: { colors: textColor } },

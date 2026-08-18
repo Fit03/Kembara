@@ -1,4 +1,7 @@
 <?php
+date_default_timezone_set('Asia/Kuala_Lumpur');
+ini_set('date.timezone', 'Asia/Kuala_Lumpur');
+
 define('DB_HOST', 'localhost');
 define('DB_NAME', 'vehicle_booking');
 define('DB_USER', 'root');
