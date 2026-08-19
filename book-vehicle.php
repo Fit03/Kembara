@@ -222,6 +222,22 @@ $fullyBookedDatesJson = json_encode(array_values($fullyBookedDates));
         .loc-suggestion-item .loc-suggestion-text { line-height: 1.3; }
         .loc-suggestion-empty { padding: 0.75rem; font-size: 0.75rem; color: var(--ta-muted); text-align: center; }
 
+        /* ---------- Maklumat jarak & masa laluan ---------- */
+        .route-info-badge {
+            display: flex;
+            gap: 1.25rem;
+            flex-wrap: wrap;
+            background: var(--ta-brand-50);
+            color: var(--ta-brand);
+            border-radius: 0.75rem;
+            padding: 0.65rem 0.9rem;
+            font-size: 0.75rem;
+            font-weight: 600;
+            margin-bottom: 0.75rem;
+        }
+        .route-info-badge.hidden { display: none; }
+        .route-info-badge strong { font-weight: 700; }
+
         /* ---------- Flatpickr: sepadan dengan tema laman ---------- */
         .flatpickr-calendar {
             background: var(--ta-surface) !important;
@@ -477,39 +493,89 @@ $fullyBookedDatesJson = json_encode(array_values($fullyBookedDates));
                 </div>
               </div>
 
+              <div id="route-info" class="route-info-badge hidden"></div>
               <div id="map" class="rounded-2xl overflow-hidden border" style="height:360px; border-color:var(--ta-border)"></div>
               <p class="text-xs text-slate-400 mt-2">Taip untuk mencari lokasi, pilih dari cadangan, atau klik terus pada peta. Medan <span id="pin-mode-label" class="font-semibold">Asal</span> yang sedang aktif akan dikemaskini.</p>
             </div>
+            <input type="hidden" name="distance_km" id="distance-km-hidden" />
 
             <div class="border-t" style="border-color:var(--ta-border)"></div>
 
             <!-- Butiran Perjalanan -->
+            <div>
+              <label class="text-xs font-medium block mb-1">Jenis Perjalanan</label>
+              <select name="trip_type" id="trip-type" class="select select-bordered w-full" onchange="toggleReturnField()">
+                <option value="One Way">Sehala</option>
+                <option value="Return">Pergi Balik</option>
+              </select>
+            </div>
+            
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
-                <label class="text-xs font-medium block mb-1">Tarikh &amp; Masa Berangkat</label>
-                <input type="text" name="depart_datetime" id="depart-datetime-input" required
-                       class="input input-bordered w-full" placeholder="Pilih tarikh & masa" />
+                <label class="text-xs font-medium block mb-1">Tarikh Berangkat</label>
+                <input type="text" id="depart-date-input" required autocomplete="off"
+                       class="input input-bordered w-full" placeholder="Pilih tarikh" />
               </div>
               <div>
-                <label class="text-xs font-medium block mb-1">Jenis Perjalanan</label>
-                <select name="trip_type" id="trip-type" class="select select-bordered w-full" onchange="toggleReturnField()">
-                  <option value="One Way">Sehala</option>
-                  <option value="Return">Pergi Balik</option>
-                </select>
+                <label class="text-xs font-medium block mb-1">Masa Berangkat</label>
+                <input type="text" id="depart-time-input" required autocomplete="off"
+                       class="input input-bordered w-full" placeholder="Pilih masa" />
               </div>
             </div>
+            <input type="hidden" name="depart_datetime" id="depart-datetime-hidden" />
+
 
             <div id="return-field-wrap" class="hidden">
-              <label class="text-xs font-medium block mb-1">Tarikh &amp; Masa Pulang</label>
-              <input type="text" name="return_datetime" id="return-datetime-input"
-                     class="input input-bordered w-full" placeholder="Pilih tarikh & masa" />
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label class="text-xs font-medium block mb-1">Tarikh Pulang</label>
+                  <input type="text" id="return-date-input" autocomplete="off"
+                         class="input input-bordered w-full" placeholder="Pilih tarikh" />
+                </div>
+                <div>
+                  <label class="text-xs font-medium block mb-1">Masa Pulang</label>
+                  <input type="text" id="return-time-input" autocomplete="off"
+                         class="input input-bordered w-full" placeholder="Pilih masa" />
+                </div>
+              </div>
+              <input type="hidden" name="return_datetime" id="return-datetime-hidden" />
             </div>
 
-            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div>
-                <label class="text-xs font-medium block mb-1">Bilangan Penumpang</label>
-                <input type="number" name="passenger_total" min="1" class="input input-bordered w-full" placeholder="cth. 4" />
+            <div>
+              <div class="flex items-center justify-between mb-2 flex-wrap gap-2">
+                <label class="text-xs font-medium">Nama Penumpang</label>
+                <div class="flex items-center gap-2 flex-wrap">
+                  <button type="button" class="ta-tab" onclick="addPassengerRow()">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5 inline -mt-0.5 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" /></svg>
+                    Tambah Seorang
+                  </button>
+                  <button type="button" class="ta-tab" onclick="toggleBulkAddPanel()">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5 inline -mt-0.5 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M15 19.128a9.38 9.38 0 002.625.372 9.337 9.337 0 004.121-.952 4.125 4.125 0 00-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 018.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0111.964-3.07M12 6.375a3.375 3.375 0 11-6.75 0 3.375 3.375 0 016.75 0zm8.25 2.25a2.625 2.625 0 11-5.25 0 2.625 2.625 0 015.25 0z" /></svg>
+                    Tambah Ramai (Bas)
+                  </button>
+                </div>
               </div>
+
+              <div id="bulk-add-panel" class="hidden rounded-xl border p-3.5 mb-3 flex flex-col gap-3" style="border-color:var(--ta-border); background:var(--ta-canvas)">
+                <p class="text-xs" style="color:var(--ta-muted)">Untuk kumpulan besar seperti bas, tambah beberapa slot kosong sekali gus, atau tampal senarai nama terus (satu nama setiap baris).</p>
+
+                <div class="flex items-center gap-2 flex-wrap">
+                  <input type="number" id="bulk-passenger-count" min="1" max="60" placeholder="Bilangan, cth. 40" class="input input-bordered input-sm w-40" />
+                  <button type="button" class="btn btn-sm" onclick="addPassengerRows()">Tambah Slot Kosong</button>
+                </div>
+
+                <div>
+                  <textarea id="bulk-passenger-paste" rows="4" class="textarea textarea-bordered w-full text-sm" placeholder="Tampal senarai nama di sini, satu nama setiap baris..."></textarea>
+                  <button type="button" class="btn btn-sm mt-2" onclick="addPassengersFromPaste()">Jana Daripada Senarai</button>
+                </div>
+              </div>
+
+              <div id="passenger-names-list" class="flex flex-col gap-2"></div>
+              <div class="flex items-center justify-between mt-2">
+                <p class="text-xs text-slate-400" id="passenger-empty-hint">Belum ada penumpang ditambah.</p>
+                <button type="button" id="clear-passengers-btn" class="text-xs font-semibold text-error hover:underline hidden" onclick="clearAllPassengers()">Kosongkan Semua</button>
+              </div>
+              <input type="hidden" name="passenger_total" id="passenger-total-hidden" value="0" />
             </div>
 
             <div>
@@ -593,17 +659,57 @@ $fullyBookedDatesJson = json_encode(array_values($fullyBookedDates));
             updateRouteLine();
         }
 
-        function updateRouteLine() {
+        // Lukis laluan sebenar (ikut jalan) antara Asal & Destinasi, dan papar jarak (KM)
+        async function updateRouteLine() {
             if (routeLine) {
                 map.removeLayer(routeLine);
                 routeLine = null;
             }
-            if (originMarker && destMarker) {
-                routeLine = L.polyline([originMarker.getLatLng(), destMarker.getLatLng()], {
-                    color: '#6366f1', weight: 3, dashArray: '6,6',
-                }).addTo(map);
-                map.fitBounds(routeLine.getBounds(), { padding: [50, 50] });
+            if (!(originMarker && destMarker)) {
+                hideRouteInfo();
+                return;
             }
+
+            const o = originMarker.getLatLng();
+            const d = destMarker.getLatLng();
+
+            try {
+                const url = `https://router.project-osrm.org/route/v1/driving/${o.lng},${o.lat};${d.lng},${d.lat}?overview=full&geometries=geojson`;
+                const res = await fetch(url);
+                const data = await res.json();
+
+                if (data.code === 'Ok' && data.routes && data.routes[0]) {
+                    const route = data.routes[0];
+                    const coords = route.geometry.coordinates.map(c => [c[1], c[0]]);
+                    routeLine = L.polyline(coords, { color: '#6366f1', weight: 4 }).addTo(map);
+                    map.fitBounds(routeLine.getBounds(), { padding: [50, 50] });
+                    showRouteInfo(route.distance, route.duration);
+                    return;
+                }
+            } catch (e) {
+                // jatuh balik ke garis lurus jika perkhidmatan laluan gagal
+            }
+
+            routeLine = L.polyline([o, d], { color: '#6366f1', weight: 3, dashArray: '6,6' }).addTo(map);
+            map.fitBounds(routeLine.getBounds(), { padding: [50, 50] });
+            hideRouteInfo();
+        }
+
+        function showRouteInfo(distanceMeters, durationSeconds) {
+            const km = (distanceMeters / 1000).toFixed(1);
+            const mins = Math.round(durationSeconds / 60);
+            const info = document.getElementById('route-info');
+            info.innerHTML = `<span>Jarak Anggaran: <strong>${km} km</strong></span><span>Masa Perjalanan: <strong>${mins} min</strong></span>`;
+            info.classList.remove('hidden');
+
+            const distInput = document.getElementById('distance-km-hidden');
+            if (distInput) distInput.value = km;
+        }
+
+        function hideRouteInfo() {
+            document.getElementById('route-info').classList.add('hidden');
+            const distInput = document.getElementById('distance-km-hidden');
+            if (distInput) distInput.value = '';
         }
 
         async function reverseGeocode(lat, lng, mode) {
@@ -696,6 +802,109 @@ $fullyBookedDatesJson = json_encode(array_values($fullyBookedDates));
             document.getElementById('return-field-wrap').classList.toggle('hidden', tripType === 'One Way');
         }
 
+        // ----- Nama Penumpang (butang Tambah / Buang, + tambahan pukal untuk bas) -----
+        const MAX_PASSENGERS = 60;
+
+        function updatePassengerMeta() {
+            const list = document.getElementById('passenger-names-list');
+            const count = list.children.length;
+            document.getElementById('passenger-total-hidden').value = count;
+            document.getElementById('passenger-empty-hint').classList.toggle('hidden', count > 0);
+            document.getElementById('clear-passengers-btn').classList.toggle('hidden', count === 0);
+        }
+
+        function addPassengerRow(focusInput = true) {
+            const list = document.getElementById('passenger-names-list');
+            if (list.children.length >= MAX_PASSENGERS) return null;
+
+            const row = document.createElement('div');
+            row.className = 'flex items-center gap-2';
+
+            const input = document.createElement('input');
+            input.type = 'text';
+            input.name = 'passenger_names[]';
+            input.required = true;
+            input.autocomplete = 'off';
+            input.className = 'input input-bordered w-full';
+            input.placeholder = `Nama Penumpang ${list.children.length + 1}`;
+
+            const removeBtn = document.createElement('button');
+            removeBtn.type = 'button';
+            removeBtn.className = 'btn btn-ghost btn-square btn-sm text-error shrink-0';
+            removeBtn.setAttribute('aria-label', 'Buang Penumpang');
+            removeBtn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>';
+            removeBtn.onclick = function () {
+                row.remove();
+                renumberPassengerPlaceholders();
+                updatePassengerMeta();
+            };
+
+            row.appendChild(input);
+            row.appendChild(removeBtn);
+            list.appendChild(row);
+            updatePassengerMeta();
+            if (focusInput) input.focus();
+            return input;
+        }
+
+        function renumberPassengerPlaceholders() {
+            const inputs = document.querySelectorAll('#passenger-names-list input');
+            inputs.forEach((input, i) => {
+                if (!input.value) input.placeholder = `Nama Penumpang ${i + 1}`;
+            });
+        }
+
+        function toggleBulkAddPanel() {
+            document.getElementById('bulk-add-panel').classList.toggle('hidden');
+        }
+
+        // Tambah beberapa slot kosong sekali gus (cth. untuk bas 40 tempat duduk)
+        function addPassengerRows() {
+            const countInput = document.getElementById('bulk-passenger-count');
+            const requested = parseInt(countInput.value, 10);
+            if (!requested || requested < 1) return;
+
+            const list = document.getElementById('passenger-names-list');
+            const room = MAX_PASSENGERS - list.children.length;
+            const toAdd = Math.min(requested, room);
+
+            for (let i = 0; i < toAdd; i++) addPassengerRow(false);
+            countInput.value = '';
+
+            if (requested > room) {
+                alert(`Hanya ${room} slot tambahan dibenarkan (had maksimum ${MAX_PASSENGERS} penumpang).`);
+            }
+        }
+
+        // Tampal senarai nama (satu setiap baris) dan jana medan terus
+        function addPassengersFromPaste() {
+            const textarea = document.getElementById('bulk-passenger-paste');
+            const names = textarea.value.split('\n').map(n => n.trim()).filter(n => n !== '');
+            if (names.length === 0) return;
+
+            const list = document.getElementById('passenger-names-list');
+            const room = MAX_PASSENGERS - list.children.length;
+            const toAdd = names.slice(0, room);
+
+            toAdd.forEach((name) => {
+                const input = addPassengerRow(false);
+                if (input) input.value = name;
+            });
+            textarea.value = '';
+
+            if (names.length > room) {
+                alert(`Hanya ${room} nama pertama ditambah (had maksimum ${MAX_PASSENGERS} penumpang).`);
+            }
+        }
+
+        function clearAllPassengers() {
+            if (!confirm('Kosongkan semua penumpang yang telah ditambah?')) return;
+            document.getElementById('passenger-names-list').innerHTML = '';
+            updatePassengerMeta();
+        }
+
+        updatePassengerMeta();
+
         function initMap() {
             // Pusat lalai: Selangor, Malaysia
             map = L.map('map').setView([3.0738, 101.5183], 11);
@@ -745,26 +954,55 @@ $fullyBookedDatesJson = json_encode(array_values($fullyBookedDates));
         }
 
         document.addEventListener('DOMContentLoaded', function () {
-            const sharedDateOptions = {
-                enableTime: true,
-                time_24hr: true,
-                dateFormat: 'Y-m-d\\TH:i', // sepadan dengan format datetime-local asal
+            // Gabungkan tarikh (Y-m-d) + masa (H:i) terpisah menjadi satu nilai
+            // "Y-m-dTH:i" dalam medan hidden, sepadan dengan lajur datetime di pangkalan data.
+            function combine(dateId, timeId, hiddenId) {
+                const dateVal = document.getElementById(dateId).value;
+                const timeVal = document.getElementById(timeId).value;
+                document.getElementById(hiddenId).value = (dateVal && timeVal) ? `${dateVal}T${timeVal}` : '';
+            }
+
+            const dateOptions = {
+                dateFormat: 'Y-m-d',
                 minDate: 'today',
                 disable: [
                     function (date) { return isDateFullyBooked(date, fullyBookedDates); }
                 ],
             };
+            const timeOptions = {
+                enableTime: true,
+                noCalendar: true,
+                time_24hr: true,
+                dateFormat: 'H:i',
+            };
 
-            const departPicker = flatpickr('#depart-datetime-input', sharedDateOptions);
-
-            // Tarikh pulang tidak boleh sebelum tarikh berangkat
-            flatpickr('#return-datetime-input', Object.assign({}, sharedDateOptions, {
-                onOpen: function (selectedDates, dateStr, instance) {
-                    if (departPicker.selectedDates[0]) {
-                        instance.set('minDate', departPicker.selectedDates[0]);
+            const departDatePicker = flatpickr('#depart-date-input', Object.assign({}, dateOptions, {
+                onChange: function () {
+                    combine('depart-date-input', 'depart-time-input', 'depart-datetime-hidden');
+                    if (returnDatePicker && departDatePicker.selectedDates[0]) {
+                        returnDatePicker.set('minDate', departDatePicker.selectedDates[0]);
                     }
                 },
             }));
+            const departTimePicker = flatpickr('#depart-time-input', Object.assign({}, timeOptions, {
+                onChange: function () { combine('depart-date-input', 'depart-time-input', 'depart-datetime-hidden'); },
+            }));
+
+            // Tarikh pulang tidak boleh sebelum tarikh berangkat
+            const returnDatePicker = flatpickr('#return-date-input', Object.assign({}, dateOptions, {
+                onChange: function () { combine('return-date-input', 'return-time-input', 'return-datetime-hidden'); },
+            }));
+            const returnTimePicker = flatpickr('#return-time-input', Object.assign({}, timeOptions, {
+                onChange: function () { combine('return-date-input', 'return-time-input', 'return-datetime-hidden'); },
+            }));
+
+            // Jaring keselamatan: pastikan medan hidden dikemaskini sebelum borang dihantar
+            document.getElementById('booking-form').addEventListener('submit', function () {
+                combine('depart-date-input', 'depart-time-input', 'depart-datetime-hidden');
+                if (document.getElementById('trip-type').value === 'Return') {
+                    combine('return-date-input', 'return-time-input', 'return-datetime-hidden');
+                }
+            });
         });
     </script>
 

@@ -79,7 +79,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         } elseif ($action === 'upload_photo') {
             if (empty($_FILES['photo']) || $_FILES['photo']['error'] !== UPLOAD_ERR_OK) {
-                throw new RuntimeException('Sila pilih fail imej yang sah untuk dimuat naik.');
+                throw new RuntimeException('Sila pilih fail imej yang sah untuk draculauat naik.');
             }
 
             $file = $_FILES['photo'];
@@ -95,7 +95,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
             $imgInfo = @getimagesize($file['tmp_name']);
             if ($imgInfo === false) {
-                throw new RuntimeException('Fail yang dimuat naik bukan imej yang sah.');
+                throw new RuntimeException('Fail yang draculauat naik bukan imej yang sah.');
             }
 
             if (!is_dir($UPLOAD_DIR)) {

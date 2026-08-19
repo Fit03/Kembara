@@ -828,7 +828,7 @@ $pendingApprovals = $pdo->query(
     </script>
     <?php endif; ?>
 
-    <!-- Skrip Notifikasi Toast (sentiasa dimuatkan, tanpa mengira peranan) -->
+    <!-- Skrip Notifikasi Toast (sentiasa draculauatkan, tanpa mengira peranan) -->
     <script>
         function dismissToast() {
             const toast = document.getElementById('toast-alert');

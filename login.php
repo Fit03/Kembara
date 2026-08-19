@@ -33,7 +33,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if (!$user) {
             $error = "E-mel ini tidak berdaftar dalam sistem.";
         } elseif (!password_verify($password, $user['password'])) {
-            $error = "Kata laluan yang dimasukkan adalah salah.";
+            $error = "Kata laluan yang draculaasukkan adalah salah.";
         } else {
             $_SESSION['user_id']  = $user['user_id'];
             $_SESSION['fullname'] = $user['fullname'];

@@ -80,6 +80,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $pax       = (int)($_POST['passenger_total'] ?? 0);
             $purpose   = trim($_POST['purpose'] ?? '');
 
+            // Nama penumpang dihantar sebagai array (passenger_names[]) daripada
+            // senarai butang Tambah/Buang Penumpang pada borang tempahan
+            $passengerNamesArr = array_values(array_filter(array_map(
+                'trim',
+                $_POST['passenger_names'] ?? []
+            ), fn($n) => $n !== ''));
+            $passengerNamesJson = !empty($passengerNamesArr)
+                ? json_encode($passengerNamesArr, JSON_UNESCAPED_UNICODE)
+                : null;
+            // Bilangan penumpang diselaraskan dengan jumlah nama yang benar-benar diisi
+            if (!empty($passengerNamesArr)) {
+                $pax = count($passengerNamesArr);
+            }
+
             if ($departRaw === '' || $origin === '' || $dest === '' || $purpose === '') {
                 throw new RuntimeException('Sila lengkapkan semua maklumat wajib tempahan.');
             }
@@ -101,12 +115,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $stmt = $pdo->prepare(
                 "INSERT INTO vehicle_bookings
                  (booking_no, user_id, depart_datetime, return_datetime, trip_type, origin, destination,
-                  passenger_total, purpose, status)
-                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'Pending')"
+                  passenger_total, passenger_names, purpose, status)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Pending')"
             );
             $stmt->execute([
                 $bookingNo, $currentUserId, $departRaw, $returnRaw !== '' ? $returnRaw : null,
-                $tripType, $origin, $dest, $pax > 0 ? $pax : null, $purpose,
+                $tripType, $origin, $dest, $pax > 0 ? $pax : null, $passengerNamesJson, $purpose,
             ]);
             $newId = (int)$pdo->lastInsertId();
 
@@ -808,6 +822,9 @@ $tabs = ['All' => 'Semua', 'Pending' => 'Menunggu', 'Approved' => 'Diluluskan', 
                             "depart_datetime"  => date('d M Y, h:i A', strtotime($b["depart_datetime"])),
                             "return_datetime"  => $b["return_datetime"] ? date('d M Y, h:i A', strtotime($b["return_datetime"])) : '—',
                             "passenger_total"  => $b["passenger_total"] ?: '—',
+                            "passenger_names"  => $b["passenger_names"]
+                                ? implode(', ', json_decode($b["passenger_names"], true) ?: [])
+                                : '—',
                             "purpose"          => $b["purpose"],
                             "vehicle"          => $b["plate_no"] ? trim(($b["vehicle_name"] ?: '') . ' (' . $b["plate_no"] . ')') : 'Belum ditugaskan',
                             "driver"           => $b["driver_name"] ?: 'Tiada',
@@ -937,6 +954,7 @@ $tabs = ['All' => 'Semua', 'Pending' => 'Menunggu', 'Approved' => 'Diluluskan', 
           <div><p class="text-xs text-slate-400 mb-0.5">Status</p><p class="font-medium" id="view-status"></p></div>
           <div><p class="text-xs text-slate-400 mb-0.5">Jenis Perjalanan</p><p class="font-medium" id="view-trip-type"></p></div>
           <div><p class="text-xs text-slate-400 mb-0.5">Bilangan Penumpang</p><p class="font-medium" id="view-pax"></p></div>
+          <div class="col-span-2"><p class="text-xs text-slate-400 mb-0.5">Nama Penumpang</p><p class="font-medium" id="view-passenger-names"></p></div>
           <div><p class="text-xs text-slate-400 mb-0.5">Asal</p><p class="font-medium" id="view-origin"></p></div>
           <div><p class="text-xs text-slate-400 mb-0.5">Destinasi</p><p class="font-medium" id="view-destination"></p></div>
           <div><p class="text-xs text-slate-400 mb-0.5">Berangkat</p><p class="font-medium" id="view-depart"></p></div>
@@ -991,6 +1009,7 @@ $tabs = ['All' => 'Semua', 'Pending' => 'Menunggu', 'Approved' => 'Diluluskan', 
             document.getElementById('view-status').textContent       = b.status;
             document.getElementById('view-trip-type').textContent    = b.trip_type;
             document.getElementById('view-pax').textContent          = b.passenger_total;
+            document.getElementById('view-passenger-names').textContent = b.passenger_names;
             document.getElementById('view-origin').textContent       = b.origin;
             document.getElementById('view-destination').textContent  = b.destination;
             document.getElementById('view-depart').textContent       = b.depart_datetime;
