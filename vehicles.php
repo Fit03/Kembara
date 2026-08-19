@@ -21,6 +21,11 @@ if (!$email) {
     $email = $stmt->fetchColumn() ?: 'tiada-emel@selangor.gov.my';
 }
 
+$avatarStmt = $pdo->prepare("SELECT profile_picture FROM users WHERE user_id = ?");
+$avatarStmt->execute([$currentUserId]);
+$profilePicture = $avatarStmt->fetchColumn();
+$hasPhoto = $profilePicture && is_file(__DIR__ . '/' . $profilePicture);
+
 $badgeColor = match($role) {
   'SuperAdmin' => 'badge badge-error',
   'Admin'      => 'badge badge-warning',
@@ -537,10 +542,14 @@ $pendingApprovals = $pdo->query(
 
                 <div class="dropdown dropdown-end">
                     <div tabindex="0" role="button" class="btn btn-ghost rounded-full pl-1 pr-2 py-1 flex items-center gap-2 h-auto min-h-0">
-                        <div class="avatar placeholder">
+                        <div class="avatar <?= $hasPhoto ? '' : 'placeholder' ?>">
+                          <?php if ($hasPhoto): ?>
+                            <div class="rounded-full w-8 h-8"><img src="<?= htmlspecialchars($profilePicture) ?>?v=<?= filemtime(__DIR__ . '/' . $profilePicture) ?>" alt="Avatar" /></div>
+                          <?php else: ?>
                             <div class="rounded-full w-8 h-8 flex items-center justify-center font-bold text-xs uppercase text-white" style="background:var(--ta-brand)">
-                                <?= htmlspecialchars(substr($fullname, 0, 1)) ?>
+                              <?= htmlspecialchars(substr($fullname, 0, 1)) ?>
                             </div>
+                          <?php endif; ?>
                         </div>
                         <span class="text-sm font-semibold hidden sm:inline-block"><?= htmlspecialchars($fullname) ?></span>
                     </div>
