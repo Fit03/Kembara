@@ -1,63 +1,19 @@
 <?php
-// login.php
+// index.php - Landing Page Sistem Tempahan Kenderaan & Bilik Mesyuarat
 require_once __DIR__ . '/config/database.php';
 require_once __DIR__ . '/includes/auth.php';
-
-// Redirect if already logged in
-if (isset($_SESSION['user_id'])) {
-    header("Location: dashboard.php");
-    exit();
-}
-
-$error = '';
-
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $email = trim($_POST['email'] ?? '');
-    $password = $_POST['password'] ?? '';
-
-    // 1. Check for empty inputs
-    if (empty($email) && empty($password)) {
-        $error = "Sila masukkan e-mel dan kata laluan anda.";
-    } elseif (empty($email)) {
-        $error = "Sila masukkan alamat e-mel anda.";
-    } elseif (empty($password)) {
-        $error = "Sila masukkan kata laluan anda.";
-    } elseif (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
-        $error = "Format e-mel tidak sah.";
-    } else {
-        // 3. Query database for user by email
-        $stmt = $pdo->prepare("SELECT user_id, fullname, email, password, role FROM users WHERE email = ?");
-        $stmt->execute([$email]);
-        $user = $stmt->fetch();
-
-        if (!$user) {
-            $error = "E-mel ini tidak berdaftar dalam sistem.";
-        } elseif (!password_verify($password, $user['password'])) {
-            $error = "Kata laluan yang draculaasukkan adalah salah.";
-        } else {
-            $_SESSION['user_id']  = $user['user_id'];
-            $_SESSION['fullname'] = $user['fullname'];
-            $_SESSION['role']     = $user['role'];
-
-            header("Location: dashboard.php");
-            exit();
-        }
-    }
-}
 ?>
-
 <!DOCTYPE html>
-<html lang="en" data-theme="garden">
+<html lang="ms">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Kembara</title>
-    <link rel="icon" type="image/png" href="assets/img/favicon.png" />
+    <title>Sistem Tempahan Kenderaan & Bilik Mesyuarat</title>
+    <link rel="icon" type="image/png" href="assets/img/logo.png" />
     
-    <!-- Tailwind CSS & daisyUI CDN -->
-    <link href="https://cdn.jsdelivr.net/npm/daisyui@4.12.10/dist/full.min.css" rel="stylesheet" type="text/css" />
+    <!-- Tailwind CSS CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://fonts.googleapis.com/css?family=Open+Sans:300,400,600,700" rel="stylesheet" />
+    <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
     
     <!-- React, ReactDOM, Three.js, and Babel CDNs -->
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
@@ -66,117 +22,175 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 
     <style>
-        body { font-family: 'Open Sans', sans-serif; }
+        body { 
+            font-family: 'Manrope', sans-serif; 
+            background-color: #f5f5f7;
+            color: #1d1d1f;
+        }
+        #pixel-liquid-bg-root canvas {
+            display: block;
+            width: 100vw !important;
+            height: 100vh !important;
+        }
     </style>
 </head>
-<body class="min-h-screen bg-base-200 relative overflow-x-hidden flex flex-col justify-between">
+<body class="min-h-screen relative overflow-x-hidden flex flex-col justify-between selection:bg-pink-500 selection:text-white">
 
     <!-- WebGL Fluid Background Container -->
-    <div id="pixel-liquid-bg-root" class="fixed inset-0 z-0 pointer-events-none"></div>
+    <div id="pixel-liquid-bg-root" class="fixed inset-0 z-0 pointer-events-auto"></div>
 
-    <div class="relative z-10 flex-grow flex flex-col justify-between">
-        <!-- Hero banner header -->
-        <div class="pt-12 pb-24 container mx-auto px-4 text-center">
-            <h1 class="mt-4 mb-2 text-3xl font-bold text-base-content">Selamat Datang</h1>
-            <p class="text-base-content/70 text-sm font-medium">Sistem Kembara</p>
-        </div>
+    <!-- Header / Navigasi Atas (LOGO PERTAMA) -->
+    <header class="relative z-20 w-full max-w-7xl mx-auto px-4 sm:px-6 pt-6 flex items-center justify-between pointer-events-auto">
+        <a href="" class="flex items-center gap-3 group">
+            <img src="assets/img/logo.png" alt="Logo" class="h-10 sm:h-12 w-auto object-contain transition-transform group-hover:scale-105 drop-shadow-sm" />
+            <span class="font-extrabold text-2xl tracking-tight text-zinc-900">Sistem Tempahan Kenderaan & Bilik Mesyuarat</span>
+        </a>
+    </header>
 
-        <!-- Login Card Overlay -->
-        <div class="container mx-auto px-4 mb-auto">
-            <div class="card shrink-0 w-full max-w-sm mx-auto shadow-2xl bg-base-100/90 backdrop-blur-md rounded-2xl border border-white/20">
-                <form class="card-body" action="login.php" method="POST">
-                    <h2 class="card-title text-2xl font-bold justify-center mb-1">Log Masuk</h2>
-
-                    <!-- Dynamic daisyUI Alert -->
-                    <?php if (!empty($error)): ?>
-                        <div role="alert" class="alert alert-error text-sm p-3 mb-4 shadow-sm flex items-center gap-2">
-                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 shrink-0 stroke-current" fill="none" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                            </svg>
-                            <span><?= htmlspecialchars($error) ?></span>
-                        </div>
-                    <?php endif; ?>
-
-                    <!-- Email Field -->
-                    <div class="form-control">
-                        <label class="label">
-                            <span class="label-text">Emel</span>
-                        </label>
-                        <input type="email" name="email" placeholder="emel@selangor.gov.my" class="input input-bordered rounded-lg bg-base-100/60" required />
-                    </div>
-
-                    <!-- Password Field Container -->
-                    <div class="form-control mt-2">
-                        <label class="label">
-                            <span class="label-text">Kata Laluan</span>
-                        </label>
-                        <div class="relative w-full">
-                            <input
-                                type="password"
-                                id="password-input"
-                                name="password"
-                                placeholder="Kata Laluan"
-                                class="input input-bordered rounded-lg w-full pr-12 text-base bg-base-100/60"
-                                required
-                            />
-                            <button
-                                type="button"
-                                onclick="togglePassword()"
-                                class="absolute inset-y-0 right-0 pr-4 flex items-center text-base-content/60 hover:text-base-content focus:outline-none"
-                                aria-label="Tunjuk kata laluan"
-                            >
-                                <svg id="eye-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.8" stroke="currentColor" class="w-6 h-6">
-                                    <path stroke-linecap="round" stroke-linejoin="round" d="M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178z" />
-                                    <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+    <!-- Lapisan Antaramuka Pengguna (Kandungan Asal Landing Page) -->
+    <div class="relative z-10 min-h-[calc(100vh-80px)] flex items-center justify-center pointer-events-none py-8 sm:py-12">
+        <div class="container mx-auto px-4 max-w-7xl pointer-events-auto">
+            <div class="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-12 items-center">
+                
+                <!-- Bahagian Kiri: Tajuk & Pilihan Sistem -->
+                <div class="lg:col-span-7 space-y-4 sm:space-y-6">
+                    
+                    <!-- Badge Status + Small Logo (LOGO KEDUA) -->
+                    <div class="flex items-center gap-3">
+                        <div class="inline-flex bg-white/70 border border-black/10 rounded-full pt-2 pr-4 pb-2 pl-3 backdrop-blur-xl gap-x-2 items-center shadow-sm">
+                            <img src="assets/img/logo.png" alt="Logo" class="h-5 w-auto object-contain" />
+                            <span class="text-[10px] sm:text-xs tracking-wider uppercase flex items-center gap-2 font-sans text-zinc-700 font-semibold">
+                                Portal Rasmi Pengurusan Sumber
+                                <svg xmlns="http://www.w3.org/2000/svg" aria-hidden="true" role="img" width="14" height="14" viewBox="0 0 24 24" class="text-pink-600 sm:w-4 sm:h-4">
+                                    <path fill="currentColor" d="M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2m1 15h-2v-6h2zm0-8h-2V7h2z"/>
                                 </svg>
-                                <svg id="eye-slash-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.8" stroke="currentColor" class="w-6 h-6 hidden">
-                                    <path stroke-linecap="round" stroke-linejoin="round" d="M3.98 8.223A10.477 10.477 0 001.934 12C3.226 16.338 7.244 19.5 12 19.5c.993 0 1.953-.138 2.863-.395M6.228 6.228A10.45 10.45 0 0112 4.5c4.756 0 8.773 3.162 10.065 7.498a10.523 10.523 0 01-4.293 5.774M6.228 6.228L3 3m3.228 3.228l3.65 3.65m7.894 7.894L21 21m-3.228-3.228l-3.65-3.65m0 0a3 3 0 10-4.243-4.243m4.242 4.242L9.88 9.88" />
-                                </svg>
-                            </button>
+                            </span>
                         </div>
-
-                        <!-- Forgot Password Link -->
-                        <label class="label justify-end">
-                            <a href="#" class="label-text-alt link link-hover text-sm">Lupa Kata Laluan?</a>
-                        </label>
                     </div>
 
-                    <!-- Submit Button -->
-                    <div class="form-control mt-4">
-                        <button type="submit" class="btn btn-neutral">Log Masuk</button>
+                    <!-- Tajuk Utama -->
+                    <h1 class="text-4xl sm:text-5xl md:text-6xl lg:text-7xl leading-[0.95] font-extrabold tracking-tight drop-shadow-sm text-zinc-900">
+                        Sistem Tempahan<br>
+                        <span class="bg-clip-text font-extrabold text-transparent bg-gradient-to-br from-pink-600 via-rose-500 to-purple-600">
+                            Kenderaan & Bilik
+                        </span><br>
+                        Mesyuarat
+                    </h1>
+
+                    <!-- Sub-penerangan -->
+                    <p class="text-base sm:text-lg text-zinc-700 max-w-xl font-medium">
+                        Pengurusan tempahan perkhidmatan logistik kenderaan rasmi dan fasiliti bilik mesyuarat secara kendiri dengan pantas, telus, dan teratur.
+                    </p>
+
+                    <!-- Kad Pilihan Sistem -->
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-4">
+                        
+                        <!-- Pilihan 1: Tempahan Kenderaan -->
+                        <a href="login.php" class="group relative overflow-hidden rounded-2xl bg-white/80 border border-black/10 p-5 backdrop-blur-xl transition-all duration-300 hover:border-pink-500 hover:bg-white hover:-translate-y-1 shadow-lg">
+                            <div class="flex items-center justify-between mb-3">
+                                <div class="w-10 h-10 rounded-xl bg-pink-100 border border-pink-200 flex items-center justify-center text-pink-600 group-hover:bg-pink-600 group-hover:text-white transition-colors">
+                                    <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                        <path d="M19 17h2c.6 0 1-.4 1-1v-3c0-.9-.7-1.7-1.5-1.9C18.7 10.6 16 10 16 10s-1.3-1.4-2.2-2.3c-.5-.4-1.1-.7-1.8-.7H5c-.6 0-1.1.4-1.4.9l-1.4 2.9A3.7 3.7 0 0 0 2 12v4c0 .6.4 1 1 1h2"/>
+                                        <circle cx="7" cy="17" r="2"/>
+                                        <path d="M9 17h6"/>
+                                        <circle cx="17" cy="17" r="2"/>
+                                    </svg>
+                                </div>
+                                <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5 text-zinc-400 group-hover:text-pink-600 group-hover:translate-x-1 transition-all" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3"/>
+                                </svg>
+                            </div>
+                            <h2 class="text-lg font-bold text-zinc-900 group-hover:text-pink-600 transition-colors">Tempahan Kenderaan</h2>
+                            <p class="text-xs text-zinc-600 mt-1">Tempah kenderaan jabatan, semak ketersediaan pemandu dan jadual perjalanan.</p>
+                        </a>
+
+                        <!-- Pilihan 2: Tempahan Bilik Mesyuarat -->
+                        <a href="meeting-room/" class="group relative overflow-hidden rounded-2xl bg-white/80 border border-black/10 p-5 backdrop-blur-xl transition-all duration-300 hover:border-pink-500 hover:bg-white hover:-translate-y-1 shadow-lg">
+                            <div class="flex items-center justify-between mb-3">
+                                <div class="w-10 h-10 rounded-xl bg-pink-100 border border-pink-200 flex items-center justify-center text-pink-600 group-hover:bg-pink-600 group-hover:text-white transition-colors">
+                                    <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                        <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/>
+                                        <circle cx="9" cy="7" r="4"/>
+                                        <path d="M22 21v-2a4 4 0 0 3-3-3.87"/>
+                                        <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+                                    </svg>
+                                </div>
+                                <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5 text-zinc-400 group-hover:text-pink-600 group-hover:translate-x-1 transition-all" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3"/>
+                                </svg>
+                            </div>
+                            <h2 class="text-lg font-bold text-zinc-900 group-hover:text-pink-600 transition-colors">Bilik Mesyuarat</h2>
+                            <p class="text-xs text-zinc-600 mt-1">Semak kalendar, fasiliti bilik, VC, dan buat tempahan ruang perbincangan.</p>
+                        </a>
+
                     </div>
-                </form>
+                </div>
+
+                <!-- Bahagian Kanan: Panel Statistik -->
+                <div class="lg:col-span-5 space-y-4 sm:space-y-6">
+                    <div class="overflow-hidden border border-black/10 bg-white/80 w-full h-fit rounded-2xl sm:rounded-3xl relative backdrop-blur-xl shadow-xl">
+                        <div class="p-6 sm:p-8 relative">
+                            
+                            <div class="flex items-center gap-3 mb-6">
+                                <div class="w-12 h-12 rounded-2xl border border-pink-200 bg-pink-100 flex items-center justify-center text-pink-600">
+                                    <svg xmlns="http://www.w3.org/2000/svg" class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
+                                    </svg>
+                                </div>
+                                <div>
+                                    <div class="text-2xl sm:text-3xl tracking-tight font-extrabold text-zinc-900">99.4%</div>
+                                    <div class="text-xs sm:text-sm text-zinc-600 font-medium">Kadar Kelulusan Tempahan</div>
+                                </div>
+                            </div>
+
+                            <!-- Progress Bar -->
+                            <div class="space-y-3 mb-6">
+                                <div class="flex items-center justify-between text-xs sm:text-sm">
+                                    <span class="text-zinc-600 font-medium">Kapasiti Penggunaan Harian</span>
+                                    <span class="font-bold text-pink-600">85% Aktif</span>
+                                </div>
+                                <div class="h-2 bg-zinc-200 rounded-full overflow-hidden">
+                                    <div class="h-full bg-gradient-to-r from-pink-500 to-rose-400 rounded-full" style="width: 85%;"></div>
+                                </div>
+                            </div>
+
+                            <div class="h-px w-full bg-black/10 my-4"></div>
+
+                            <!-- Ringkasan Statistik -->
+                            <div class="flex justify-between mb-4 gap-2">
+                                <div class="text-center px-2 py-1 rounded-xl hover:bg-black/5 transition-all flex-1">
+                                    <div class="text-xl sm:text-2xl leading-tight text-zinc-900 font-extrabold">12</div>
+                                    <div class="text-[10px] sm:text-xs opacity-70 uppercase tracking-wide font-semibold">Kenderaan</div>
+                                </div>
+                                <div class="w-px h-10 my-auto bg-black/10"></div>
+                                <div class="text-center px-2 py-1 rounded-xl hover:bg-black/5 transition-all flex-1">
+                                    <div class="text-xl sm:text-2xl leading-tight text-zinc-900 font-extrabold">8</div>
+                                    <div class="text-[10px] sm:text-xs opacity-70 uppercase tracking-wide font-semibold">Bilik</div>
+                                </div>
+                                <div class="w-px h-10 my-auto bg-black/10"></div>
+                                <div class="text-center px-2 py-1 rounded-xl hover:bg-black/5 transition-all flex-1">
+                                    <div class="text-xl sm:text-2xl leading-tight text-zinc-900 font-extrabold">24/7</div>
+                                    <div class="text-[10px] sm:text-xs opacity-70 uppercase tracking-wide font-semibold">Akses</div>
+                                </div>
+                            </div>
+
+                            <?php if (!isset($_SESSION['user_id'])): ?>
+                                <div class="mt-6 pt-2">
+                                    <a href="login.php" class="block text-center py-2.5 px-4 bg-zinc-900 hover:bg-zinc-800 text-white font-medium rounded-xl transition-all shadow-md">
+                                        Log Masuk Pengguna
+                                    </a>
+                                </div>
+                            <?php endif; ?>
+
+                        </div>
+                    </div>
+                </div>
+
             </div>
         </div>
-
-        <footer class="py-6 mt-8">
-            <div class="container mx-auto px-4 text-center">
-                <p class="text-sm text-base-content/60 font-medium">© <span id="year"></span> Kembara · Perbendaharaan Negeri Selangor</p>
-            </div>
-        </footer>
     </div>
 
-    <!-- Toggle Password JS -->
-    <script>
-        function togglePassword() {
-            const passwordInput = document.getElementById('password-input');
-            const eyeIcon = document.getElementById('eye-icon');
-            const eyeSlashIcon = document.getElementById('eye-slash-icon');
-
-            if (passwordInput.type === 'password') {
-                passwordInput.type = 'text';
-                eyeIcon.classList.add('hidden');
-                eyeSlashIcon.classList.remove('hidden');
-            } else {
-                passwordInput.type = 'password';
-                eyeIcon.classList.remove('hidden');
-                eyeSlashIcon.classList.add('hidden');
-            }
-        }
-        document.getElementById('year').textContent = new Date().getFullYear();
-    </script>
-
-    <!-- PixelLiquidBg Component Mount Script -->
+    <!-- Skrip Latar Belakang Pixel Liquid WebGL Asal dari Login Page -->
     <script type="text/babel">
         const { useEffect, useRef } = React;
 
@@ -366,25 +380,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             gl_FragColor = vec4(v, 0.0, 1.0);
         }`;
 
-        const viscous_frag = `
-        precision highp float;
-        uniform sampler2D velocity;
-        uniform sampler2D velocity_new;
-        uniform float v;
-        uniform vec2 px;
-        uniform float dt;
-        varying vec2 uv;
-        void main(){
-            vec2 old  = texture2D(velocity, uv).xy;
-            vec2 new0 = texture2D(velocity_new, uv + vec2(px.x * 2.0, 0.0)).xy;
-            vec2 new1 = texture2D(velocity_new, uv - vec2(px.x * 2.0, 0.0)).xy;
-            vec2 new2 = texture2D(velocity_new, uv + vec2(0.0, px.y * 2.0)).xy;
-            vec2 new3 = texture2D(velocity_new, uv - vec2(0.0, px.y * 2.0)).xy;
-            vec2 newv = 4.0 * old + v * dt * (new0 + new1 + new2 + new3);
-            newv /= 4.0 * (1.0 + v * dt);
-            gl_FragColor = vec4(newv, 0.0, 0.0);
-        }`;
-
         const DEFAULT_LIGHT_PALETTE = ["#ffffff", "#FD96E5", "#F36AC3", "#FE4396", "#ff85b3"];
 
         function writePaletteData(data, stops) {
@@ -463,9 +458,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
             resize() {
                 if (!this.container) return;
-                const r = this.container.getBoundingClientRect();
-                this.width = Math.max(1, Math.floor(r.width));
-                this.height = Math.max(1, Math.floor(r.height));
+                this.width = window.innerWidth;
+                this.height = window.innerHeight;
                 this.renderer?.setSize(this.width, this.height, false);
             }
 
@@ -511,9 +505,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
             _onMove(e) {
                 if (!this.container) return;
-                const r = this.container.getBoundingClientRect();
-                this.isInside = e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top && e.clientY <= r.bottom;
-                if (!this.isInside) return;
                 this.onInteract?.();
                 this._set(e.clientX, e.clientY);
             }
@@ -526,11 +517,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
 
             _set(cx, cy) {
-                if (!this.container) return;
                 if (this.timer) clearTimeout(this.timer);
-                const r = this.container.getBoundingClientRect();
-                const nx = (cx - r.left) / r.width;
-                const ny = (cy - r.top) / r.height;
+                const nx = cx / window.innerWidth;
+                const ny = cy / window.innerHeight;
                 this.coords.set(nx * 2 - 1, -(ny * 2 - 1));
                 this.mouseMoved = true;
                 this.timer = setTimeout(() => { this.mouseMoved = false; }, 100);
@@ -864,8 +853,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     sim.resize();
                     outputUniforms.uRes.value.set(gl.width, gl.height);
                 };
-                const ro = new ResizeObserver(handleResize);
-                ro.observe(container);
+                window.addEventListener("resize", handleResize);
 
                 let raf = 0;
                 let running = true;
@@ -900,7 +888,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 return () => {
                     running = false;
                     cancelAnimationFrame(raf);
-                    ro.disconnect();
+                    window.removeEventListener("resize", handleResize);
                     document.removeEventListener("visibilitychange", onVisibility);
                     mouse.dispose();
                     sim.dispose();
@@ -920,5 +908,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         const root = ReactDOM.createRoot(document.getElementById('pixel-liquid-bg-root'));
         root.render(<PixelLiquidBgApp />);
     </script>
+
 </body>
 </html>

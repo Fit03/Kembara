@@ -1,0 +1,222 @@
+:root, [data-theme] {
+    --ta-canvas: var(--color-base-200);
+    --ta-surface: var(--color-base-100);
+    --ta-border: var(--color-base-300);
+    --ta-ink: var(--color-base-content);
+    --ta-muted: color-mix(in oklch, var(--color-base-content) 55%, transparent);
+    --ta-brand: var(--color-primary);
+    --ta-brand-50: color-mix(in oklch, var(--color-primary) 12%, var(--color-base-100));
+}
+
+.bg-white { background-color: var(--ta-surface) !important; }
+.text-slate-400, .text-slate-500 { color: var(--ta-muted) !important; }
+.text-slate-700, .text-slate-800 { color: var(--ta-ink) !important; }
+.hover\:bg-slate-50:hover, .hover\:bg-slate-100:hover { background-color: var(--ta-canvas) !important; }
+.hover\:text-slate-700:hover { color: var(--ta-ink) !important; }
+
+* { font-family: 'Outfit', ui-sans-serif, system-ui, sans-serif; }
+
+body { 
+    background: var(--ta-canvas); 
+    color: var(--ta-ink); 
+    zoom: 110%; /* Global zoom adjustment */
+    transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+/* Card & Sidenav Dark Mode Overrides */
+.card, .ta-sidebar, nav {
+    background: color-mix(in oklch, var(--ta-surface) 72%, transparent) !important;
+    border-color: var(--ta-border) !important;
+    color: var(--ta-ink) !important;
+}
+
+/* Table text, borders & hover — theme-aware in both modes now */
+table th { color: var(--ta-muted) !important; }
+table td { border-color: var(--ta-border) !important; }
+table tr:hover { background-color: color-mix(in oklch, var(--color-base-content) 5%, transparent) !important; }
+
+.ta-icon-box {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 3rem;
+    height: 3rem;
+    border-radius: 0.75rem;
+    background: var(--ta-canvas);
+    color: var(--ta-ink);
+}
+
+.ta-nav-link {
+    display: flex;
+    align-items: center;
+    gap: 0.7rem;
+    border-radius: 0.5rem;
+    padding: 0.55rem 0.75rem;
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: var(--ta-muted);
+    transition: all .15s ease;
+}
+.ta-nav-link:hover { background: var(--ta-canvas); color: var(--ta-ink); }
+.ta-nav-link.active { background: var(--ta-brand-50); color: var(--ta-brand); font-weight: 600; }
+.ta-nav-icon { display: inline-flex; width: 1.25rem; height: 1.25rem; flex-shrink: 0; }
+
+.ta-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    border-radius: 9999px;
+    padding: 0.15rem 0.65rem;
+    font-size: 0.7rem;
+    font-weight: 600;
+}
+/* Soft badges — derived from daisyUI's semantic theme colors, so one
+   rule covers both light and dracula automatically */
+.badge-soft-success { background: color-mix(in oklch, var(--color-success) 18%, var(--color-base-100)); color: var(--color-success); }
+.badge-soft-warning { background: color-mix(in oklch, var(--color-warning) 18%, var(--color-base-100)); color: var(--color-warning); }
+.badge-soft-error   { background: color-mix(in oklch, var(--color-error) 18%, var(--color-base-100));   color: var(--color-error); }
+.badge-soft-info    { background: color-mix(in oklch, var(--color-info) 18%, var(--color-base-100));    color: var(--color-info); }
+.badge-soft-neutral { background: color-mix(in oklch, var(--color-neutral) 18%, var(--color-base-100)); color: var(--ta-ink); }
+
+.ta-divide > * + * { border-top: 1px solid var(--ta-border); }
+
+.ta-tab {
+    display: inline-flex;
+    align-items: center;
+    white-space: nowrap;
+    padding: 0.4rem 0.9rem;
+    border-radius: 9999px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--ta-muted);
+    border: 1px solid var(--ta-border);
+    transition: all .15s ease;
+}
+.ta-tab:hover { color: var(--ta-ink); background: var(--ta-canvas); }
+.ta-tab.active { background: var(--ta-brand); color: #fff; border-color: var(--ta-brand); }
+
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-thumb { background: var(--ta-border); border-radius: 999px; }
+
+.card.clickable {
+    cursor: pointer;
+    transition: transform .14s ease, box-shadow .14s ease;
+}
+.card.clickable:hover {
+    transform: translateY(-4px) scale(1.02);
+    box-shadow: 0 8px 20px rgba(2,6,23,0.06);
+}
+.card.clickable:active {
+    transform: translateY(1px);
+}
+
+#toast-alert {
+    position: fixed;
+    top: 1.25rem;
+    left: 50%;
+    z-index: 300;
+    animation: ta-toast-in 0.55s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+#toast-alert.ta-toast-hide {
+    animation: ta-toast-out 0.35s cubic-bezier(0.4, 0, 1, 1) forwards;
+}
+
+@keyframes ta-toast-in {
+    0%   { opacity: 0; transform: translate(-50%, -28px) scale(0.85); }
+    60%  { opacity: 1; transform: translate(-50%, 6px) scale(1.02); }
+    100% { opacity: 1; transform: translate(-50%, 0) scale(1); }
+}
+
+@keyframes ta-toast-out {
+    0%   { opacity: 1; transform: translate(-50%, 0) scale(1); }
+    100% { opacity: 0; transform: translate(-50%, -18px) scale(0.92); }
+}
+
+dialog.modal {
+    opacity: 0;
+    transform: scale(0.92) translateY(12px);
+    transition: opacity 0.28s cubic-bezier(0.34, 1.56, 0.64, 1),
+                transform 0.32s cubic-bezier(0.34, 1.56, 0.64, 1),
+                overlay 0.32s allow-discrete,
+                display 0.32s allow-discrete;
+}
+dialog.modal[open] {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+}
+@starting-style {
+    dialog.modal[open] {
+        opacity: 0;
+        transform: scale(0.92) translateY(12px);
+    }
+}
+dialog.modal::backdrop {
+    background: rgba(15, 23, 42, 0);
+    backdrop-filter: blur(0px);
+    transition: background 0.32s ease, backdrop-filter 0.32s ease,
+                overlay 0.32s allow-discrete, display 0.32s allow-discrete;
+}
+dialog.modal[open]::backdrop {
+    background: rgba(15, 23, 42, 0.45);
+    backdrop-filter: blur(3px);
+}
+@starting-style {
+    dialog.modal[open]::backdrop {
+        background: rgba(15, 23, 42, 0);
+        backdrop-filter: blur(0px);
+    }
+}
+
+@keyframes glassSheen {
+  0%   { transform: translateX(-120%) skewX(-15deg); opacity: 0; }
+  15%  { opacity: 0.5; }
+  50%  { opacity: 0.35; }
+  100% { transform: translateX(220%) skewX(-15deg); opacity: 0; }
+}
+
+.glass-dock {
+  position: relative;
+  background: color-mix(in oklch, var(--ta-surface, #ffffff) 7%, transparent);
+  backdrop-filter: blur(34px) saturate(220%);
+  -webkit-backdrop-filter: blur(34px) saturate(220%);
+  box-shadow:
+    0 20px 45px -18px rgba(0,0,0,0.28),
+    0 1px 0 rgba(255,255,255,0.5) inset,
+    0 -6px 14px -8px rgba(0,0,0,0.12) inset;
+}
+
+.glass-dock::before {
+  content: "";
+  position: absolute; inset: 0;
+  border-radius: inherit;
+  border: 1px solid rgba(255,255,255,0.35);
+  -webkit-mask: linear-gradient(#000,#000) content-box, linear-gradient(#000,#000);
+  pointer-events: none;
+}
+
+.glass-dock::after {
+  content: "";
+  position: absolute; inset: 0;
+  border-radius: inherit;
+  background: linear-gradient(75deg, transparent 35%, rgba(255,255,255,0.55) 48%, transparent 60%);
+  width: 60%;
+  animation: glassSheen 1.6s cubic-bezier(0.22,0.9,0.3,1) 0.3s 1 both;
+  pointer-events: none;
+}
+
+.more-popover {
+  background: color-mix(in oklch, var(--ta-surface, #ffffff) 94%, transparent);
+  backdrop-filter: blur(24px) saturate(200%);
+  -webkit-backdrop-filter: blur(24px) saturate(200%);
+  border: 1px solid rgba(255,255,255,0.5);
+  box-shadow: 0 20px 45px -18px rgba(0,0,0,0.28), 0 1px 0 rgba(255,255,255,0.6) inset;
+}
+.more-popover a:hover {
+  background: var(--ta-brand-50, rgba(0,122,255,0.08));
+  color: var(--ta-brand, #007AFF) !important;
+}
+.more-popover.open {
+  opacity: 1 !important;
+  transform: scale(1) !important;
+  pointer-events: auto !important;
+}

@@ -16,7 +16,7 @@ $role = $_SESSION['role']; // Boleh jadi 'SuperAdmin', 'Admin', atau 'User'
 $dayNamesMY = ['Ahad', 'Isnin', 'Selasa', 'Rabu', 'Khamis', 'Jumaat', 'Sabtu'];
 $monthNamesMY = ['Januari', 'Februari', 'Mac', 'April', 'Mei', 'Jun', 'Julai', 'Ogos', 'September', 'Oktober', 'November', 'Disember'];
 $now = new DateTime();
-$todayLabel = strtoupper($dayNamesMY[(int)$now->format('w')] . ', ' . $now->format('j') . ' ' . $monthNamesMY[(int)$now->format('n') - 1]);
+$todayLabel = strtoupper($dayNamesMY[(int)$now->format('w')] . ', ' . $monthNamesMY[(int)$now->format('n') - 1] . ' ' . $now->format('j'));
 
 $hour = (int) $now->format('G');
 if ($hour < 12) {
@@ -248,7 +248,6 @@ if ($role === 'User') {
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, shrink-to-fit=no" />
     <title>Kembara - Dashboard</title>
-    <link rel="icon" type="image/png" href="assets/img/favicon.png" />
 
     <!-- Font: Outfit -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -259,13 +258,198 @@ if ($role === 'User') {
     <link href="https://cdn.jsdelivr.net/npm/daisyui@5/themes.css" rel="stylesheet" type="text/css" />
     <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
 
-    <!-- Custom CSS -->
-    <link rel="stylesheet" href="assets/css/style.css" />
-
     <!-- ApexCharts CDN -->
     <script src="https://cdn.jsdelivr.net/npm/apexcharts"></script>
 
+    <style>
+        /*
+         * These --ta-* variables now simply point at daisyUI's own theme
+         * variables, so they automatically follow whichever daisyUI theme
+         * is active on <html data-theme="..."> — light (light) or
+         * dracula (dark) — instead of us maintaining a separate hand-picked
+         * palette per mode.
+         */
+        :root, [data-theme] {
+            --ta-canvas: var(--color-base-200);
+            --ta-surface: var(--color-base-100);
+            --ta-border: var(--color-base-300);
+            --ta-ink: var(--color-base-content);
+            --ta-muted: color-mix(in oklch, var(--color-base-content) 55%, transparent);
+            --ta-brand: var(--color-primary);
+            --ta-brand-50: color-mix(in oklch, var(--color-primary) 12%, var(--color-base-100));
+        }
 
+        /*
+         * A handful of utility classes in the markup below were hardcoded to
+         * Tailwind's slate/white palette (from before daisyUI theming was
+         * wired up). Remap them to the active daisyUI theme so every corner
+         * of the page (nav, dropdowns, table headers, footer) follows
+         * light / dracula too.
+         */
+        .bg-white { background-color: var(--ta-surface) !important; }
+        .text-slate-400, .text-slate-500 { color: var(--ta-muted) !important; }
+        .text-slate-700, .text-slate-800 { color: var(--ta-ink) !important; }
+        .hover\:bg-slate-50:hover, .hover\:bg-slate-100:hover { background-color: var(--ta-canvas) !important; }
+        .hover\:text-slate-700:hover { color: var(--ta-ink) !important; }
+
+        * { font-family: 'Outfit', ui-sans-serif, system-ui, sans-serif; }
+
+        body { 
+            background: var(--ta-canvas); 
+            color: var(--ta-ink); 
+            zoom: 110%; /* Global zoom adjustment */
+            transition: background-color 0.2s ease, color 0.2s ease;
+        }
+
+        /* Card & Sidenav Dark Mode Overrides */
+        .card, .ta-sidebar, nav {
+            background: var(--ta-surface) !important;
+            border-color: var(--ta-border) !important;
+            color: var(--ta-ink) !important;
+        }
+
+        /* Table text, borders & hover — theme-aware in both modes now */
+        table th { color: var(--ta-muted) !important; }
+        table td { border-color: var(--ta-border) !important; }
+        table tr:hover { background-color: color-mix(in oklch, var(--color-base-content) 5%, transparent) !important; }
+
+        .ta-icon-box {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 3rem;
+            height: 3rem;
+            border-radius: 0.75rem;
+            background: var(--ta-canvas);
+            color: var(--ta-ink);
+        }
+
+        .ta-nav-link {
+            display: flex;
+            align-items: center;
+            gap: 0.7rem;
+            border-radius: 0.5rem;
+            padding: 0.55rem 0.75rem;
+            font-size: 0.875rem;
+            font-weight: 500;
+            color: var(--ta-muted);
+            transition: all .15s ease;
+        }
+        .ta-nav-link:hover { background: var(--ta-canvas); color: var(--ta-ink); }
+        .ta-nav-link.active { background: var(--ta-brand-50); color: var(--ta-brand); font-weight: 600; }
+        .ta-nav-icon { display: inline-flex; width: 1.25rem; height: 1.25rem; flex-shrink: 0; }
+
+        .ta-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.25rem;
+            border-radius: 9999px;
+            padding: 0.15rem 0.65rem;
+            font-size: 0.7rem;
+            font-weight: 600;
+        }
+        /* Soft badges — derived from daisyUI's semantic theme colors, so one
+           rule covers both light and dracula automatically */
+        .badge-soft-success { background: color-mix(in oklch, var(--color-success) 18%, var(--color-base-100)); color: var(--color-success); }
+        .badge-soft-warning { background: color-mix(in oklch, var(--color-warning) 18%, var(--color-base-100)); color: var(--color-warning); }
+        .badge-soft-error   { background: color-mix(in oklch, var(--color-error) 18%, var(--color-base-100));   color: var(--color-error); }
+        .badge-soft-info    { background: color-mix(in oklch, var(--color-info) 18%, var(--color-base-100));    color: var(--color-info); }
+        .badge-soft-neutral { background: color-mix(in oklch, var(--color-neutral) 18%, var(--color-base-100)); color: var(--ta-ink); }
+
+        .ta-divide > * + * { border-top: 1px solid var(--ta-border); }
+
+        .ta-timeline-item { position: relative; padding-left: 2.25rem; padding-bottom: 1.1rem; }
+        .ta-timeline-item::before {
+            content: '';
+            position: absolute;
+            left: 0.6rem;
+            top: 1.6rem;
+            bottom: -0.3rem;
+            width: 1px;
+            background: var(--ta-border);
+        }
+        .ta-timeline-item:last-child::before { display: none; }
+        .ta-timeline-dot {
+            position: absolute;
+            left: 0;
+            top: 0.15rem;
+            width: 1.25rem;
+            height: 1.25rem;
+            border-radius: 9999px;
+            background: var(--ta-brand-50);
+            color: var(--ta-brand);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .card.clickable {
+            cursor: pointer;
+            transition: transform .14s ease, box-shadow .14s ease;
+        }
+        .card.clickable:hover {
+            transform: translateY(-4px) scale(1.02);
+            box-shadow: 0 8px 20px rgba(2,6,23,0.06);
+        }
+        .card.clickable:active {
+            transform: translateY(1px);
+        }
+
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-thumb { background: var(--ta-border); border-radius: 999px; }
+
+          @keyframes glassSheen {
+          0%   { transform: translateX(-120%) skewX(-15deg); opacity: 0; }
+          15%  { opacity: 0.5; }
+          50%  { opacity: 0.35; }
+          100% { transform: translateX(220%) skewX(-15deg); opacity: 0; }
+        }
+        .glass-dock {
+          position: relative;
+          background: color-mix(in oklch, var(--ta-surface, #ffffff) 7%, transparent);
+          backdrop-filter: blur(34px) saturate(220%);
+          -webkit-backdrop-filter: blur(34px) saturate(220%);
+          box-shadow:
+            0 20px 45px -18px rgba(0,0,0,0.28),
+            0 1px 0 rgba(255,255,255,0.5) inset,
+            0 -6px 14px -8px rgba(0,0,0,0.12) inset;
+        }
+        .glass-dock::before {
+          /* thin refracted rim */
+          content: "";
+          position: absolute; inset: 0;
+          border-radius: inherit;
+          border: 1px solid rgba(255,255,255,0.35);
+          -webkit-mask: linear-gradient(#000,#000) content-box, linear-gradient(#000,#000);
+          pointer-events: none;
+        }
+        .glass-dock::after {
+          /* one-shot sheen sweep on load */
+          content: "";
+          position: absolute; inset: 0;
+          border-radius: inherit;
+          background: linear-gradient(75deg, transparent 35%, rgba(255,255,255,0.55) 48%, transparent 60%);
+          width: 60%;
+          animation: glassSheen 1.6s cubic-bezier(0.22,0.9,0.3,1) 0.3s 1 both;
+          pointer-events: none;
+        }
+
+        /* DaisyUI fab reskinned as liquid glass petals */
+        .glass-fab .btn-circle {
+          background: color-mix(in oklch, var(--ta-surface, #ffffff) 22%, transparent) !important;
+          backdrop-filter: blur(18px) saturate(200%);
+          -webkit-backdrop-filter: blur(18px) saturate(200%);
+          border: 1px solid rgba(255,255,255,0.45) !important;
+          box-shadow: 0 8px 20px -6px rgba(0,0,0,0.25), inset 0 1px 1px rgba(255,255,255,0.7) !important;
+          color: var(--ta-text, #1c1c1e) !important;
+        }
+        .glass-fab .btn-circle:hover { transform: translateY(-2px) scale(1.04); }
+        .glass-fab .fab-close .btn-circle {
+          background: color-mix(in oklch, var(--ta-brand, #007AFF) 85%, white) !important;
+          color: #fff !important;
+          border: none !important;
+        }
+    </style>
 </head>
 <body class="min-h-screen">
 
@@ -389,49 +573,36 @@ if ($role === 'User') {
             <span class="text-[11px] font-medium tracking-tight">Pemandu</span>
           </a>
 
-          <!-- "Lagi" — same look/behaviour as Tempahan, Kenderaan, Pemandu; opens a glass popover instead of the FAB flower -->
-          <div id="nav-more" role="button" tabindex="0" aria-haspopup="true" aria-expanded="false"
-            class="nav-item relative flex flex-col items-center gap-1 flex-1 py-1 z-10 transition-transform duration-200 active:scale-90" style="color: var(--ta-muted)">
-            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8">
-              <circle cx="5" cy="12" r="1.5" fill="currentColor" stroke="none"/>
-              <circle cx="12" cy="12" r="1.5" fill="currentColor" stroke="none"/>
-              <circle cx="19" cy="12" r="1.5" fill="currentColor" stroke="none"/>
-            </svg>
-            <span class="text-[11px] font-medium tracking-tight">Lagi</span>
-
-            <!-- Popover menu -->
-            <div id="more-menu"
-              class="more-popover absolute bottom-full right-0 mb-3 w-38 rounded-2xl p-1.5 opacity-0 scale-95 pointer-events-none transition-all duration-200 origin-bottom-right">
-              
-              <?php if ($role === 'SuperAdmin'): ?>
-              <a href="users.php" class="flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-sm font-medium transition-colors" style="color: var(--ta-text, #1c1c1e)">
-                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M15 19.128a9.38 9.38 0 002.625.372 9.337 9.337 0 004.121-.952 4.125 4.125 0 00-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 018.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0111.964-3.07M12 6.375a3.375 3.375 0 11-6.75 0 3.375 3.375 0 016.75 0zm8.25 2.25a2.625 2.625 0 11-5.25 0 2.625 2.625 0 015.25 0z" /></svg>
-                Pengguna
-              </a>
-              <?php endif; ?>
-
-              <?php if (in_array($role, ['SuperAdmin', 'Admin'], true)): ?>
-              <a href="activity-log.php" class="flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-sm font-medium transition-colors" style="color: var(--ta-text, #1c1c1e)">
-                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                Log Aktiviti
-              </a>
-              <?php endif; ?>
-
-              <!-- Example: Adding a new item -->
-              <a href="reports.php" class="flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-sm font-medium transition-colors" style="color: var(--ta-text, #1c1c1e)">
-                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M10.5 6a7.5 7.5 0 107.5 7.5h-7.5V6z" /><path stroke-linecap="round" stroke-linejoin="round" d="M13.5 10.5H21A7.5 7.5 0 0013.5 3v7.5z" /></svg>
-                Laporan
-              </a>
-
-              <a href="profile.php" class="flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-sm font-medium transition-colors" style="color: var(--ta-text, #1c1c1e)">
-                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8">
-                  <circle cx="12" cy="8" r="4" stroke-linecap="round" stroke-linejoin="round"/>
-                  <path stroke-linecap="round" stroke-linejoin="round" d="M4 20c0-4.418 3.582-8 8-8s8 3.582 8 8" />
+          <!-- "Lagi" as a DaisyUI FAB flower -->
+          <?php if (in_array($role, ['SuperAdmin', 'Admin'], true)): ?>
+          <div class="flex-1 flex justify-center z-10">
+            <div class="fab glass-fab" id="nav-more">
+              <div tabindex="0" role="button" class="btn btn-circle btn-sm" style="color: var(--ta-muted)">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8">
+                  <circle cx="5" cy="12" r="1.5" fill="currentColor" stroke="none"/>
+                  <circle cx="12" cy="12" r="1.5" fill="currentColor" stroke="none"/>
+                  <circle cx="19" cy="12" r="1.5" fill="currentColor" stroke="none"/>
                 </svg>
-                Profil Saya
+              </div>
+
+              <?php if ($role === 'SuperAdmin'): ?>
+              <a href="users.php" class="btn btn-circle btn-sm">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M15 19.128a9.38 9.38 0 002.625.372 9.337 9.337 0 004.121-.952 4.125 4.125 0 00-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 018.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0111.964-3.07M12 6.375a3.375 3.375 0 11-6.75 0 3.375 3.375 0 016.75 0zm8.25 2.25a2.625 2.625 0 11-5.25 0 2.625 2.625 0 015.25 0z" /></svg>
               </a>
+              <?php endif; ?>
+
+              <a href="log-aktiviti.php" class="btn btn-circle btn-sm">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+              </a>
+
+              <div class="fab-close">
+                <button class="btn btn-circle btn-sm">
+                  <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+                </button>
+              </div>
             </div>
           </div>
+          <?php endif; ?>
         </div>
       </div>
     </div>
@@ -439,6 +610,7 @@ if ($role === 'User') {
     <script>
       document.addEventListener('DOMContentLoaded', () => {
         const currentPath = window.location.pathname.split('/').pop() || 'dashboard.php';
+        const pill = document.getElementById('liquid-pill');
         let activeItem = null;
 
         if (currentPath.includes('dashboard')) activeItem = document.getElementById('nav-dashboard');
@@ -448,7 +620,7 @@ if ($role === 'User') {
         else if (currentPath.includes('users') || currentPath.includes('log-aktiviti')) activeItem = document.getElementById('nav-more');
 
         function setFloatingActive(element) {
-          if (!element) return;
+          if (!element || !pill) return;
 
           document.querySelectorAll('.nav-item').forEach(el => {
             el.style.color = 'var(--ta-muted)';
@@ -457,10 +629,25 @@ if ($role === 'User') {
           });
 
           if (element.id === 'nav-dashboard') {
+            pill.style.opacity = '0';
             const label = element.querySelector('span:last-child');
             if (label) label.style.color = 'var(--ta-brand, #007AFF)';
             return;
           }
+
+          if (element.id === 'nav-more') {
+            pill.style.opacity = '0';
+            const trigger = element.querySelector('[role="button"]');
+            if (trigger) trigger.style.color = 'var(--ta-brand, #007AFF)';
+            return;
+          }
+
+          const parentRect = element.parentElement.getBoundingClientRect();
+          const itemRect = element.getBoundingClientRect();
+
+          pill.style.width = `${itemRect.width}px`;
+          pill.style.left = `${itemRect.left - parentRect.left}px`;
+          pill.style.opacity = '1';
 
           element.style.color = 'var(--ta-brand, #007AFF)';
           const svg = element.querySelector('svg');
@@ -469,32 +656,6 @@ if ($role === 'User') {
 
         if (activeItem) setFloatingActive(activeItem);
         window.addEventListener('resize', () => { if (activeItem) setFloatingActive(activeItem); });
-
-        // "Lagi" popover — open/close (alternative to the old FAB flower)
-        const moreBtn = document.getElementById('nav-more');
-        const moreMenu = document.getElementById('more-menu');
-        if (moreBtn && moreMenu) {
-          const toggleMenu = (open) => {
-            const isOpen = open !== undefined ? open : !moreMenu.classList.contains('open');
-            moreMenu.classList.toggle('open', isOpen);
-            moreBtn.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
-          };
-          moreBtn.addEventListener('click', (e) => {
-            e.stopPropagation();
-            toggleMenu();
-          });
-          moreBtn.addEventListener('keydown', (e) => {
-            if (e.key === 'Enter' || e.key === ' ') {
-              e.preventDefault();
-              toggleMenu();
-            } else if (e.key === 'Escape') {
-              toggleMenu(false);
-            }
-          });
-          document.addEventListener('click', (e) => {
-            if (!moreBtn.contains(e.target)) toggleMenu(false);
-          });
-        }
       });
     </script>
 
@@ -620,7 +781,7 @@ if ($role === 'User') {
         <!-- ============ Paparan Peribadi (User) ============ -->
 
         <!-- Kad Statistik Peribadi -->
-        <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-5">
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
           <div class="card p-5" data-href="bookings.php?mine=1">
             <div class="ta-icon-box mb-4">
               <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.6"><path stroke-linecap="round" stroke-linejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 012.25-2.25h13.5A2.25 2.25 0 0121 7.5v11.25m-18 0A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75m-18 0v-7.5A2.25 2.25 0 015.25 9h13.5A2.25 2.25 0 0121 11.25v7.5" /></svg>
@@ -778,6 +939,9 @@ if ($role === 'User') {
           </div>
           <?php endif; ?>
         </div>
+
+        <?php if ($isApprover): ?>
+        <?php endif; ?>
 
         <!-- Baris 2: Carta ApexCharts -->
         <div class="grid grid-cols-1 lg:grid-cols-2 gap-5 mt-5">
@@ -1124,6 +1288,7 @@ if ($role === 'User') {
               </table>
             </div>
           </div>
+
           <div class="card p-5">
             <h6 class="font-semibold mb-4">Aktiviti Terkini</h6>
             <?php if (empty($recentActivity)): ?>
@@ -1419,6 +1584,6 @@ if ($role === 'User') {
             });
         });
     })();
-    </script>l
+    </script>
 </body>
 </html>
