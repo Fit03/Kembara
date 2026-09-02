@@ -320,7 +320,7 @@ if ($role === 'User') {
         <ul class="flex flex-col gap-1">
           <?php if (in_array($role, ['SuperAdmin', 'Admin'], true)): ?>
           <li>
-            <a class="ta-nav-link" href="activity-log.php">
+            <a class="ta-nav-link" href="activity_log.php">
               <svg class="ta-nav-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
               <span>Log Aktiviti</span>
             </a>
@@ -411,17 +411,11 @@ if ($role === 'User') {
               <?php endif; ?>
 
               <?php if (in_array($role, ['SuperAdmin', 'Admin'], true)): ?>
-              <a href="activity-log.php" class="flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-sm font-medium transition-colors" style="color: var(--ta-text, #1c1c1e)">
+              <a href="activity_log.php" class="flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-sm font-medium transition-colors" style="color: var(--ta-text, #1c1c1e)">
                 <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
                 Log Aktiviti
               </a>
               <?php endif; ?>
-
-              <!-- Example: Adding a new item -->
-              <a href="reports.php" class="flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-sm font-medium transition-colors" style="color: var(--ta-text, #1c1c1e)">
-                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M10.5 6a7.5 7.5 0 107.5 7.5h-7.5V6z" /><path stroke-linecap="round" stroke-linejoin="round" d="M13.5 10.5H21A7.5 7.5 0 0013.5 3v7.5z" /></svg>
-                Laporan
-              </a>
 
               <a href="profile.php" class="flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-sm font-medium transition-colors" style="color: var(--ta-text, #1c1c1e)">
                 <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8">
@@ -445,7 +439,7 @@ if ($role === 'User') {
         else if (currentPath.includes('bookings') || currentPath.includes('book-vehicle')) activeItem = document.getElementById('nav-bookings');
         else if (currentPath.includes('vehicles')) activeItem = document.getElementById('nav-vehicles');
         else if (currentPath.includes('drivers')) activeItem = document.getElementById('nav-drivers');
-        else if (currentPath.includes('users') || currentPath.includes('log-aktiviti')) activeItem = document.getElementById('nav-more');
+        else if (currentPath.includes('users') || currentPath.includes('activity_log')) activeItem = document.getElementById('nav-more');
 
         function setFloatingActive(element) {
           if (!element) return;

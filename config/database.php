@@ -21,3 +21,14 @@ try {
 } catch (PDOException $e) {
     die("Database connection failed: " . $e->getMessage());
 }
+
+/**
+ * Helper function to record system activity logs.
+ */
+if (!function_exists('activity_log')) {
+    function log_activity(PDO $pdo, ?int $userId, string $module, string $action, ?string $description = null): void {
+        $ip = $_SERVER['REMOTE_ADDR'] ?? '127.0.0.1';
+        $stmt = $pdo->prepare("INSERT INTO activity_log (user_id, module, action, description, ip_address) VALUES (?, ?, ?, ?, ?)");
+        $stmt->execute([$userId, $module, $action, $description, $ip]);
+    }
+}

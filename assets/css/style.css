@@ -220,3 +220,121 @@ dialog.modal[open]::backdrop {
   transform: scale(1) !important;
   pointer-events: auto !important;
 }
+
+#map { z-index: 0; }
+.leaflet-control-attribution { font-size: 10px !important; }
+
+/* ---------- Kotak carian lokasi (gaya Grab) ---------- */
+.loc-field { position: relative; }
+
+.loc-field .loc-icon {
+    position: absolute;
+    left: 0.9rem;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 1.1rem;
+    height: 1.1rem;
+    pointer-events: none;
+    color: var(--ta-muted);
+    transition: color .15s ease;
+}
+.loc-field.active .loc-icon { color: var(--ta-brand); }
+
+.loc-field input.input {
+    padding-left: 2.6rem;
+    border-radius: 0.9rem;
+    border-color: var(--ta-border);
+    background: var(--ta-surface);
+    transition: border-color .15s ease, box-shadow .15s ease;
+}
+.loc-field.active input.input {
+    border-color: var(--ta-brand);
+    box-shadow: 0 0 0 3px color-mix(in oklch, var(--ta-brand) 16%, transparent);
+}
+
+.loc-suggestions {
+    position: absolute;
+    left: 0; right: 0; top: calc(100% + 6px);
+    z-index: 60;
+    background: var(--ta-surface);
+    border: 1px solid var(--ta-border);
+    border-radius: 1rem;
+    box-shadow: 0 16px 32px -12px rgba(0,0,0,.35);
+    max-height: 240px;
+    overflow-y: auto;
+    padding: 0.35rem;
+    display: none;
+}
+.loc-suggestions.open { display: block; }
+
+.loc-suggestion-item {
+    display: flex;
+    align-items: center;
+    gap: 0.65rem;
+    padding: 0.6rem 0.65rem;
+    border-radius: 0.7rem;
+    font-size: 0.8rem;
+    cursor: pointer;
+    color: var(--ta-ink);
+}
+.loc-suggestion-item:hover { background: var(--ta-brand-50); }
+.loc-suggestion-item .loc-suggestion-pin {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.75rem;
+    height: 1.75rem;
+    border-radius: 9999px;
+    background: var(--ta-canvas);
+    color: var(--ta-muted);
+    flex-shrink: 0;
+}
+.loc-suggestion-item .loc-suggestion-text { line-height: 1.3; }
+.loc-suggestion-empty { padding: 0.75rem; font-size: 0.75rem; color: var(--ta-muted); text-align: center; }
+
+/* ---------- Maklumat jarak & masa laluan ---------- */
+.route-info-badge {
+    display: flex;
+    gap: 1.25rem;
+    flex-wrap: wrap;
+    background: var(--ta-brand-50);
+    color: var(--ta-brand);
+    border-radius: 0.75rem;
+    padding: 0.65rem 0.9rem;
+    font-size: 0.75rem;
+    font-weight: 600;
+    margin-bottom: 0.75rem;
+}
+.route-info-badge.hidden { display: none; }
+.route-info-badge strong { font-weight: 700; }
+
+/* ---------- Flatpickr: sepadan dengan tema laman ---------- */
+.flatpickr-calendar {
+    background: var(--ta-surface) !important;
+    border: 1px solid var(--ta-border) !important;
+    border-radius: 1rem !important;
+    box-shadow: 0 16px 32px -12px rgba(0,0,0,.35) !important;
+    font-family: 'Outfit', ui-sans-serif, system-ui, sans-serif !important;
+}
+.flatpickr-months, .flatpickr-weekdays { background: transparent !important; }
+.flatpickr-current-month .flatpickr-monthDropdown-months,
+.flatpickr-current-month input.cur-year { color: var(--ta-ink) !important; }
+.flatpickr-month, .flatpickr-weekday { color: var(--ta-ink) !important; fill: var(--ta-ink) !important; }
+.flatpickr-day { color: var(--ta-ink) !important; border-radius: 0.6rem !important; }
+.flatpickr-day.today { border-color: var(--ta-brand) !important; }
+.flatpickr-day.selected, .flatpickr-day.selected:hover {
+    background: var(--ta-brand) !important;
+    border-color: var(--ta-brand) !important;
+    color: #fff !important;
+}
+.flatpickr-day:hover { background: var(--ta-canvas) !important; }
+.flatpickr-day.flatpickr-disabled, .flatpickr-day.flatpickr-disabled:hover {
+    color: var(--ta-muted) !important;
+    opacity: .4;
+    cursor: not-allowed !important;
+    background: transparent !important;
+}
+.flatpickr-day.prevMonthDay, .flatpickr-day.nextMonthDay { color: var(--ta-muted) !important; opacity: .35; }
+.flatpickr-time input, .flatpickr-time .flatpickr-am-pm { color: var(--ta-ink) !important; }
+.numInputWrapper span.arrowUp:after { border-bottom-color: var(--ta-ink) !important; }
+.numInputWrapper span.arrowDown:after { border-top-color: var(--ta-ink) !important; }

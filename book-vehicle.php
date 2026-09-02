@@ -75,204 +75,7 @@ $fullyBookedDatesJson = json_encode(array_values($fullyBookedDates));
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
     <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
 
-    <style>
-        :root, [data-theme] {
-            --ta-canvas: var(--color-base-200);
-            --ta-surface: var(--color-base-100);
-            --ta-border: var(--color-base-300);
-            --ta-ink: var(--color-base-content);
-            --ta-muted: color-mix(in oklch, var(--color-base-content) 55%, transparent);
-            --ta-brand: var(--color-primary);
-            --ta-brand-50: color-mix(in oklch, var(--color-primary) 12%, var(--color-base-100));
-        }
-
-        .bg-white { background-color: var(--ta-surface) !important; }
-        .text-slate-400, .text-slate-500 { color: var(--ta-muted) !important; }
-        .text-slate-700, .text-slate-800 { color: var(--ta-ink) !important; }
-        .hover\:bg-slate-50:hover, .hover\:bg-slate-100:hover { background-color: var(--ta-canvas) !important; }
-        .hover\:text-slate-700:hover { color: var(--ta-ink) !important; }
-
-        * { font-family: 'Outfit', ui-sans-serif, system-ui, sans-serif; }
-
-        body {
-            background: var(--ta-canvas);
-            color: var(--ta-ink);
-            zoom: 110%;
-            transition: background-color 0.2s ease, color 0.2s ease;
-        }
-
-        .card, .ta-sidebar, nav {
-            background: var(--ta-surface) !important;
-            border-color: var(--ta-border) !important;
-            color: var(--ta-ink) !important;
-        }
-
-        .ta-nav-link {
-            display: flex;
-            align-items: center;
-            gap: 0.7rem;
-            border-radius: 0.5rem;
-            padding: 0.55rem 0.75rem;
-            font-size: 0.875rem;
-            font-weight: 500;
-            color: var(--ta-muted);
-            transition: all .15s ease;
-        }
-        .ta-nav-link:hover { background: var(--ta-canvas); color: var(--ta-ink); }
-        .ta-nav-link.active { background: var(--ta-brand-50); color: var(--ta-brand); font-weight: 600; }
-        .ta-nav-icon { display: inline-flex; width: 1.25rem; height: 1.25rem; flex-shrink: 0; }
-
-        .ta-badge {
-            display: inline-flex;
-            align-items: center;
-            gap: 0.25rem;
-            border-radius: 9999px;
-            padding: 0.15rem 0.65rem;
-            font-size: 0.7rem;
-            font-weight: 600;
-        }
-        .badge-soft-warning { background: color-mix(in oklch, var(--color-warning) 18%, var(--color-base-100)); color: var(--color-warning); }
-        .badge-soft-error   { background: color-mix(in oklch, var(--color-error) 18%, var(--color-base-100));   color: var(--color-error); }
-        .badge-soft-info    { background: color-mix(in oklch, var(--color-info) 18%, var(--color-base-100));    color: var(--color-info); }
-
-        .ta-tab {
-            display: inline-flex;
-            align-items: center;
-            white-space: nowrap;
-            padding: 0.4rem 0.9rem;
-            border-radius: 9999px;
-            font-size: 0.8rem;
-            font-weight: 600;
-            color: var(--ta-muted);
-            border: 1px solid var(--ta-border);
-            transition: all .15s ease;
-            cursor: pointer;
-            background: var(--ta-surface);
-        }
-        .ta-tab:hover { color: var(--ta-ink); background: var(--ta-canvas); }
-        .ta-tab.active { background: var(--ta-brand); color: #fff; border-color: var(--ta-brand); }
-
-        #map { z-index: 0; }
-        .leaflet-control-attribution { font-size: 10px !important; }
-
-        /* ---------- Kotak carian lokasi (gaya Grab) ---------- */
-        .loc-field { position: relative; }
-
-        .loc-field .loc-icon {
-            position: absolute;
-            left: 0.9rem;
-            top: 50%;
-            transform: translateY(-50%);
-            width: 1.1rem;
-            height: 1.1rem;
-            pointer-events: none;
-            color: var(--ta-muted);
-            transition: color .15s ease;
-        }
-        .loc-field.active .loc-icon { color: var(--ta-brand); }
-
-        .loc-field input.input {
-            padding-left: 2.6rem;
-            border-radius: 0.9rem;
-            border-color: var(--ta-border);
-            background: var(--ta-surface);
-            transition: border-color .15s ease, box-shadow .15s ease;
-        }
-        .loc-field.active input.input {
-            border-color: var(--ta-brand);
-            box-shadow: 0 0 0 3px color-mix(in oklch, var(--ta-brand) 16%, transparent);
-        }
-
-        .loc-suggestions {
-            position: absolute;
-            left: 0; right: 0; top: calc(100% + 6px);
-            z-index: 60;
-            background: var(--ta-surface);
-            border: 1px solid var(--ta-border);
-            border-radius: 1rem;
-            box-shadow: 0 16px 32px -12px rgba(0,0,0,.35);
-            max-height: 240px;
-            overflow-y: auto;
-            padding: 0.35rem;
-            display: none;
-        }
-        .loc-suggestions.open { display: block; }
-
-        .loc-suggestion-item {
-            display: flex;
-            align-items: center;
-            gap: 0.65rem;
-            padding: 0.6rem 0.65rem;
-            border-radius: 0.7rem;
-            font-size: 0.8rem;
-            cursor: pointer;
-            color: var(--ta-ink);
-        }
-        .loc-suggestion-item:hover { background: var(--ta-brand-50); }
-        .loc-suggestion-item .loc-suggestion-pin {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            width: 1.75rem;
-            height: 1.75rem;
-            border-radius: 9999px;
-            background: var(--ta-canvas);
-            color: var(--ta-muted);
-            flex-shrink: 0;
-        }
-        .loc-suggestion-item .loc-suggestion-text { line-height: 1.3; }
-        .loc-suggestion-empty { padding: 0.75rem; font-size: 0.75rem; color: var(--ta-muted); text-align: center; }
-
-        /* ---------- Maklumat jarak & masa laluan ---------- */
-        .route-info-badge {
-            display: flex;
-            gap: 1.25rem;
-            flex-wrap: wrap;
-            background: var(--ta-brand-50);
-            color: var(--ta-brand);
-            border-radius: 0.75rem;
-            padding: 0.65rem 0.9rem;
-            font-size: 0.75rem;
-            font-weight: 600;
-            margin-bottom: 0.75rem;
-        }
-        .route-info-badge.hidden { display: none; }
-        .route-info-badge strong { font-weight: 700; }
-
-        /* ---------- Flatpickr: sepadan dengan tema laman ---------- */
-        .flatpickr-calendar {
-            background: var(--ta-surface) !important;
-            border: 1px solid var(--ta-border) !important;
-            border-radius: 1rem !important;
-            box-shadow: 0 16px 32px -12px rgba(0,0,0,.35) !important;
-            font-family: 'Outfit', ui-sans-serif, system-ui, sans-serif !important;
-        }
-        .flatpickr-months, .flatpickr-weekdays { background: transparent !important; }
-        .flatpickr-current-month .flatpickr-monthDropdown-months,
-        .flatpickr-current-month input.cur-year { color: var(--ta-ink) !important; }
-        .flatpickr-month, .flatpickr-weekday { color: var(--ta-ink) !important; fill: var(--ta-ink) !important; }
-        .flatpickr-day { color: var(--ta-ink) !important; border-radius: 0.6rem !important; }
-        .flatpickr-day.today { border-color: var(--ta-brand) !important; }
-        .flatpickr-day.selected, .flatpickr-day.selected:hover {
-            background: var(--ta-brand) !important;
-            border-color: var(--ta-brand) !important;
-            color: #fff !important;
-        }
-        .flatpickr-day:hover { background: var(--ta-canvas) !important; }
-        .flatpickr-day.flatpickr-disabled, .flatpickr-day.flatpickr-disabled:hover {
-            color: var(--ta-muted) !important;
-            opacity: .4;
-            cursor: not-allowed !important;
-            background: transparent !important;
-        }
-        .flatpickr-day.prevMonthDay, .flatpickr-day.nextMonthDay { color: var(--ta-muted) !important; opacity: .35; }
-        .flatpickr-time input, .flatpickr-time .flatpickr-am-pm { color: var(--ta-ink) !important; }
-        .numInputWrapper span.arrowUp:after { border-bottom-color: var(--ta-ink) !important; }
-        .numInputWrapper span.arrowDown:after { border-top-color: var(--ta-ink) !important; }
-
-        ::-webkit-scrollbar { width: 8px; height: 8px; }
-        ::-webkit-scrollbar-thumb { background: var(--ta-border); border-radius: 999px; }
-    </style>
+    <link rel="stylesheet" href="assets/css/style.css" />
 </head>
 <body class="min-h-screen">
 
@@ -322,6 +125,18 @@ $fullyBookedDatesJson = json_encode(array_values($fullyBookedDates));
           </li>
           <?php endif; ?>
         </ul>
+
+        <?php if ($role === 'SuperAdmin'): ?>
+        <p class="mt-6 px-3 mb-2 text-[0.65rem] font-semibold uppercase tracking-widest text-slate-400">Log</p>
+        <ul class="flex flex-col gap-1">
+          <li>
+            <a class="ta-nav-link" href="activity_log.php">
+              <svg class="ta-nav-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+              <span>Log Aktiviti</span>
+            </a>
+          </li>
+        </ul>
+        <?php endif; ?>
       </div>
 
       <div class="p-4 border-t" style="border-color:var(--ta-border)">
@@ -332,36 +147,93 @@ $fullyBookedDatesJson = json_encode(array_values($fullyBookedDates));
       </div>
     </aside>
 
-    <!-- Navbar Bawah (mobile) -->
-    <div class="fixed inset-x-0 bottom-0 z-[70] xl:hidden">
-      <div class="relative">
-        <a href="dashboard.php" class="absolute left-1/2 -translate-x-1/2 -top-7 z-10 flex flex-col items-center gap-1">
-          <span class="w-16 h-16 rounded-full flex items-center justify-center shadow-lg" style="background:var(--ta-brand); color:#fff; box-shadow:0 6px 16px -4px color-mix(in oklch, var(--ta-brand) 60%, transparent), 0 0 0 6px var(--ta-canvas)">
-            <svg xmlns="http://www.w3.org/2000/svg" class="h-7 w-7" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M3.75 3v11.25A2.25 2.25 0 006 16.5h2.25M3.75 3h-1.5M3.75 3h16.5M21.75 3v11.25A2.25 2.25 0 0119.5 16.5H17.25m-10.5 0h6m-6 0v3.75A1.5 1.5 0 007.5 21.75h9a1.5 1.5 0 001.5-1.5V16.5m-10.5 0h10.5" /></svg>
+    <!-- Liquid Glass Floating Dock (Mobile) -->
+    <div class="fixed inset-x-0 bottom-0 z-[70] xl:hidden px-4 pb-4 pointer-events-none">
+      <div class="relative max-w-md mx-auto pointer-events-auto">
+
+        <!-- Central Floating Action Button (Dashboard) -->
+        <a href="dashboard.php"
+          id="nav-dashboard"
+          class="nav-item absolute left-1/2 -translate-x-1/2 -top-7 z-30 flex flex-col items-center group transition-transform duration-300 ease-[cubic-bezier(0.175,0.885,0.32,2.2)] active:scale-90">
+          <span class="relative w-14 h-14 rounded-full flex items-center justify-center transition-all duration-300 group-hover:-translate-y-1"
+                style="background: linear-gradient(135deg, color-mix(in oklch, var(--ta-brand, #007AFF) 85%, white), var(--ta-brand, #007AFF));
+                      color:#fff;
+                      box-shadow: 0 12px 28px -6px color-mix(in oklch, var(--ta-brand, #007AFF) 50%, transparent),
+                                  0 0 0 1px rgba(255,255,255,0.5) inset,
+                                  0 0 0 4px var(--ta-canvas, #ffffff);">
+            <span class="absolute inset-0 rounded-full bg-gradient-to-b from-white/45 via-white/10 to-transparent opacity-80 pointer-events-none"></span>
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 relative z-10" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M3.75 3v11.25A2.25 2.25 0 006 16.5h2.25M3.75 3h-1.5M3.75 3h16.5M21.75 3v11.25A2.25 2.25 0 0119.5 16.5H17.25m-10.5 0h6m-6 0v3.75A1.5 1.5 0 007.5 21.75h9a1.5 1.5 0 001.5-1.5V16.5m-10.5 0h10.5" />
+            </svg>
           </span>
-          <span class="text-[11px] font-semibold" style="color:var(--ta-brand)">Dashboard</span>
+          <span class="text-[11px] font-medium tracking-tight mt-1" style="color: var(--ta-muted)">Dashboard</span>
         </a>
 
-        <div class="flex items-center justify-around px-2 pt-2" style="background:var(--ta-surface); border-top:1px solid var(--ta-border); height:4.25rem; padding-bottom:env(safe-area-inset-bottom)">
-          <a href="bookings.php" class="flex flex-col items-center gap-1 flex-1 py-1" style="color:var(--ta-brand)">
+        <!-- Liquid Glass Dock Base -->
+        <div class="glass-dock flex items-center justify-around px-2 pt-2.5 pb-2 rounded-[32px] overflow-visible">
+
+          <!-- Sliding active pill -->
+          <div id="liquid-pill"
+              class="absolute top-1.5 bottom-1.5 rounded-[22px] transition-all duration-300 ease-[cubic-bezier(0.175,0.885,0.32,1.2)] opacity-0 pointer-events-none z-0"
+              style="background: color-mix(in oklch, var(--ta-brand, #007AFF) 14%, rgba(255,255,255,0.55));
+                    border: 1px solid rgba(255,255,255,0.6);
+                    box-shadow: 0 4px 14px rgba(0,0,0,0.06), inset 0 1px 1px rgba(255,255,255,0.9);">
+          </div>
+
+          <a href="bookings.php" id="nav-bookings"
+            class="nav-item flex flex-col items-center gap-1 flex-1 py-1 z-10 transition-transform duration-200 active:scale-90" style="color: var(--ta-muted)">
             <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 012.25-2.25h13.5A2.25 2.25 0 0121 7.5v11.25m-18 0A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75m-18 0v-7.5A2.25 2.25 0 015.25 9h13.5A2.25 2.25 0 0121 11.25v7.5m-13.5-6h.008v.008h-.008v-.008zm0 3h.008v.008h-.008v-.008zm3-3h.008v.008h-.008v-.008zm0 3h.008v.008h-.008v-.008z" /></svg>
-            <span class="text-[11px] font-medium">Tempahan</span>
+            <span class="text-[11px] font-medium tracking-tight">Tempahan</span>
           </a>
-          <a href="vehicles.php" class="flex flex-col items-center gap-1 flex-1 py-1" style="color:var(--ta-muted)">
+
+          <a href="vehicles.php" id="nav-vehicles"
+            class="nav-item flex flex-col items-center gap-1 flex-1 py-1 z-10 transition-transform duration-200 active:scale-90" style="color: var(--ta-muted)">
             <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M8.25 18.75a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m3 0h6m-9 0H3.375a1.125 1.125 0 01-1.125-1.125V14.25m17.25 4.5a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m3 0h1.125c.621 0 1.129-.504 1.09-1.124a17.902 17.902 0 00-3.213-9.193 2.056 2.056 0 00-1.58-.86H14.25M16.5 18.75h-2.25m0-11.177v-.958c0-.568-.422-1.048-.987-1.106a48.554 48.554 0 00-10.026 0 1.106 1.106 0 00-.987 1.106v7.635m12-6.677v6.677m0 0h-12" /></svg>
-            <span class="text-[11px] font-medium">Kenderaan</span>
+            <span class="text-[11px] font-medium tracking-tight">Kenderaan</span>
           </a>
-          <div class="flex-1 flex justify-center"><span class="w-16"></span></div>
-          <a href="drivers.php" class="flex flex-col items-center gap-1 flex-1 py-1" style="color:var(--ta-muted)">
+
+          <div class="flex-1 flex justify-center pointer-events-none"><span class="w-14"></span></div>
+
+          <a href="drivers.php" id="nav-drivers"
+            class="nav-item flex flex-col items-center gap-1 flex-1 py-1 z-10 transition-transform duration-200 active:scale-90" style="color: var(--ta-muted)">
             <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M2.25 8.25h19.5M2.25 9h19.5m-16.5 5.25h6m-6 2.25h3m-3.75 3h15a2.25 2.25 0 002.25-2.25V6.75A2.25 2.25 0 0019.5 4.5h-15a2.25 2.25 0 00-2.25 2.25v10.5A2.25 2.25 0 004.5 19.5z" /></svg>
-            <span class="text-[11px] font-medium">Pemandu</span>
+            <span class="text-[11px] font-medium tracking-tight">Pemandu</span>
           </a>
-          <?php if ($role === 'SuperAdmin'): ?>
-          <a href="users.php" class="flex flex-col items-center gap-1 flex-1 py-1" style="color:var(--ta-muted)">
-            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M15 19.128a9.38 9.38 0 002.625.372 9.337 9.337 0 004.121-.952 4.125 4.125 0 00-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 018.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0111.964-3.07M12 6.375a3.375 3.375 0 11-6.75 0 3.375 3.375 0 016.75 0zm8.25 2.25a2.625 2.625 0 11-5.25 0 2.625 2.625 0 015.25 0z" /></svg>
-            <span class="text-[11px] font-medium">Pengguna</span>
-          </a>
-          <?php endif; ?>
+
+          <!-- "Lagi" menu popover -->
+          <div id="nav-more" role="button" tabindex="0" aria-haspopup="true" aria-expanded="false"
+            class="nav-item relative flex flex-col items-center gap-1 flex-1 py-1 z-10 transition-transform duration-200 active:scale-90" style="color: var(--ta-muted)">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8">
+              <circle cx="5" cy="12" r="1.5" fill="currentColor" stroke="none"/>
+              <circle cx="12" cy="12" r="1.5" fill="currentColor" stroke="none"/>
+              <circle cx="19" cy="12" r="1.5" fill="currentColor" stroke="none"/>
+            </svg>
+            <span class="text-[11px] font-medium tracking-tight">Lagi</span>
+
+            <!-- Popover menu -->
+            <div id="more-menu"
+              class="more-popover absolute bottom-full right-0 mb-3 w-38 rounded-2xl p-1.5 opacity-0 scale-95 pointer-events-none transition-all duration-200 origin-bottom-right">
+              <?php if ($role === 'SuperAdmin'): ?>
+              <a href="users.php" class="flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-sm font-medium transition-colors" style="color: var(--ta-text, #1c1c1e)">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M15 19.128a9.38 9.38 0 002.625.372 9.337 9.337 0 004.121-.952 4.125 4.125 0 00-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 018.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0111.964-3.07M12 6.375a3.375 3.375 0 11-6.75 0 3.375 3.375 0 016.75 0zm8.25 2.25a2.625 2.625 0 11-5.25 0 2.625 2.625 0 015.25 0z" /></svg>
+                Pengguna
+              </a>
+              <a href="activity_log.php" class="flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-sm font-medium transition-colors" style="color: var(--ta-text, #1c1c1e)">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                Log Aktiviti
+              </a>
+              <?php endif; ?>
+              <?php if ($role === 'User' || $role === 'Admin' || $role === 'SuperAdmin'): ?>
+              <a href="profile.php" class="flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-sm font-medium transition-colors" style="color: var(--ta-text, #1c1c1e)">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8">
+                  <circle cx="12" cy="8" r="4" stroke-linecap="round" stroke-linejoin="round"/>
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M4 20c0-4.418 3.582-8 8-8s8 3.582 8 8" />
+                </svg>
+                Profil Saya
+              </a>
+              <?php endif; ?>
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -1004,6 +876,65 @@ $fullyBookedDatesJson = json_encode(array_values($fullyBookedDates));
                     combine('return-date-input', 'return-time-input', 'return-datetime-hidden');
                 }
             });
+        });
+
+        document.addEventListener('DOMContentLoaded', () => {
+            const currentPath = window.location.pathname.split('/').pop() || 'dashboard.php';
+            let activeItem = null;
+
+            if (currentPath.includes('dashboard')) activeItem = document.getElementById('nav-dashboard');
+            else if (currentPath.includes('bookings') || currentPath.includes('book-vehicle')) activeItem = document.getElementById('nav-bookings');
+            else if (currentPath.includes('vehicles')) activeItem = document.getElementById('nav-vehicles');
+            else if (currentPath.includes('drivers')) activeItem = document.getElementById('nav-drivers');
+            else if (currentPath.includes('users') || currentPath.includes('activity_log')) activeItem = document.getElementById('nav-more');
+
+            function setFloatingActive(element) {
+                if (!element) return;
+
+                document.querySelectorAll('.nav-item').forEach(el => {
+                    el.style.color = 'var(--ta-muted)';
+                    const svg = el.querySelector('svg');
+                    if (svg) svg.style.transform = 'translateY(0px)';
+                });
+
+                if (element.id === 'nav-dashboard') {
+                    const label = element.querySelector('span:last-child');
+                    if (label) label.style.color = 'var(--ta-brand, #007AFF)';
+                    return;
+                }
+
+                element.style.color = 'var(--ta-brand, #007AFF)';
+                const svg = element.querySelector('svg');
+                if (svg) svg.style.transform = 'translateY(-2px)';
+            }
+
+            if (activeItem) setFloatingActive(activeItem);
+            window.addEventListener('resize', () => { if (activeItem) setFloatingActive(activeItem); });
+
+            const moreBtn = document.getElementById('nav-more');
+            const moreMenu = document.getElementById('more-menu');
+            if (moreBtn && moreMenu) {
+                const toggleMenu = (open) => {
+                    const isOpen = open !== undefined ? open : !moreMenu.classList.contains('open');
+                    moreMenu.classList.toggle('open', isOpen);
+                    moreBtn.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+                };
+                moreBtn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    toggleMenu();
+                });
+                moreBtn.addEventListener('keydown', (e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        toggleMenu();
+                    } else if (e.key === 'Escape') {
+                        toggleMenu(false);
+                    }
+                });
+                document.addEventListener('click', (e) => {
+                    if (!moreBtn.contains(e.target)) toggleMenu(false);
+                });
+            }
         });
     </script>
 
