@@ -32,6 +32,9 @@ $badgeColor = match($role) {
 
 $pendingApprovals = $pdo->query("SELECT COUNT(*) FROM vehicle_bookings WHERE status = 'Pending'")->fetchColumn();
 
+// Pautan "Kembali" — kekalkan penapis/carian/halaman jadual yang asal jika ada
+$backUrl = 'bookings.php' . (isset($_GET['from']) && $_GET['from'] !== '' ? '?' . $_GET['from'] : '');
+
 // --- Tarikh Penuh Tempahan (untuk sekat kalendar) ---------------------
 // Andaian: jadual "drivers" menyimpan semua pemandu aktif, dan setiap
 // tempahan (bukan status "Rejected"/"Cancelled") menggunakan 1 pemandu
@@ -253,6 +256,9 @@ $fullyBookedDatesJson = json_encode(array_values($fullyBookedDates));
       <!-- Navigasi Atas -->
       <nav class="sticky top-0 z-50 flex items-center justify-between gap-4 px-4 sm:px-6 py-3 bg-white border-b" style="border-color:var(--ta-border)">
         <div class="flex items-center gap-3">
+            <a href="<?= htmlspecialchars($backUrl) ?>" class="btn btn-ghost btn-circle btn-sm h-9 w-9 min-h-0" title="Kembali">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-4.5 w-4.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M10.5 19.5L3 12m0 0l7.5-7.5M3 12h18" /></svg>
+            </a>
             <div>
                 <h6 class="font-bold text-base leading-tight">Tempah Kenderaan</h6>
                 <p class="text-xs leading-tight" style="color:var(--ta-muted)">

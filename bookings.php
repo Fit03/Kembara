@@ -731,37 +731,9 @@ $tabs = ['All' => 'Semua', 'Pending' => 'Menunggu', 'Approved' => 'Diluluskan', 
                       <span class="ta-badge <?= $statusBadge($b['status']) ?>"><?= htmlspecialchars($statusLabel($b['status'])) ?></span>
                     </td>
                     <td class="px-3 py-3 text-sm border-b text-center whitespace-nowrap" style="border-color:var(--ta-border)">
-                      <?php
-                        $lastActionStmt = $pdo->prepare(
-                          "SELECT bh.action, u.fullname FROM booking_history bh JOIN users u ON u.user_id = bh.action_by WHERE bh.booking_id = ? ORDER BY bh.action_datetime DESC LIMIT 1"
-                        );
-                        $lastActionStmt->execute([(int)$b['booking_id']]);
-                        $lastAct = $lastActionStmt->fetch(PDO::FETCH_ASSOC) ?: [];
-                      ?>
-                      <button type="button" class="btn btn-ghost btn-xs" title="Lihat Butiran"
-                        onclick='openViewModal(<?= json_encode([
-                            "booking_no"       => $b["booking_no"],
-                            "requester_name"   => $b["requester_name"],
-                            "trip_type"        => $tripTypeLabel($b["trip_type"]),
-                            "origin"           => $b["origin"],
-                            "destination"      => $b["destination"],
-                            "depart_datetime"  => date('d M Y, h:i A', strtotime($b["depart_datetime"])),
-                            "return_datetime"  => $b["return_datetime"] ? date('d M Y, h:i A', strtotime($b["return_datetime"])) : '—',
-                            "passenger_total"  => $b["passenger_total"] ?: '—',
-                            "passenger_names"  => $b["passenger_names"]
-                                ? implode(', ', json_decode($b["passenger_names"], true) ?: [])
-                                : '—',
-                            "purpose"          => $b["purpose"],
-                            "vehicle"          => $b["plate_no"] ? trim(($b["vehicle_name"] ?: '') . ' (' . $b["plate_no"] . ')') : 'Belum ditugaskan',
-                            "driver"           => $b["driver_name"] ?: 'Tiada',
-                            "status"           => $statusLabel($b["status"]),
-                            "status_raw"       => $b["status"],
-                            "approved_by"      => $b["approved_by_name"] ?: '—',
-                            "last_action"      => $lastAct['action'] ?? null,
-                            "last_action_by"   => $lastAct['fullname'] ?? null,
-                        ], JSON_UNESCAPED_UNICODE | JSON_HEX_APOS | JSON_HEX_QUOT) ?>)'>
+                      <a href="view.php?id=<?= (int)$b['booking_id'] ?><?= ($qs = $_SERVER['QUERY_STRING'] ?? '') !== '' ? '&from=' . urlencode($qs) : '' ?>" class="btn btn-ghost btn-xs" title="Lihat Butiran">
                         <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178z" /><path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
-                      </button>
+                      </a>
 
                       <?php if ($canManage && $b['status'] === 'Pending'): ?>
                         <button type="button" class="btn btn-ghost btn-xs text-success" title="Luluskan"
@@ -869,34 +841,6 @@ $tabs = ['All' => 'Semua', 'Pending' => 'Menunggu', 'Approved' => 'Diluluskan', 
       <form method="dialog" class="modal-backdrop"><button>close</button></form>
     </dialog>
 
-    <!-- Modal: Lihat Butiran Tempahan -->
-    <dialog id="modal-view" class="modal">
-      <div class="modal-box card max-w-lg">
-        <form method="dialog"><button class="btn btn-sm btn-circle btn-ghost absolute right-3 top-3">✕</button></form>
-        <h3 class="font-bold text-lg mb-1">Butiran Tempahan</h3>
-        <p class="text-sm text-slate-400 mb-4" id="view-booking-no"></p>
-        <div class="grid grid-cols-2 gap-x-4 gap-y-3 text-sm">
-          <div><p class="text-xs text-slate-400 mb-0.5">Pemohon</p><p class="font-medium" id="view-requester"></p></div>
-          <div><p class="text-xs text-slate-400 mb-0.5">Status</p><p class="font-medium" id="view-status"></p></div>
-          <div><p class="text-xs text-slate-400 mb-0.5">Jenis Perjalanan</p><p class="font-medium" id="view-trip-type"></p></div>
-          <div><p class="text-xs text-slate-400 mb-0.5">Bilangan Penumpang</p><p class="font-medium" id="view-pax"></p></div>
-          <div class="col-span-2"><p class="text-xs text-slate-400 mb-0.5">Nama Penumpang</p><p class="font-medium" id="view-passenger-names"></p></div>
-          <div><p class="text-xs text-slate-400 mb-0.5">Asal</p><p class="font-medium" id="view-origin"></p></div>
-          <div><p class="text-xs text-slate-400 mb-0.5">Destinasi</p><p class="font-medium" id="view-destination"></p></div>
-          <div><p class="text-xs text-slate-400 mb-0.5">Berangkat</p><p class="font-medium" id="view-depart"></p></div>
-          <div><p class="text-xs text-slate-400 mb-0.5">Pulang</p><p class="font-medium" id="view-return"></p></div>
-          <div><p class="text-xs text-slate-400 mb-0.5">Kenderaan</p><p class="font-medium" id="view-vehicle"></p></div>
-          <div><p class="text-xs text-slate-400 mb-0.5">Pemandu</p><p class="font-medium" id="view-driver"></p></div>
-          <div class="col-span-2"><p class="text-xs text-slate-400 mb-0.5">Tujuan</p><p class="font-medium" id="view-purpose"></p></div>
-          <div class="col-span-2"><p id="view-action-label" class="text-xs text-slate-400 mb-0.5">Tindakan Oleh</p><p class="font-medium" id="view-approved-by"></p></div>
-        </div>
-        <div class="modal-action mt-4">
-          <button type="button" class="btn btn-ghost" onclick="document.getElementById('modal-view').close()">Tutup</button>
-        </div>
-      </div>
-      <form method="dialog" class="modal-backdrop"><button>close</button></form>
-    </dialog>
-
     <!-- Modal: Sahkan Tindakan Status -->
     <dialog id="modal-action" class="modal">
       <div class="modal-box card max-w-sm">
@@ -927,35 +871,6 @@ $tabs = ['All' => 'Semua', 'Pending' => 'Menunggu', 'Approved' => 'Diluluskan', 
             const select = document.getElementById('approve-driver-select');
             const opt = select.options[select.selectedIndex];
             document.getElementById('approve-vehicle-preview').textContent = (opt && opt.dataset.vehicle) ? opt.dataset.vehicle : '—';
-        }
-
-        function openViewModal(b) {
-            document.getElementById('view-booking-no').textContent   = b.booking_no;
-            document.getElementById('view-requester').textContent    = b.requester_name;
-            document.getElementById('view-status').textContent       = b.status;
-            document.getElementById('view-trip-type').textContent    = b.trip_type;
-            document.getElementById('view-pax').textContent          = b.passenger_total;
-            document.getElementById('view-passenger-names').textContent = b.passenger_names;
-            document.getElementById('view-origin').textContent       = b.origin;
-            document.getElementById('view-destination').textContent  = b.destination;
-            document.getElementById('view-depart').textContent       = b.depart_datetime;
-            document.getElementById('view-return').textContent       = b.return_datetime;
-            document.getElementById('view-vehicle').textContent      = b.vehicle;
-            document.getElementById('view-driver').textContent       = b.driver;
-            document.getElementById('view-purpose').textContent      = b.purpose;
-            // Determine label and actor depending on raw status or last action
-            const statusRaw = b.status_raw || '';
-            let actionLabel = 'Tindakan Oleh';
-            if (statusRaw === 'Approved') actionLabel = 'Diluluskan Oleh';
-            else if (statusRaw === 'Rejected') actionLabel = 'Ditolak Oleh';
-            else if (statusRaw === 'Cancelled') actionLabel = 'Dibatalkan Oleh';
-            else if (statusRaw === 'Completed') actionLabel = 'Ditamatkan Oleh';
-
-            document.getElementById('view-action-label').textContent = actionLabel;
-
-            const actor = b.last_action_by || b.approved_by || '—';
-            document.getElementById('view-approved-by').textContent  = actor;
-            document.getElementById('modal-view').showModal();
         }
 
         function openActionModal(id, action, text, buttonLabel, isDanger) {

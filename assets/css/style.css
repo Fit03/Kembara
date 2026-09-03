@@ -26,7 +26,7 @@ body {
 
 /* Card & Sidenav Dark Mode Overrides */
 .card, .ta-sidebar, nav {
-    background: color-mix(in oklch, var(--ta-surface) 72%, transparent) !important;
+    background: color-mix(in oklch, var(--ta-surface) 90%, transparent) !important;
     border-color: var(--ta-border) !important;
     color: var(--ta-ink) !important;
 }
@@ -213,7 +213,7 @@ dialog.modal[open]::backdrop {
 }
 
 .more-popover {
-  background: color-mix(in oklch, var(--ta-surface, #ffffff) 94%, transparent);
+  background: color-mix(in oklch, var(--ta-surface, #ffffff) 90%, transparent);
   backdrop-filter: blur(24px) saturate(200%);
   -webkit-backdrop-filter: blur(24px) saturate(200%);
   border: 1px solid rgba(255,255,255,0.5);
