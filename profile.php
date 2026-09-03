@@ -182,12 +182,23 @@ $hasPhoto = $user['profile_picture'] && is_file(__DIR__ . '/' . $user['profile_p
 $pendingApprovals = $pdo->query("SELECT COUNT(*) FROM vehicle_bookings WHERE status = 'Pending'")->fetchColumn();
 ?>
 <!DOCTYPE html>
-<html lang="ms" garden>
+<html lang="ms" data-theme="garden">
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, shrink-to-fit=no" />
     <title>Kembara - Profil Saya</title>
     <link rel="icon" type="image/png" href="assets/img/favicon.png" />
+
+    <script>
+        (function () {
+            try {
+                const savedTheme = localStorage.getItem('theme');
+                const systemPrefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+                const preferredTheme = savedTheme || (systemPrefersDark ? 'dracula' : 'garden');
+                document.documentElement.setAttribute('data-theme', preferredTheme);
+            } catch (e) {}
+        })();
+    </script>
 
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700&display=swap" rel="stylesheet" />
@@ -252,7 +263,7 @@ $pendingApprovals = $pdo->query("SELECT COUNT(*) FROM vehicle_bookings WHERE sta
         <ul class="flex flex-col gap-1">
           <?php if (in_array($role, ['SuperAdmin', 'Admin'], true)): ?>
           <li>
-            <a class="ta-nav-link" href="activity-log.php">
+            <a class="ta-nav-link" href="activity_log.php">
               <svg class="ta-nav-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
               <span>Log Aktiviti</span>
             </a>
@@ -277,9 +288,9 @@ $pendingApprovals = $pdo->query("SELECT COUNT(*) FROM vehicle_bookings WHERE sta
           id="nav-dashboard"
           class="nav-item absolute left-1/2 -translate-x-1/2 -top-7 z-30 flex flex-col items-center group transition-transform duration-300 ease-[cubic-bezier(0.175,0.885,0.32,2.2)] active:scale-90">
           <span class="relative w-14 h-14 rounded-full flex items-center justify-center transition-all duration-300 group-hover:-translate-y-1"
-                style="background: linear-gradient(135deg, color-mix(in oklch, var(--ta-brand, #007AFF) 85%, white), var(--ta-brand, #007AFF));
+                style="background: linear-gradient(135deg, color-mix(in oklch, var(--ta-brand) 85%, white), var(--ta-brand));
                       color:#fff;
-                      box-shadow: 0 12px 28px -6px color-mix(in oklch, var(--ta-brand, #007AFF) 50%, transparent),
+                      box-shadow: 0 12px 28px -6px color-mix(in oklch, var(--ta-brand) 50%, transparent),
                                   0 0 0 1px rgba(255,255,255,0.5) inset,
                                   0 0 0 4px var(--ta-canvas, #ffffff);">
             <span class="absolute inset-0 rounded-full bg-gradient-to-b from-white/45 via-white/10 to-transparent opacity-80 pointer-events-none"></span>
@@ -296,7 +307,7 @@ $pendingApprovals = $pdo->query("SELECT COUNT(*) FROM vehicle_bookings WHERE sta
           <!-- Sliding active pill -->
           <div id="liquid-pill"
               class="absolute top-1.5 bottom-1.5 rounded-[22px] transition-all duration-300 ease-[cubic-bezier(0.175,0.885,0.32,1.2)] opacity-0 pointer-events-none z-0"
-              style="background: color-mix(in oklch, var(--ta-brand, #007AFF) 14%, rgba(255,255,255,0.55));
+              style="background: color-mix(in oklch, var(--ta-brand) 14%, rgba(255,255,255,0.55));
                     border: 1px solid rgba(255,255,255,0.6);
                     box-shadow: 0 4px 14px rgba(0,0,0,0.06), inset 0 1px 1px rgba(255,255,255,0.9);">
           </div>

@@ -172,11 +172,22 @@ $moduleIcon = function (string $m): string {
 };
 ?>
 <!DOCTYPE html>
-<html lang="ms" garden>
+<html lang="ms" data-theme="garden">
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, shrink-to-fit=no" />
     <title>Kembara - Log Aktiviti</title>
+
+    <script>
+        (function () {
+            try {
+                const savedTheme = localStorage.getItem('theme');
+                const systemPrefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+                const preferredTheme = savedTheme || (systemPrefersDark ? 'dracula' : 'garden');
+                document.documentElement.setAttribute('data-theme', preferredTheme);
+            } catch (e) {}
+        })();
+    </script>
 
     <!-- Font: Outfit -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
