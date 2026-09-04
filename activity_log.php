@@ -68,7 +68,8 @@ if (!in_array($range, ['today', '7d', '30d', 'all'], true)) {
 $unionSql = "
     SELECT al.module AS module, al.action AS action, al.description AS description,
            COALESCE(u1.fullname, 'Pengguna Dipadam') AS actor_name,
-           u1.profile_picture AS actor_photo, al.created_at AS created_at
+           u1.profile_picture AS actor_photo, al.role_at_time AS role_at_time,
+           al.user_agent AS user_agent, al.created_at AS created_at
     FROM activity_log al
     LEFT JOIN users u1 ON u1.user_id = al.user_id
 
@@ -76,7 +77,8 @@ $unionSql = "
 
     SELECT 'Tempahan' AS module, bh.action AS action, bh.remarks AS description,
            COALESCE(u2.fullname, 'Pengguna Dipadam') AS actor_name,
-           u2.profile_picture AS actor_photo, bh.action_datetime AS created_at
+           u2.profile_picture AS actor_photo, NULL AS role_at_time,
+           NULL AS user_agent, bh.action_datetime AS created_at
     FROM booking_history bh
     LEFT JOIN users u2 ON u2.user_id = bh.action_by
 ";
@@ -169,6 +171,39 @@ $moduleIcon = function (string $m): string {
         'Tempahan'   => '<path stroke-linecap="round" stroke-linejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 012.25-2.25h13.5A2.25 2.25 0 0121 7.5v11.25m-18 0A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75m-18 0v-7.5A2.25 2.25 0 015.25 9h13.5A2.25 2.25 0 0121 11.25v7.5m-13.5-6h.008v.008h-.008v-.008zm0 3h.008v.008h-.008v-.008zm3-3h.008v.008h-.008v-.008zm0 3h.008v.008h-.008v-.008z" />',
         default      => '<path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />',
     };
+};
+
+/**
+ * Terjemah user_agent mentah kepada label pelayar/peranti ringkas
+ * untuk dipaparkan (bukan analisis penuh, sekadar bacaan mudah).
+ */
+$deviceLabel = function (?string $ua): ?string {
+    if (!$ua) return null;
+    $browser = match (true) {
+        str_contains($ua, 'Edg/')     => 'Edge',
+        str_contains($ua, 'OPR/')     => 'Opera',
+        str_contains($ua, 'Chrome/')  => 'Chrome',
+        str_contains($ua, 'Firefox/') => 'Firefox',
+        str_contains($ua, 'Safari/')  => 'Safari',
+        default                       => 'Pelayar Lain',
+    };
+    $os = match (true) {
+        str_contains($ua, 'Windows')      => 'Windows',
+        str_contains($ua, 'Android')      => 'Android',
+        str_contains($ua, 'iPhone'),
+        str_contains($ua, 'iPad')         => 'iOS',
+        str_contains($ua, 'Mac OS')       => 'macOS',
+        str_contains($ua, 'Linux')        => 'Linux',
+        default                           => null,
+    };
+    return $os ? "{$browser} · {$os}" : $browser;
+};
+
+$roleBadge = fn(?string $r) => match ($r) {
+    'SuperAdmin' => 'badge-soft-error',
+    'Admin'      => 'badge-soft-warning',
+    'User'       => 'badge-soft-info',
+    default      => null,
 };
 ?>
 <!DOCTYPE html>
@@ -647,12 +682,21 @@ $moduleIcon = function (string $m): string {
                       <div class="flex items-center gap-2 flex-wrap">
                         <span class="ta-badge <?= $moduleBadge($a['module']) ?>"><?= htmlspecialchars($a['module']) ?></span>
                         <span class="ta-badge <?= $actionBadge($a['action']) ?>"><?= htmlspecialchars($a['action']) ?></span>
+                        <?php if (!empty($a['role_at_time']) && $roleBadge($a['role_at_time'])): ?>
+                          <span class="ta-badge <?= $roleBadge($a['role_at_time']) ?>"><?= htmlspecialchars($a['role_at_time']) ?></span>
+                        <?php endif; ?>
                       </div>
                       <h6 class="mb-0 mt-1.5 text-sm font-semibold leading-normal">
                         <?= htmlspecialchars($a['actor_name']) ?>
                       </h6>
                       <?php if (!empty($a['description'])): ?>
                         <p class="mt-0.5 mb-0 text-xs leading-tight" style="color:var(--ta-muted)"><?= htmlspecialchars($a['description']) ?></p>
+                      <?php endif; ?>
+                      <?php $dev = $deviceLabel($a['user_agent'] ?? null); if ($dev): ?>
+                        <p class="mt-1 mb-0 text-[11px] flex items-center gap-1" style="color:var(--ta-muted)">
+                          <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 17.25v1.007a3 3 0 01-.879 2.122L7.5 21h9l-.621-.621A3 3 0 0115 18.257V17.25m6-12V15a2.25 2.25 0 01-2.25 2.25H5.25A2.25 2.25 0 013 15V5.25m18 0A2.25 2.25 0 0018.75 3H5.25A2.25 2.25 0 003 5.25m18 0V12a2.25 2.25 0 01-2.25 2.25H5.25A2.25 2.25 0 013 12V5.25" /></svg>
+                          <?= htmlspecialchars($dev) ?>
+                        </p>
                       <?php endif; ?>
                     </div>
                     <span class="text-xs shrink-0" style="color:var(--ta-muted)"><?= htmlspecialchars(date('d M Y, H:i', strtotime($a['created_at']))) ?></span>
@@ -691,4 +735,3 @@ $moduleIcon = function (string $m): string {
         </footer>
       </div>
     </main>
-

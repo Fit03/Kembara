@@ -32,12 +32,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         if (!$user) {
             $error = "E-mel ini tidak berdaftar dalam sistem.";
+            log_activity($pdo, null, 'Log Masuk', 'Log Masuk Gagal', "Percubaan log masuk dengan e-mel tidak berdaftar: {$email}");
         } elseif (!password_verify($password, $user['password'])) {
-            $error = "Kata laluan yang draculaasukkan adalah salah.";
+            $error = "Kata laluan yang dimasukkan adalah salah.";
+            log_activity($pdo, (int)$user['user_id'], 'Log Masuk', 'Log Masuk Gagal', "Kata laluan salah untuk e-mel: {$email}");
         } else {
             $_SESSION['user_id']  = $user['user_id'];
             $_SESSION['fullname'] = $user['fullname'];
             $_SESSION['role']     = $user['role'];
+
+            log_activity($pdo, (int)$user['user_id'], 'Log Masuk', 'Log Masuk', "{$user['fullname']} log masuk ke sistem.");
 
             header("Location: dashboard.php");
             exit();
