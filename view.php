@@ -432,6 +432,10 @@ if (isset($_SESSION['flash'])) {
                 Ditempah oleh <span class="font-medium"><?= htmlspecialchars($b['requester_name']) ?></span>
               </p>
             </div>
+            <a href="print.php?id=<?= (int)$bookingId ?>" class="btn btn-info btn-sm gap-2" target="_blank" rel="noopener" title="Cetak tempahan">
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M6.75 9V3.75h10.5V9m-12 9h13.5a2.25 2.25 0 002.25-2.25v-4.5A2.25 2.25 0 0018.75 9H5.25A2.25 2.25 0 003 11.25v4.5A2.25 2.25 0 005.25 18zm2.25-3h9v5.25h-9V15z" /></svg>
+              <span>Cetak</span>
+            </a>
           </div>
 
           <div class="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-5 text-sm">
