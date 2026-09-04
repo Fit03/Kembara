@@ -209,6 +209,7 @@ dialog.modal[open]::backdrop {
   border-radius: inherit;
   border: 1px solid rgba(255,255,255,0.35);
   -webkit-mask: linear-gradient(#000,#000) content-box, linear-gradient(#000,#000);
+    mask: linear-gradient(#000,#000) content-box, linear-gradient(#000,#000);
   pointer-events: none;
 }
 
