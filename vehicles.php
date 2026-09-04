@@ -66,7 +66,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $plateNo   = trim($_POST['plate_no'] ?? '');
             $vName     = trim($_POST['vehicle_name'] ?? '') ?: null;
             $vType     = trim($_POST['vehicle_type'] ?? '') ?: null;
-            $model     = trim($_POST['model'] ?? '') ?: null;
             $color     = trim($_POST['color'] ?? '') ?: null;
             $capacity  = $_POST['capacity'] !== '' ? (int)$_POST['capacity'] : null;
             $roadTax   = $_POST['road_tax_expiry'] !== '' ? $_POST['road_tax_expiry'] : null;
@@ -85,11 +84,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if ($action === 'add_vehicle') {
                 $stmt = $pdo->prepare(
                     "INSERT INTO vehicles
-                        (plate_no, vehicle_name, vehicle_type, model, color, capacity,
+                        (plate_no, vehicle_name, vehicle_type, color, capacity,
                          road_tax_expiry, insurance_expiry, status, description, driver_id)
-                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
                 );
-                $stmt->execute([$plateNo, $vName, $vType, $model, $color, $capacity,
+                $stmt->execute([$plateNo, $vName, $vType, $color, $capacity,
                     $roadTax, $insurance, $status, $desc, $driverId]);
 
                 $flash = ['type' => 'success', 'msg' => "Kenderaan '{$plateNo}' berjaya didaftarkan."];
@@ -101,12 +100,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
                 $stmt = $pdo->prepare(
                     "UPDATE vehicles SET
-                        plate_no = ?, vehicle_name = ?, vehicle_type = ?, model = ?, color = ?,
+                        plate_no = ?, vehicle_name = ?, vehicle_type = ?, color = ?,
                         capacity = ?, road_tax_expiry = ?, insurance_expiry = ?, status = ?,
                         description = ?, driver_id = ?
                      WHERE vehicle_id = ?"
                 );
-                $stmt->execute([$plateNo, $vName, $vType, $model, $color, $capacity,
+                $stmt->execute([$plateNo, $vName, $vType, $color, $capacity,
                     $roadTax, $insurance, $status, $desc, $driverId, $vid]);
 
                 $flash = ['type' => 'success', 'msg' => "Maklumat '{$plateNo}' berjaya dikemaskini."];
@@ -307,9 +306,9 @@ $pendingApprovals = $pdo->query(
           <?php endif; ?>
         </ul>
 
+        <?php if (in_array($role, ['SuperAdmin', 'Admin'], true)): ?>
         <p class="mt-6 px-3 mb-2 text-[0.65rem] font-semibold uppercase tracking-widest text-slate-400">Log</p>
         <ul class="flex flex-col gap-1">
-          <?php if (in_array($role, ['SuperAdmin', 'Admin'], true)): ?>
           <li>
             <a class="ta-nav-link" href="activity_log.php">
               <svg class="ta-nav-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
@@ -666,7 +665,7 @@ $pendingApprovals = $pdo->query(
                   <tr class="hover:bg-slate-50/70 transition-colors">
                     <td class="px-3 py-3 text-sm border-b whitespace-nowrap" style="border-color:var(--ta-border)">
                       <p class="mb-0 font-medium"><?= htmlspecialchars($v['plate_no']) ?></p>
-                      <p class="mb-0 text-xs text-slate-400"><?= htmlspecialchars(trim(($v['vehicle_name'] ?? '') . ' ' . ($v['model'] ?? ''))) ?: '—' ?></p>
+                      <p class="mb-0 text-xs text-slate-400"><?= htmlspecialchars($v['vehicle_name'] ?? '') ?: '—' ?></p>
                     </td>
                     <td class="px-3 py-3 text-sm border-b whitespace-nowrap" style="border-color:var(--ta-border)">
                       <?= htmlspecialchars($v['vehicle_type'] ?? '—') ?>
@@ -691,7 +690,6 @@ $pendingApprovals = $pdo->query(
                             "plate_no"         => $v["plate_no"],
                             "vehicle_name"     => $v["vehicle_name"],
                             "vehicle_type"     => $v["vehicle_type"],
-                            "model"            => $v["model"],
                             "color"            => $v["color"],
                             "capacity"         => $v["capacity"],
                             "road_tax_expiry"  => $v["road_tax_expiry"],
@@ -766,10 +764,6 @@ $pendingApprovals = $pdo->query(
               <input type="text" name="vehicle_type" placeholder="MPV, Van, Sedan..." class="input input-bordered w-full" />
             </div>
             <div>
-              <label class="text-xs font-medium block mb-1">Model</label>
-              <input type="text" name="model" class="input input-bordered w-full" />
-            </div>
-            <div>
               <label class="text-xs font-medium block mb-1">Warna</label>
               <input type="text" name="color" class="input input-bordered w-full" />
             </div>
@@ -837,10 +831,6 @@ $pendingApprovals = $pdo->query(
             <div>
               <label class="text-xs font-medium block mb-1">Jenis Kenderaan</label>
               <input type="text" name="vehicle_type" id="edit-vehicle-type" class="input input-bordered w-full" />
-            </div>
-            <div>
-              <label class="text-xs font-medium block mb-1">Model</label>
-              <input type="text" name="model" id="edit-model" class="input input-bordered w-full" />
             </div>
             <div>
               <label class="text-xs font-medium block mb-1">Warna</label>
@@ -915,7 +905,6 @@ $pendingApprovals = $pdo->query(
             document.getElementById('edit-plate-no').value      = v.plate_no;
             document.getElementById('edit-vehicle-name').value  = v.vehicle_name || '';
             document.getElementById('edit-vehicle-type').value  = v.vehicle_type || '';
-            document.getElementById('edit-model').value         = v.model || '';
             document.getElementById('edit-color').value         = v.color || '';
             document.getElementById('edit-capacity').value      = v.capacity || '';
             document.getElementById('edit-road-tax').value      = v.road_tax_expiry || '';

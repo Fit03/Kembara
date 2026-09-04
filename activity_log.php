@@ -42,6 +42,7 @@ $pendingApprovals = $pdo->query(
     "SELECT COUNT(*) FROM vehicle_bookings WHERE status = 'Pending'"
 )->fetchColumn();
 
+$flash = null;
 if (isset($_SESSION['flash'])) {
     $flash = $_SESSION['flash'];
     unset($_SESSION['flash']);
@@ -419,15 +420,6 @@ $roleBadge = fn(?string $r) => match ($r) {
             </a>
           </li>
 
-          <?php if (in_array($role, ['SuperAdmin', 'Admin'], true)): ?>
-          <li>
-            <a class="ta-nav-link active" href="activity_log.php">
-              <svg class="ta-nav-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-              <span>Log Aktiviti</span>
-            </a>
-          </li>
-          <?php endif; ?>
-
           <?php if ($role === 'SuperAdmin'): ?>
           <li>
             <a class="ta-nav-link" href="users.php">
@@ -437,6 +429,18 @@ $roleBadge = fn(?string $r) => match ($r) {
           </li>
           <?php endif; ?>
         </ul>
+
+        <?php if (in_array($role, ['SuperAdmin', 'Admin'], true)): ?>
+        <p class="mt-6 px-3 mb-2 text-[0.65rem] font-semibold uppercase tracking-widest text-slate-400">Log</p>
+        <ul class="flex flex-col gap-1">
+          <li>
+            <a class="ta-nav-link active" href="activity_log.php">
+              <svg class="ta-nav-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+              <span>Log Aktiviti</span>
+            </a>
+          </li>
+        </ul>
+        <?php endif; ?>
       </div>
 
       <div class="p-4 border-t" style="border-color:var(--ta-border)">
@@ -561,9 +565,6 @@ $roleBadge = fn(?string $r) => match ($r) {
                             <p class="text-xs text-slate-400 mt-1 truncate"><?= htmlspecialchars($email) ?></p>
                         </li>
                         <li><a href="profile.php" class="py-2.5 text-xs font-medium">Profil Saya</a></li>
-                        <?php if (in_array($role, ['SuperAdmin', 'Admin'], true)): ?>
-                        <li><a href="activity_log.php" class="py-2.5 text-xs font-medium">Log Aktiviti</a></li>
-                        <?php endif; ?>
                         <div class="divider my-1"></div>
                         <li><a href="logout.php" class="py-2.5 text-xs font-semibold text-red-600">Log Keluar</a></li>
                     </ul>

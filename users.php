@@ -306,9 +306,9 @@ $pendingApprovals = $pdo->query(
           <?php endif; ?>
         </ul>
 
+        <?php if (in_array($role, ['SuperAdmin', 'Admin'], true)): ?>
         <p class="mt-6 px-3 mb-2 text-[0.65rem] font-semibold uppercase tracking-widest text-slate-400">Log</p>
         <ul class="flex flex-col gap-1">
-          <?php if (in_array($role, ['SuperAdmin', 'Admin'], true)): ?>
           <li>
             <a class="ta-nav-link" href="activity_log.php">
               <svg class="ta-nav-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>

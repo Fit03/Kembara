@@ -47,6 +47,16 @@ table tr:hover { background-color: color-mix(in oklch, var(--color-base-content)
     color: var(--ta-ink);
 }
 
+/* Warna kad statistik — padankan dengan susunan kad di dashboard.php:
+   Tempahan(biru) → Kelulusan(hijau) → Kenderaan(ungu) → Pengguna(oren)
+   → Perjalanan(cyan) → Pemandu(pink) */
+.ta-icon-box-blue   { background: color-mix(in oklch, #3b82f6 18%, var(--ta-surface)); color: #3b82f6; }
+.ta-icon-box-green  { background: color-mix(in oklch, #22c55e 18%, var(--ta-surface)); color: #22c55e; }
+.ta-icon-box-purple { background: color-mix(in oklch, #a855f7 18%, var(--ta-surface)); color: #a855f7; }
+.ta-icon-box-orange { background: color-mix(in oklch, #f97316 18%, var(--ta-surface)); color: #f97316; }
+.ta-icon-box-cyan   { background: color-mix(in oklch, #06b6d4 18%, var(--ta-surface)); color: #06b6d4; }
+.ta-icon-box-pink   { background: color-mix(in oklch, #ec4899 18%, var(--ta-surface)); color: #ec4899; }
+
 .ta-nav-link {
     display: flex;
     align-items: center;
