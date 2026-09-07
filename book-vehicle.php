@@ -345,7 +345,8 @@ $fullyBookedDatesJson = json_encode(array_values($fullyBookedDates));
           <h6 class="font-semibold text-lg mb-1">Maklumat Perjalanan</h6>
           <p class="text-sm mb-5" style="color:var(--ta-muted)">Lengkapkan butiran tempahan kenderaan anda. Pemandu &amp; kenderaan akan ditugaskan oleh pentadbir semasa kelulusan.</p>
 
-          <form action="bookings.php" method="POST" class="flex flex-col gap-5" id="booking-form">
+          <!-- Corrected tag -->
+          <form action="bookings.php" method="POST" enctype="multipart/form-data" class="flex flex-col gap-5" id="booking-form">  
             <input type="hidden" name="action" value="add_booking" />
 
             <!-- Pemilih Lokasi Peta (gaya Grab) -->
@@ -447,16 +448,22 @@ $fullyBookedDatesJson = json_encode(array_values($fullyBookedDates));
               </div>
 
               <div id="bulk-add-panel" class="hidden rounded-xl border p-3.5 mb-3 flex flex-col gap-3" style="border-color:var(--ta-border); background:var(--ta-canvas)">
-                <p class="text-xs" style="color:var(--ta-muted)">Untuk kumpulan besar seperti bas, tambah beberapa slot kosong sekali gus, atau tampal senarai nama terus (satu nama setiap baris).</p>
+                <p class="text-xs" style="color:var(--ta-muted)">Untuk kumpulan besar seperti bas, tambah beberapa slot kosong sekali gus, atau tampal (<i>paste</i>) senarai nama terus (satu nama setiap baris).</p>
 
                 <div class="flex items-center gap-2 flex-wrap">
                   <input type="number" id="bulk-passenger-count" min="1" max="60" placeholder="Bilangan, cth. 40" class="input input-bordered input-sm w-40" />
-                  <button type="button" class="btn btn-sm" onclick="addPassengerRows()">Tambah Slot Kosong</button>
+                    <button type="button" class="ta-tab" onclick="addPassengerRow()">Tambah Slot Kosong</button>
                 </div>
 
                 <div>
                   <textarea id="bulk-passenger-paste" rows="4" class="textarea textarea-bordered w-full text-sm" placeholder="Tampal senarai nama di sini, satu nama setiap baris..."></textarea>
-                  <button type="button" class="btn btn-sm mt-2" onclick="addPassengersFromPaste()">Jana Daripada Senarai</button>
+                  <button type="button" class="btn btn-sm btn-outline mt-2" onclick="addPassengersFromPaste()">Jana Daripada Senarai</button>
+                </div>
+                
+                <p class="text-xs" style="color:var(--ta-muted)">atau muat naik memo</p>
+                
+                <div>
+                  <input type="file" class="file-input file-input-sm" name="passenger_memo" accept=".pdf" />
                 </div>
               </div>
 

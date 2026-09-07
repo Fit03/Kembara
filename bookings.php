@@ -80,6 +80,31 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $pax       = (int)($_POST['passenger_total'] ?? 0);
             $purpose   = trim($_POST['purpose'] ?? '');
 
+            // --- NEW: Process PDF Upload ---
+            $passenger_memo_path = null;
+            if (isset($_FILES['passenger_memo']) && $_FILES['passenger_memo']['error'] === UPLOAD_ERR_OK) {
+                $fileTmpPath = $_FILES['passenger_memo']['tmp_name'];
+                $fileSize = $_FILES['passenger_memo']['size'];
+                $fileType = mime_content_type($fileTmpPath);
+
+                if ($fileType === 'application/pdf' && $fileSize <= 2000000) {
+                    $uploadDir = 'assets/uploads/memos/';
+                    if (!is_dir($uploadDir)) {
+                        mkdir($uploadDir, 0755, true);
+                    }
+                    $newFileName = uniqid('memo_') . '.pdf';
+                    $destPath = $uploadDir . $newFileName;
+                    
+                    if (move_uploaded_file($fileTmpPath, $destPath)) {
+                        $passenger_memo_path = $destPath;
+                    } else {
+                        throw new RuntimeException('Ralat semasa menyimpan fail memo.');
+                    }
+                } else {
+                    throw new RuntimeException('Sila muat naik format fail PDF sahaja (Maksimum 2MB).');
+                }
+            }
+
             // Nama penumpang dihantar sebagai array (passenger_names[]) daripada
             // senarai butang Tambah/Buang Penumpang pada borang tempahan
             $passengerNamesArr = array_values(array_filter(array_map(
@@ -96,6 +121,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
             if ($departRaw === '' || $origin === '' || $dest === '' || $purpose === '') {
                 throw new RuntimeException('Sila lengkapkan semua maklumat wajib tempahan.');
+            }
+            // NEW: Ensure they either typed names or uploaded a memo
+            if (empty($passengerNamesArr) && !$passenger_memo_path) {
+                throw new RuntimeException('Sila masukkan sekurang-kurangnya nama seorang penumpang ATAU muat naik memo senarai (PDF).');
             }
             if (!in_array($tripType, ['One Way', 'Return', 'Both'], true)) {
                 throw new RuntimeException('Jenis perjalanan tidak sah.');
@@ -115,12 +144,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $stmt = $pdo->prepare(
                 "INSERT INTO vehicle_bookings
                  (booking_no, user_id, depart_datetime, return_datetime, trip_type, origin, destination,
-                  passenger_total, passenger_names, purpose, status)
-                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Pending')"
+                  passenger_total, passenger_names, passenger_memo_path, purpose, status)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Pending')"
             );
             $stmt->execute([
                 $bookingNo, $currentUserId, $departRaw, $returnRaw !== '' ? $returnRaw : null,
-                $tripType, $origin, $dest, $pax > 0 ? $pax : null, $passengerNamesJson, $purpose,
+                $tripType, $origin, $dest, $pax > 0 ? $pax : null, $passengerNamesJson, $passenger_memo_path, $purpose,
             ]);
             $newId = (int)$pdo->lastInsertId();
 
