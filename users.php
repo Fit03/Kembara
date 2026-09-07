@@ -753,12 +753,17 @@ $pendingApprovals = $pdo->query(
           </div>
           <div>
             <label class="text-xs font-medium block mb-1">Jabatan</label>
-            <select name="department_id" class="select select-bordered w-full">
-              <option value="">— Tiada —</option>
-              <?php foreach ($departments as $d): ?>
-                <option value="<?= (int)$d['department_id'] ?>"><?= htmlspecialchars($d['department_name']) ?></option>
-              <?php endforeach; ?>
-            </select>
+            <div class="ta-combobox" data-combobox>
+              <input type="hidden" name="department_id" data-combobox-value />
+              <input type="text" class="input input-bordered w-full" placeholder="Cari jabatan..." autocomplete="off"
+                role="combobox" aria-expanded="false" aria-autocomplete="list" data-combobox-input />
+              <div class="ta-combobox-options" role="listbox" data-combobox-options>
+                <button type="button" class="ta-combobox-option" data-value="">— Tiada —</button>
+                <?php foreach ($departments as $d): ?>
+                  <button type="button" class="ta-combobox-option" data-value="<?= (int)$d['department_id'] ?>"><?= htmlspecialchars($d['department_name']) ?></button>
+                <?php endforeach; ?>
+              </div>
+            </div>
           </div>
           <div>
             <label class="text-xs font-medium block mb-1">Peranan</label>
@@ -803,12 +808,17 @@ $pendingApprovals = $pdo->query(
           </div>
           <div>
             <label class="text-xs font-medium block mb-1">Jabatan</label>
-            <select name="department_id" id="edit-department" class="select select-bordered w-full">
-              <option value="">— Tiada —</option>
-              <?php foreach ($departments as $d): ?>
-                <option value="<?= (int)$d['department_id'] ?>"><?= htmlspecialchars($d['department_name']) ?></option>
-              <?php endforeach; ?>
-            </select>
+            <div class="ta-combobox" id="edit-department-combobox" data-combobox>
+              <input type="hidden" name="department_id" data-combobox-value />
+              <input type="text" class="input input-bordered w-full" placeholder="Cari jabatan..." autocomplete="off"
+                role="combobox" aria-expanded="false" aria-autocomplete="list" data-combobox-input />
+              <div class="ta-combobox-options" role="listbox" data-combobox-options>
+                <button type="button" class="ta-combobox-option" data-value="">— Tiada —</button>
+                <?php foreach ($departments as $d): ?>
+                  <button type="button" class="ta-combobox-option" data-value="<?= (int)$d['department_id'] ?>"><?= htmlspecialchars($d['department_name']) ?></button>
+                <?php endforeach; ?>
+              </div>
+            </div>
           </div>
           <div>
             <label class="text-xs font-medium block mb-1">Peranan</label>
@@ -856,7 +866,7 @@ $pendingApprovals = $pdo->query(
             document.getElementById('edit-fullname').value   = u.fullname;
             document.getElementById('edit-email').value      = u.email;
             document.getElementById('edit-phone').value      = u.phone_no || '';
-            document.getElementById('edit-department').value = u.department_id || '';
+            setComboboxValue(document.querySelector('#edit-department-combobox'), u.department_id || '');
             document.getElementById('edit-role').value       = u.role;
             document.getElementById('modal-edit').showModal();
         }
@@ -879,6 +889,68 @@ $pendingApprovals = $pdo->query(
                 setTimeout(dismissToast, 4000);
             }
         })();
+
+        function setComboboxValue(combobox, value) {
+          if (!combobox) return;
+          const hiddenInput = combobox.querySelector('[data-combobox-value]');
+          const textInput = combobox.querySelector('[data-combobox-input]');
+          const option = [...combobox.querySelectorAll('.ta-combobox-option')]
+            .find(item => item.dataset.value === String(value ?? ''));
+
+          hiddenInput.value = option ? option.dataset.value : '';
+          textInput.value = option ? option.textContent.trim() : '';
+          combobox.querySelectorAll('.ta-combobox-option').forEach(item => {
+            item.classList.toggle('selected', item === option);
+          });
+        }
+
+        document.querySelectorAll('[data-combobox]').forEach(combobox => {
+          const input = combobox.querySelector('[data-combobox-input]');
+          const hiddenInput = combobox.querySelector('[data-combobox-value]');
+          const options = [...combobox.querySelectorAll('.ta-combobox-option')];
+
+          const closeOptions = () => {
+            combobox.classList.remove('open');
+            input.setAttribute('aria-expanded', 'false');
+          };
+          const openOptions = () => {
+            combobox.classList.add('open');
+            input.setAttribute('aria-expanded', 'true');
+          };
+          const filterOptions = () => {
+            const query = input.value.trim().toLowerCase();
+            options.forEach(option => {
+              option.hidden = query !== '' && !option.textContent.toLowerCase().includes(query);
+            });
+          };
+
+          input.addEventListener('focus', () => {
+            filterOptions();
+            openOptions();
+          });
+          input.addEventListener('input', () => {
+            hiddenInput.value = '';
+            options.forEach(option => option.classList.remove('selected'));
+            filterOptions();
+            openOptions();
+          });
+          input.addEventListener('keydown', event => {
+            if (event.key === 'Escape') {
+              closeOptions();
+            } else if (event.key === 'ArrowDown') {
+              event.preventDefault();
+              openOptions();
+              combobox.querySelector('.ta-combobox-option:not([hidden])')?.focus();
+            }
+          });
+          options.forEach(option => option.addEventListener('click', () => {
+            setComboboxValue(combobox, option.dataset.value);
+            closeOptions();
+          }));
+          combobox.addEventListener('focusout', event => {
+            if (!combobox.contains(event.relatedTarget)) closeOptions();
+          });
+        });
     </script>
 
     <!-- Skrip Tukar Mod Tema Terang/Gelap -->
