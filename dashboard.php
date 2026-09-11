@@ -98,14 +98,11 @@ $deptRows = $pdo->query(
 
 // -- Dokumen kenderaan tamat tempoh dalam masa 30 hari -------------
 $expiringDocs = $pdo->query(
-    "SELECT plate_no, vehicle_name, road_tax_expiry, insurance_expiry
+   "SELECT plate_no, vehicle_name, road_tax_expiry
      FROM vehicles
-     WHERE (road_tax_expiry IS NOT NULL AND road_tax_expiry <= DATE_ADD(CURRENT_DATE(), INTERVAL 30 DAY))
-        OR (insurance_expiry IS NOT NULL AND insurance_expiry <= DATE_ADD(CURRENT_DATE(), INTERVAL 30 DAY))
-     ORDER BY LEAST(
-        COALESCE(road_tax_expiry, '9999-12-31'),
-        COALESCE(insurance_expiry, '9999-12-31')
-     ) ASC
+    WHERE road_tax_expiry IS NOT NULL
+     AND road_tax_expiry <= DATE_ADD(CURRENT_DATE(), INTERVAL 30 DAY)
+    ORDER BY road_tax_expiry ASC
      LIMIT 5"
 )->fetchAll(PDO::FETCH_ASSOC);
 
@@ -836,34 +833,7 @@ if ($role === 'User') {
                         ? new DateTime($doc['road_tax_expiry'])
                         : null;
 
-                    $insuranceDate = !empty($doc['insurance_expiry'])
-                        ? new DateTime($doc['insurance_expiry'])
-                        : null;
-
-                    // Tentukan dokumen yang tamat paling awal
-                    $nearestType = null;
-                    $nearestDate = null;
-
-                    if ($roadTaxDate && $insuranceDate) {
-
-                        if ($roadTaxDate <= $insuranceDate) {
-                            $nearestType = 'road_tax';
-                            $nearestDate = $roadTaxDate;
-                        } else {
-                            $nearestType = 'insurance';
-                            $nearestDate = $insuranceDate;
-                        }
-
-                    } elseif ($roadTaxDate) {
-
-                        $nearestType = 'road_tax';
-                        $nearestDate = $roadTaxDate;
-
-                    } elseif ($insuranceDate) {
-
-                        $nearestType = 'insurance';
-                        $nearestDate = $insuranceDate;
-                    }
+                    $nearestDate = $roadTaxDate;
 
                     // Tentukan status warna
                     $daysRemaining = null;
@@ -901,32 +871,7 @@ if ($role === 'User') {
                           —
                           <?= htmlspecialchars($doc['vehicle_name'] ?? '') ?>
                         </p>
-
-                        <!-- Road Tax -->
-                        <p class="mb-1 text-xs text-slate-400">
-                          Cukai Jalan:
-                          <span class="<?= $nearestType === 'road_tax' ? 'font-semibold text-error' : '' ?>">
-                            <?= htmlspecialchars($doc['road_tax_expiry'] ?? '—') ?>
-                          </span>
-                        </p>
-
-                        <!-- Insurance -->
-                        <p class="text-xs">
-
-                          <span class="text-slate-400">
-                            Insurans:
-                          </span>
-
-                          <span class="<?= $nearestType === 'insurance'
-                              ? 'font-semibold text-error'
-                              : 'text-slate-400' ?>">
-
-                            <?= htmlspecialchars($doc['insurance_expiry'] ?? '—') ?>
-
-                          </span>
-
-                        </p>
-
+                        
                       </div>
 
                       <!-- Expiry badge -->
@@ -942,7 +887,7 @@ if ($role === 'User') {
                       <div class="mt-2 flex items-center gap-1.5 text-xs">
 
                         <svg xmlns="http://www.w3.org/2000/svg"
-                            class="h-3.5 w-3.5 <?= $nearestType === 'insurance' ? 'text-error' : 'text-warning' ?>"
+                            class="h-3.5 w-3.5 text-error"
                             fill="none"
                             viewBox="0 0 24 24"
                             stroke="currentColor"
@@ -952,13 +897,9 @@ if ($role === 'User') {
                                 d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z" />
                         </svg>
 
-                        <span class="<?= $nearestType === 'insurance'
-                            ? 'text-error font-semibold'
-                            : 'text-warning font-semibold' ?>">
-
-                          Tamat Tempoh:
-                          <?= $nearestDate->format('d/m/Y') ?>
-
+                        <span class="text-error font-semibold">
+                              Cukai Jalan:
+                              <span class="font-semibold text-error"><?= $nearestDate->format('d/m/Y') ?></span>
                         </span>
 
                       </div>

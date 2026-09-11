@@ -47,6 +47,35 @@ $vehicleStatusLabel = fn(string $s) => match ($s) {
     default       => $s,
 };
 
+require_once __DIR__ . '/includes/vehicle_documents.php';
+
+  if (isset($_GET['road_tax']) && isset($_GET['vehicle_id'])) {
+    $documentVehicleId = (int)$_GET['vehicle_id'];
+    $documentStmt = $pdo->prepare("SELECT road_tax_document FROM vehicles WHERE vehicle_id = ?");
+    $documentStmt->execute([$documentVehicleId]);
+    $documentPath = $documentStmt->fetchColumn();
+    $documentAbsolutePath = is_string($documentPath) ? roadTaxAbsolutePath($documentPath) : null;
+
+    if (!$documentAbsolutePath || !is_file($documentAbsolutePath)) {
+      http_response_code(404);
+      exit('Dokumen Road Tax tidak dijumpai.');
+    }
+
+    $documentMime = (new finfo(FILEINFO_MIME_TYPE))->file($documentAbsolutePath);
+    if (!in_array($documentMime, ['application/pdf', 'image/jpeg', 'image/png'], true)) {
+      http_response_code(403);
+      exit('Dokumen tidak sah.');
+    }
+
+    $download = ($_GET['road_tax'] ?? '') === 'download';
+    header('Content-Type: ' . $documentMime);
+    header('Content-Length: ' . (string)filesize($documentAbsolutePath));
+    header('X-Content-Type-Options: nosniff');
+    header('Content-Disposition: ' . ($download ? 'attachment' : 'inline') . '; filename="road-tax-document.' . pathinfo($documentAbsolutePath, PATHINFO_EXTENSION) . '"');
+    readfile($documentAbsolutePath);
+    exit();
+  }
+
 /* ==========================================================
    Tindakan Borang (Tambah / Kemaskini / Padam)
    ========================================================== */
@@ -60,16 +89,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 
     $action = $_POST['action'] ?? '';
+    $newRoadTaxAbsolutePath = null;
 
     try {
         if ($action === 'add_vehicle' || $action === 'edit_vehicle') {
             $plateNo   = trim($_POST['plate_no'] ?? '');
             $vName     = trim($_POST['vehicle_name'] ?? '') ?: null;
             $vType     = trim($_POST['vehicle_type'] ?? '') ?: null;
-            $color     = trim($_POST['color'] ?? '') ?: null;
             $capacity  = $_POST['capacity'] !== '' ? (int)$_POST['capacity'] : null;
             $roadTax   = $_POST['road_tax_expiry'] !== '' ? $_POST['road_tax_expiry'] : null;
-            $insurance = $_POST['insurance_expiry'] !== '' ? $_POST['insurance_expiry'] : null;
             $status    = $_POST['status'] ?? 'Available';
             $desc      = trim($_POST['description'] ?? '') ?: null;
             $driverId  = $_POST['driver_id'] !== '' ? (int)$_POST['driver_id'] : null;
@@ -81,15 +109,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 throw new RuntimeException('Status tidak sah.');
             }
 
+            $newRoadTaxPath = null;
+            if (isset($_FILES['road_tax_document']) && $_FILES['road_tax_document']['error'] !== UPLOAD_ERR_NO_FILE) {
+              [$newRoadTaxFilename, $newRoadTaxAbsolutePath] = validateRoadTaxUpload(
+                $_FILES['road_tax_document'], $roadTaxUploadDir, $roadTaxAllowedTypes
+              );
+              $newRoadTaxPath = $roadTaxUploadUrl . '/' . $newRoadTaxFilename;
+            }
+
             if ($action === 'add_vehicle') {
                 $stmt = $pdo->prepare(
                     "INSERT INTO vehicles
-                        (plate_no, vehicle_name, vehicle_type, color, capacity,
-                         road_tax_expiry, insurance_expiry, status, description, driver_id)
-                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+                        (plate_no, vehicle_name, vehicle_type, capacity,
+                         road_tax_expiry, road_tax_document, status, description, driver_id)
+                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"
                 );
-                $stmt->execute([$plateNo, $vName, $vType, $color, $capacity,
-                    $roadTax, $insurance, $status, $desc, $driverId]);
+                $stmt->execute([$plateNo, $vName, $vType, $capacity,
+                      $roadTax, $newRoadTaxPath, $status, $desc, $driverId]);
 
                 $flash = ['type' => 'success', 'msg' => "Kenderaan '{$plateNo}' berjaya didaftarkan."];
             } else {
@@ -98,18 +134,53 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     throw new RuntimeException('Kenderaan tidak sah.');
                 }
 
+                $oldRoadTaxStmt = $pdo->prepare("SELECT road_tax_document FROM vehicles WHERE vehicle_id = ?");
+                $oldRoadTaxStmt->execute([$vid]);
+                $oldRoadTaxPath = $oldRoadTaxStmt->fetchColumn();
+                if ($oldRoadTaxPath === false) {
+                  throw new RuntimeException('Kenderaan tidak dijumpai.');
+                }
+
                 $stmt = $pdo->prepare(
                     "UPDATE vehicles SET
-                        plate_no = ?, vehicle_name = ?, vehicle_type = ?, color = ?,
-                        capacity = ?, road_tax_expiry = ?, insurance_expiry = ?, status = ?,
-                        description = ?, driver_id = ?
+                        plate_no = ?, vehicle_name = ?, vehicle_type = ?,
+                    capacity = ?, road_tax_expiry = ?,
+                    road_tax_document = COALESCE(?, road_tax_document), status = ?,
+                    description = ?, driver_id = ?
                      WHERE vehicle_id = ?"
                 );
-                $stmt->execute([$plateNo, $vName, $vType, $color, $capacity,
-                    $roadTax, $insurance, $status, $desc, $driverId, $vid]);
+                $stmt->execute([$plateNo, $vName, $vType, $capacity,
+                  $roadTax, $newRoadTaxPath, $status, $desc, $driverId, $vid]);
+
+                if ($newRoadTaxPath && is_string($oldRoadTaxPath)) {
+                  $oldRoadTaxAbsolutePath = roadTaxAbsolutePath($oldRoadTaxPath);
+                  if ($oldRoadTaxAbsolutePath && is_file($oldRoadTaxAbsolutePath)) {
+                    @unlink($oldRoadTaxAbsolutePath);
+                  }
+                }
 
                 $flash = ['type' => 'success', 'msg' => "Maklumat '{$plateNo}' berjaya dikemaskini."];
             }
+
+            } elseif ($action === 'delete_road_tax') {
+              $vid = (int)($_POST['vehicle_id'] ?? 0);
+              if ($vid <= 0) {
+                throw new RuntimeException('Kenderaan tidak sah.');
+              }
+
+              $stmt = $pdo->prepare("SELECT road_tax_document FROM vehicles WHERE vehicle_id = ?");
+              $stmt->execute([$vid]);
+              $oldRoadTaxPath = $stmt->fetchColumn();
+              if ($oldRoadTaxPath === false) {
+                throw new RuntimeException('Kenderaan tidak dijumpai.');
+              }
+
+              $pdo->prepare("UPDATE vehicles SET road_tax_document = NULL WHERE vehicle_id = ?")->execute([$vid]);
+              $oldRoadTaxAbsolutePath = is_string($oldRoadTaxPath) ? roadTaxAbsolutePath($oldRoadTaxPath) : null;
+              if ($oldRoadTaxAbsolutePath && is_file($oldRoadTaxAbsolutePath)) {
+                @unlink($oldRoadTaxAbsolutePath);
+              }
+              $flash = ['type' => 'success', 'msg' => 'Dokumen Road Tax telah dibuang.'];
 
         } elseif ($action === 'delete_vehicle') {
             $vid = (int)($_POST['vehicle_id'] ?? 0);
@@ -117,18 +188,34 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 throw new RuntimeException('Kenderaan tidak sah.');
             }
 
-            $stmt = $pdo->prepare("SELECT plate_no FROM vehicles WHERE vehicle_id = ?");
+            $stmt = $pdo->prepare("SELECT plate_no, road_tax_document FROM vehicles WHERE vehicle_id = ?");
             $stmt->execute([$vid]);
-            $plateNo = $stmt->fetchColumn();
+            $vehicle = $stmt->fetch();
+            $plateNo = $vehicle['plate_no'] ?? null;
+            if ($plateNo === null) {
+              throw new RuntimeException('Kenderaan tidak dijumpai.');
+            }
 
             $del = $pdo->prepare("DELETE FROM vehicles WHERE vehicle_id = ?");
             $del->execute([$vid]);
 
+            $oldRoadTaxAbsolutePath = is_string($vehicle['road_tax_document'])
+              ? roadTaxAbsolutePath($vehicle['road_tax_document']) : null;
+            if ($oldRoadTaxAbsolutePath && is_file($oldRoadTaxAbsolutePath)) {
+              @unlink($oldRoadTaxAbsolutePath);
+            }
+
             $flash = ['type' => 'success', 'msg' => "Kenderaan '{$plateNo}' berjaya dipadam."];
         }
     } catch (RuntimeException $e) {
+      if ($newRoadTaxAbsolutePath && is_file($newRoadTaxAbsolutePath)) {
+        @unlink($newRoadTaxAbsolutePath);
+      }
         $flash = ['type' => 'error', 'msg' => $e->getMessage()];
     } catch (PDOException $e) {
+      if ($newRoadTaxAbsolutePath && is_file($newRoadTaxAbsolutePath)) {
+        @unlink($newRoadTaxAbsolutePath);
+      }
         if ($e->getCode() === '23000') {
             $flash = ['type' => 'error', 'msg' => 'Operasi gagal — nombor plat mungkin telah wujud, atau kenderaan ini masih mempunyai rekod tempahan berkaitan.'];
         } else {
@@ -627,10 +714,10 @@ $pendingApprovals = $pdo->query(
               <p class="mb-0 text-sm" style="color:var(--ta-muted)">Urus fleet, penugasan pemandu &amp; dokumen kenderaan</p>
             </div>
             <?php if ($canManage): ?>
-            <button type="button" class="btn btn-sm text-white border-0 gap-1.5" style="background:var(--ta-brand)" onclick="openAddModal()">
+            <a href="view-vehicle.php?mode=add" class="btn btn-sm text-white border-0 gap-1.5" style="background:var(--ta-brand)">
               <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" /></svg>
               Tambah Kenderaan
-            </button>
+            </a>
             <?php endif; ?>
           </div>
 
@@ -641,7 +728,7 @@ $pendingApprovals = $pdo->query(
                   <th class="px-3 py-2 text-xs font-semibold text-left uppercase text-slate-400">Kenderaan</th>
                   <th class="px-3 py-2 text-xs font-semibold text-left uppercase text-slate-400">Jenis / Muatan</th>
                   <th class="px-3 py-2 text-xs font-semibold text-left uppercase text-slate-400">Pemandu Ditugaskan</th>
-                  <th class="px-3 py-2 text-xs font-semibold text-left uppercase text-slate-400">Dokumen</th>
+                  <th class="px-3 py-2 text-xs font-semibold text-left uppercase text-slate-400">Dokumen (Tamat Tempoh)</th>
                   <th class="px-3 py-2 text-xs font-semibold text-center uppercase text-slate-400">Status</th>
                   <?php if ($canManage): ?>
                   <th class="px-3 py-2 text-xs font-semibold text-center uppercase text-slate-400">Tindakan</th>
@@ -654,17 +741,17 @@ $pendingApprovals = $pdo->query(
                 <?php endif; ?>
                 <?php foreach ($vehicles as $v): ?>
                   <?php
-                    $soon = false;
                     $today = new DateTime();
-                    foreach ([$v['road_tax_expiry'], $v['insurance_expiry']] as $exp) {
-                        if ($exp && (new DateTime($exp))->diff($today)->days <= 30 && strtotime($exp) >= strtotime('today')) {
-                            $soon = true;
-                        }
-                    }
+                    $roadTaxDate = !empty($v['road_tax_expiry']) ? new DateTime($v['road_tax_expiry']) : null;
+                    $nearestDate = $roadTaxDate;
+
+                    $daysRemaining = $nearestDate ? (int)$today->diff($nearestDate)->format('%r%a') : null;
+                    $expired = $daysRemaining !== null && $daysRemaining < 0;
+                    $soon    = $daysRemaining !== null && $daysRemaining >= 0 && $daysRemaining <= 30;
                   ?>
                   <tr class="hover:bg-slate-50/70 transition-colors">
                     <td class="px-3 py-3 text-sm border-b whitespace-nowrap" style="border-color:var(--ta-border)">
-                      <p class="mb-0 font-medium"><?= htmlspecialchars($v['plate_no']) ?></p>
+                      <p class="mb-0 font-medium"><a href="view-vehicle.php?id=<?= (int)$v['vehicle_id'] ?>&amp;mode=view" class="link link-primary"><?= htmlspecialchars($v['plate_no']) ?></a></p>
                       <p class="mb-0 text-xs text-slate-400"><?= htmlspecialchars($v['vehicle_name'] ?? '') ?: '—' ?></p>
                     </td>
                     <td class="px-3 py-3 text-sm border-b whitespace-nowrap" style="border-color:var(--ta-border)">
@@ -673,33 +760,33 @@ $pendingApprovals = $pdo->query(
                     </td>
                     <td class="px-3 py-3 text-sm border-b whitespace-nowrap" style="border-color:var(--ta-border)"><?= htmlspecialchars($v['driver_name'] ?? '—') ?></td>
                     <td class="px-3 py-3 text-sm border-b whitespace-nowrap" style="border-color:var(--ta-border)">
-                      <?php if ($soon): ?>
-                        <span class="ta-badge badge badge-warning">Tamat Tempoh Segera</span>
+                      <?php if ($expired): ?>
+                        <span class="ta-badge badge badge-error">Telah Tamat (<?= abs($daysRemaining) ?> hari lalu)</span>
+                      <?php elseif ($soon): ?>
+                        <span class="ta-badge badge badge-warning"><?= $daysRemaining ?> hari lagi</span>
                       <?php else: ?>
                         <span class="text-slate-400 text-xs">Terkini</span>
                       <?php endif; ?>
+                      <div class="mt-1 flex items-center gap-2 text-xs">
+                        <?php if (!empty($v['road_tax_document'])): ?>
+                          <a class="link link-primary" href="vehicles.php?road_tax=view&amp;vehicle_id=<?= (int)$v['vehicle_id'] ?>" target="_blank" rel="noopener">Lihat Dokumen</a>
+                          <a class="link link-secondary" href="vehicles.php?road_tax=download&amp;vehicle_id=<?= (int)$v['vehicle_id'] ?>">Muat Turun Dokumen</a>
+                        <?php else: ?>
+                          <span class="text-slate-400">Tiada dokumen dimuat naik</span>
+                        <?php endif; ?>
+                      </div>
                     </td>
                     <td class="px-3 py-3 text-sm border-b text-center whitespace-nowrap" style="border-color:var(--ta-border)">
                       <span class="ta-badge <?= $vehicleStatusBadge($v['status']) ?>"><?= htmlspecialchars($vehicleStatusLabel($v['status'])) ?></span>
                     </td>
                     <?php if ($canManage): ?>
                     <td class="px-3 py-3 text-sm border-b text-center whitespace-nowrap" style="border-color:var(--ta-border)">
-                      <button type="button" class="btn btn-ghost btn-xs" title="Kemaskini"
-                        onclick='openEditModal(<?= json_encode([
-                            "vehicle_id"       => (int)$v["vehicle_id"],
-                            "plate_no"         => $v["plate_no"],
-                            "vehicle_name"     => $v["vehicle_name"],
-                            "vehicle_type"     => $v["vehicle_type"],
-                            "color"            => $v["color"],
-                            "capacity"         => $v["capacity"],
-                            "road_tax_expiry"  => $v["road_tax_expiry"],
-                            "insurance_expiry" => $v["insurance_expiry"],
-                            "status"           => $v["status"],
-                            "description"      => $v["description"],
-                            "driver_id"        => $v["driver_id"],
-                        ], JSON_UNESCAPED_UNICODE | JSON_HEX_APOS | JSON_HEX_QUOT) ?>)'>
+                      <a href="view-vehicle.php?id=<?= (int)$v['vehicle_id'] ?>&amp;mode=view" class="btn btn-ghost btn-xs" title="Lihat">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M2.25 12s3.5-6.75 9.75-6.75S21.75 12 21.75 12s-3.5 6.75-9.75 6.75S2.25 12 2.25 12z" /><circle cx="12" cy="12" r="2.25" /></svg>
+                      </a>
+                      <a href="view-vehicle.php?id=<?= (int)$v['vehicle_id'] ?>&amp;mode=edit" class="btn btn-ghost btn-xs" title="Kemaskini">
                         <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931z" /></svg>
-                      </button>
+                      </a>
                       <button type="button" class="btn btn-ghost btn-xs text-error" title="Padam"
                         onclick="openDeleteModal(<?= (int)$v['vehicle_id'] ?>, '<?= htmlspecialchars(addslashes($v['plate_no'])) ?>')">
                         <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0" /></svg>
@@ -744,11 +831,11 @@ $pendingApprovals = $pdo->query(
 
     <?php if ($canManage): ?>
     <!-- Modal: Tambah Kenderaan -->
-    <dialog id="modal-add" class="modal">
+    <dialog id="modal-add" class="modal" hidden inert>
       <div class="modal-box card max-w-lg">
         <form method="dialog"><button class="btn btn-sm btn-circle btn-ghost absolute right-3 top-3">✕</button></form>
         <h3 class="font-bold text-lg mb-4">Tambah Kenderaan Baharu</h3>
-        <form action="vehicles.php<?= $search !== '' ? '?q=' . urlencode($search) : '' ?>" method="POST" class="flex flex-col gap-3">
+        <form action="vehicles.php<?= $search !== '' ? '?q=' . urlencode($search) : '' ?>" method="POST" enctype="multipart/form-data" class="flex flex-col gap-3">
           <input type="hidden" name="action" value="add_vehicle" />
           <div class="grid grid-cols-2 gap-3">
             <div>
@@ -764,10 +851,6 @@ $pendingApprovals = $pdo->query(
               <input type="text" name="vehicle_type" placeholder="MPV, Van, Sedan..." class="input input-bordered w-full" />
             </div>
             <div>
-              <label class="text-xs font-medium block mb-1">Warna</label>
-              <input type="text" name="color" class="input input-bordered w-full" />
-            </div>
-            <div>
               <label class="text-xs font-medium block mb-1">Kapasiti Penumpang</label>
               <input type="number" name="capacity" min="1" class="input input-bordered w-full" />
             </div>
@@ -776,8 +859,9 @@ $pendingApprovals = $pdo->query(
               <input type="date" name="road_tax_expiry" class="input input-bordered w-full" />
             </div>
             <div>
-              <label class="text-xs font-medium block mb-1">Tamat Tempoh Insurans</label>
-              <input type="date" name="insurance_expiry" class="input input-bordered w-full" />
+              <label class="text-xs font-medium block mb-1">Dokumen</label>
+              <input type="file" name="road_tax_document" accept=".pdf,.jpg,.jpeg,.png" class="file-input file-input-bordered w-full" />
+              <span class="text-xs text-slate-400">PDF, JPG, JPEG atau PNG (maksimum 5MB)</span>
             </div>
             <div>
               <label class="text-xs font-medium block mb-1">Status</label>
@@ -790,12 +874,17 @@ $pendingApprovals = $pdo->query(
             </div>
             <div>
               <label class="text-xs font-medium block mb-1">Pemandu Ditugaskan</label>
-              <select name="driver_id" class="select select-bordered w-full">
-                <option value="">— Tiada —</option>
-                <?php foreach ($driverOptions as $do): ?>
-                  <option value="<?= (int)$do['driver_id'] ?>"><?= htmlspecialchars($do['fullname']) ?></option>
-                <?php endforeach; ?>
-              </select>
+              <div class="ta-combobox" data-combobox>
+                <input type="hidden" name="driver_id" data-combobox-value />
+                <input type="text" class="input input-bordered w-full" placeholder="Cari pemandu..." autocomplete="off"
+                  role="combobox" aria-expanded="false" aria-autocomplete="list" data-combobox-input />
+                <div class="ta-combobox-options" role="listbox" data-combobox-options>
+                  <button type="button" class="ta-combobox-option" data-value="">— Tiada —</button>
+                  <?php foreach ($driverOptions as $do): ?>
+                    <button type="button" class="ta-combobox-option" data-value="<?= (int)$do['driver_id'] ?>"><?= htmlspecialchars($do['fullname']) ?></button>
+                  <?php endforeach; ?>
+                </div>
+              </div>
             </div>
           </div>
           <div>
@@ -812,11 +901,11 @@ $pendingApprovals = $pdo->query(
     </dialog>
 
     <!-- Modal: Kemaskini Kenderaan -->
-    <dialog id="modal-edit" class="modal">
+    <dialog id="modal-edit" class="modal" hidden inert>
       <div class="modal-box card max-w-lg">
         <form method="dialog"><button class="btn btn-sm btn-circle btn-ghost absolute right-3 top-3">✕</button></form>
         <h3 class="font-bold text-lg mb-4">Kemaskini Kenderaan</h3>
-        <form action="vehicles.php<?= $search !== '' ? '?q=' . urlencode($search) : '' ?>" method="POST" class="flex flex-col gap-3">
+        <form action="vehicles.php<?= $search !== '' ? '?q=' . urlencode($search) : '' ?>" method="POST" enctype="multipart/form-data" class="flex flex-col gap-3">
           <input type="hidden" name="action" value="edit_vehicle" />
           <input type="hidden" name="vehicle_id" id="edit-vehicle-id" />
           <div class="grid grid-cols-2 gap-3">
@@ -833,10 +922,6 @@ $pendingApprovals = $pdo->query(
               <input type="text" name="vehicle_type" id="edit-vehicle-type" class="input input-bordered w-full" />
             </div>
             <div>
-              <label class="text-xs font-medium block mb-1">Warna</label>
-              <input type="text" name="color" id="edit-color" class="input input-bordered w-full" />
-            </div>
-            <div>
               <label class="text-xs font-medium block mb-1">Kapasiti Penumpang</label>
               <input type="number" name="capacity" id="edit-capacity" min="1" class="input input-bordered w-full" />
             </div>
@@ -845,8 +930,9 @@ $pendingApprovals = $pdo->query(
               <input type="date" name="road_tax_expiry" id="edit-road-tax" class="input input-bordered w-full" />
             </div>
             <div>
-              <label class="text-xs font-medium block mb-1">Tamat Tempoh Insurans</label>
-              <input type="date" name="insurance_expiry" id="edit-insurance" class="input input-bordered w-full" />
+              <label class="text-xs font-medium block mb-1">Dokumen Road Tax</label>
+              <input type="file" name="road_tax_document" accept=".pdf,.jpg,.jpeg,.png" class="file-input file-input-bordered w-full" />
+              <span id="edit-road-tax-current" class="text-xs text-slate-400 block mt-1">No document uploaded</span>
             </div>
             <div>
               <label class="text-xs font-medium block mb-1">Status</label>
@@ -859,12 +945,17 @@ $pendingApprovals = $pdo->query(
             </div>
             <div>
               <label class="text-xs font-medium block mb-1">Pemandu Ditugaskan</label>
-              <select name="driver_id" id="edit-driver" class="select select-bordered w-full">
-                <option value="">— Tiada —</option>
-                <?php foreach ($driverOptions as $do): ?>
-                  <option value="<?= (int)$do['driver_id'] ?>"><?= htmlspecialchars($do['fullname']) ?></option>
-                <?php endforeach; ?>
-              </select>
+              <div class="ta-combobox" id="edit-driver-combobox" data-combobox>
+                <input type="hidden" name="driver_id" data-combobox-value />
+                <input type="text" class="input input-bordered w-full" placeholder="Cari pemandu..." autocomplete="off"
+                  role="combobox" aria-expanded="false" aria-autocomplete="list" data-combobox-input />
+                <div class="ta-combobox-options" role="listbox" data-combobox-options>
+                  <button type="button" class="ta-combobox-option" data-value="">— Tiada —</button>
+                  <?php foreach ($driverOptions as $do): ?>
+                    <button type="button" class="ta-combobox-option" data-value="<?= (int)$do['driver_id'] ?>"><?= htmlspecialchars($do['fullname']) ?></button>
+                  <?php endforeach; ?>
+                </div>
+              </div>
             </div>
           </div>
           <div>
@@ -875,6 +966,11 @@ $pendingApprovals = $pdo->query(
             <button type="button" class="btn btn-ghost" onclick="document.getElementById('modal-edit').close()">Batal</button>
             <button type="submit" class="btn text-white border-0" style="background:var(--ta-brand)">Simpan Perubahan</button>
           </div>
+        </form>
+        <form action="vehicles.php<?= $search !== '' ? '?q=' . urlencode($search) : '' ?>" method="POST" id="remove-road-tax-form" class="mt-2 hidden">
+          <input type="hidden" name="action" value="delete_road_tax" />
+          <input type="hidden" name="vehicle_id" id="remove-road-tax-vehicle-id" />
+          <button type="submit" class="btn btn-sm btn-error btn-outline">Remove Road Tax Document</button>
         </form>
       </div>
       <form method="dialog" class="modal-backdrop"><button>close</button></form>
@@ -905,12 +1001,20 @@ $pendingApprovals = $pdo->query(
             document.getElementById('edit-plate-no').value      = v.plate_no;
             document.getElementById('edit-vehicle-name').value  = v.vehicle_name || '';
             document.getElementById('edit-vehicle-type').value  = v.vehicle_type || '';
-            document.getElementById('edit-color').value         = v.color || '';
             document.getElementById('edit-capacity').value      = v.capacity || '';
             document.getElementById('edit-road-tax').value      = v.road_tax_expiry || '';
-            document.getElementById('edit-insurance').value     = v.insurance_expiry || '';
+            document.getElementById('remove-road-tax-vehicle-id').value = v.vehicle_id;
+            const currentDocument = document.getElementById('edit-road-tax-current');
+            const removeDocumentForm = document.getElementById('remove-road-tax-form');
+            if (v.road_tax_document) {
+              currentDocument.innerHTML = '<a class="link link-primary" target="_blank" rel="noopener" href="vehicles.php?road_tax=view&vehicle_id=' + encodeURIComponent(v.vehicle_id) + '">Lihat Dokumen</a> · <a class="link link-secondary" href="vehicles.php?road_tax=download&vehicle_id=' + encodeURIComponent(v.vehicle_id) + '">Muat Turun Dokumen</a>';
+              removeDocumentForm.classList.remove('hidden');
+            } else {
+              currentDocument.textContent = 'Tiada dokumen dimuat naik';
+              removeDocumentForm.classList.add('hidden');
+            }
             document.getElementById('edit-status').value        = v.status;
-            document.getElementById('edit-driver').value        = v.driver_id || '';
+            setComboboxValue(document.querySelector('#edit-driver-combobox'), v.driver_id || '');
             document.getElementById('edit-description').value   = v.description || '';
             document.getElementById('modal-edit').showModal();
         }
@@ -920,6 +1024,79 @@ $pendingApprovals = $pdo->query(
             document.getElementById('delete-vehicle-name').textContent = name;
             document.getElementById('modal-delete').showModal();
         }
+
+        function setComboboxValue(combobox, value) {
+            if (!combobox) return;
+            const hiddenInput = combobox.querySelector('[data-combobox-value]');
+            const textInput = combobox.querySelector('[data-combobox-input]');
+            const option = [...combobox.querySelectorAll('.ta-combobox-option')]
+                .find(item => item.dataset.value === String(value ?? ''));
+
+            hiddenInput.value = option ? option.dataset.value : '';
+            textInput.value = option ? option.textContent.trim() : '';
+            combobox.querySelectorAll('.ta-combobox-option').forEach(item => {
+                item.classList.toggle('selected', item === option);
+            });
+        }
+
+        document.querySelectorAll('[data-combobox]').forEach(combobox => {
+            const input = combobox.querySelector('[data-combobox-input]');
+            const hiddenInput = combobox.querySelector('[data-combobox-value]');
+            const options = [...combobox.querySelectorAll('.ta-combobox-option')];
+
+            const closeOptions = () => {
+                combobox.classList.remove('open');
+                input.setAttribute('aria-expanded', 'false');
+            };
+
+            const openOptions = () => {
+                combobox.classList.add('open');
+                input.setAttribute('aria-expanded', 'true');
+            };
+
+            const filterOptions = () => {
+                const query = input.value.trim().toLowerCase();
+                options.forEach(option => {
+                    const label = option.textContent.toLowerCase();
+                    option.hidden = query !== '' && !label.includes(query);
+                });
+            };
+
+            input.addEventListener('focus', () => {
+                filterOptions();
+                openOptions();
+            });
+
+            input.addEventListener('input', () => {
+                hiddenInput.value = '';
+                options.forEach(option => option.classList.remove('selected'));
+                filterOptions();
+                openOptions();
+            });
+
+            input.addEventListener('keydown', event => {
+                if (event.key === 'Escape') {
+                    closeOptions();
+                } else if (event.key === 'ArrowDown') {
+                    event.preventDefault();
+                    openOptions();
+                    combobox.querySelector('.ta-combobox-option:not([hidden])')?.focus();
+                }
+            });
+
+            options.forEach(option => {
+                option.addEventListener('click', () => {
+                    setComboboxValue(combobox, option.dataset.value);
+                    closeOptions();
+                });
+            });
+
+            combobox.addEventListener('focusout', event => {
+                if (!combobox.contains(event.relatedTarget)) {
+                    closeOptions();
+                }
+            });
+        });
     </script>
     <?php endif; ?>
 
