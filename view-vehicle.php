@@ -558,92 +558,107 @@ $roadTaxAbsolutePath = !empty($vehicle['road_tax_document']) ? roadTaxAbsolutePa
     <div class="w-full px-4 sm:px-6 py-6 mx-auto max-w-5xl">
       
       <?php if ($isView): ?>
-        <div class="grid grid-cols-1 lg:grid-cols-3 gap-5 items-start">
+        <div class="flex flex-col gap-5">
 
-          <!-- ===================== LAJUR KIRI (utama) ===================== -->
-          <div class="lg:col-span-2 flex flex-col gap-5">
-
-            <!-- Kad: Maklumat Kenderaan -->
-            <div class="card p-5 sm:p-6">
-              <div class="flex items-start justify-between gap-3 mb-5 pb-5 border-b" style="border-color:var(--ta-border)">
-                <div class="flex items-start gap-3">
-                  <div class="p-2 rounded-lg shrink-0" style="background:var(--ta-brand-50); color:var(--ta-brand)">
-                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M8.25 18.75a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m3 0h6m-9 0H3.375a1.125 1.125 0 01-1.125-1.125V14.25m17.25 4.5a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m3 0h1.125c.621 0 1.129-.504 1.09-1.124a17.902 17.902 0 00-3.213-9.193 2.056 2.056 0 00-1.58-.86H14.25M16.5 18.75h-2.25m0-11.177v-.958c0-.568-.422-1.048-.987-1.106a48.554 48.554 0 00-10.026 0 1.106 1.106 0 00-.987 1.106v7.635m12-6.677v6.677m0 0h-12" /></svg>
-                  </div>
-                  <div>
-                    <h6 class="font-semibold">Maklumat Kenderaan</h6>
-                    <p class="text-xs" style="color:var(--ta-muted)">Butiran am dan status kenderaan.</p>
-                  </div>
+          <!-- Kad: Maklumat Kenderaan -->
+          <div class="card p-5 sm:p-6">
+            <div class="flex items-start justify-between gap-3 mb-5 pb-5 border-b" style="border-color:var(--ta-border)">
+              <div class="flex items-start gap-3">
+                <div class="p-2 rounded-lg shrink-0" style="background:var(--ta-brand-50); color:var(--ta-brand)">
+                  <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M8.25 18.75a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m3 0h6m-9 0H3.375a1.125 1.125 0 01-1.125-1.125V14.25m17.25 4.5a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m3 0h1.125c.621 0 1.129-.504 1.09-1.124a17.902 17.902 0 00-3.213-9.193 2.056 2.056 0 00-1.58-.86H14.25M16.5 18.75h-2.25m0-11.177v-.958c0-.568-.422-1.048-.987-1.106a48.554 48.554 0 00-10.026 0 1.106 1.106 0 00-.987 1.106v7.635m12-6.677v6.677m0 0h-12" /></svg>
                 </div>
-                <span class="ta-badge <?= $vehicleStatusBadge($vehicle['status']) ?>"><?= htmlspecialchars($vehicleStatusLabel($vehicle['status'])) ?></span>
+                <div>
+                  <h6 class="font-semibold">Maklumat Kenderaan</h6>
+                  <p class="text-xs" style="color:var(--ta-muted)">Butiran am dan status kenderaan.</p>
+                </div>
               </div>
-
-              <div class="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-5 text-sm">
-                <div>
-                  <p class="text-xs mb-0.5" style="color:var(--ta-muted)">Nombor Plat</p>
-                  <p class="font-medium"><?= htmlspecialchars($vehicle['plate_no']) ?></p>
-                </div>
-                <div>
-                  <p class="text-xs mb-0.5" style="color:var(--ta-muted)">Nama Kenderaan</p>
-                  <p class="font-medium"><?= htmlspecialchars($vehicle['vehicle_name'] ?: '—') ?></p>
-                </div>
-                <div>
-                  <p class="text-xs mb-0.5" style="color:var(--ta-muted)">Jenis Kenderaan</p>
-                  <p class="font-medium"><?= htmlspecialchars($vehicle['vehicle_type'] ?: '—') ?></p>
-                </div>
-                <div>
-                  <p class="text-xs mb-0.5" style="color:var(--ta-muted)">Kapasiti Penumpang</p>
-                  <p class="font-medium"><?= $vehicle['capacity'] ? (int)$vehicle['capacity'] . ' penumpang' : '—' ?></p>
-                </div>
-                <div>
-                  <p class="text-xs mb-0.5" style="color:var(--ta-muted)">Pemandu Ditugaskan</p>
-                  <p class="font-medium"><?= htmlspecialchars($vehicle['driver_name'] ?: '—') ?></p>
-                </div>
-                <div class="sm:col-span-2">
-                  <p class="text-xs mb-0.5" style="color:var(--ta-muted)">Catatan</p>
-                  <p class="font-medium"><?= nl2br(htmlspecialchars($vehicle['description'] ?: '—')) ?></p>
-                </div>
+              <div class="flex items-center gap-2 shrink-0">
+                <span class="ta-badge <?= $vehicleStatusBadge($vehicle['status']) ?>"><?= htmlspecialchars($vehicleStatusLabel($vehicle['status'])) ?></span>
+                <a href="view-vehicle.php?id=<?= (int)$vehicleId ?>&amp;mode=edit" class="btn btn-sm btn-outline gap-1.5">
+                  <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931z" /><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 13.5v6a2.25 2.25 0 01-2.25 2.25H6.75A2.25 2.25 0 014.5 19.5V8.25A2.25 2.25 0 016.75 6h6" /></svg>
+                  Kemaskini
+                </a>
               </div>
             </div>
 
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-5 text-sm">
+              <div>
+                <p class="text-xs mb-0.5" style="color:var(--ta-muted)">Nombor Plat</p>
+                <p class="font-medium"><?= htmlspecialchars($vehicle['plate_no']) ?></p>
+              </div>
+              <div>
+                <p class="text-xs mb-0.5" style="color:var(--ta-muted)">Nama Kenderaan</p>
+                <p class="font-medium"><?= htmlspecialchars($vehicle['vehicle_name'] ?: '—') ?></p>
+              </div>
+              <div>
+                <p class="text-xs mb-0.5" style="color:var(--ta-muted)">Jenis Kenderaan</p>
+                <p class="font-medium"><?= htmlspecialchars($vehicle['vehicle_type'] ?: '—') ?></p>
+              </div>
+              <div>
+                <p class="text-xs mb-0.5" style="color:var(--ta-muted)">Kapasiti Penumpang</p>
+                <p class="font-medium"><?= $vehicle['capacity'] ? (int)$vehicle['capacity'] . ' penumpang' : '—' ?></p>
+              </div>
+              <div>
+                <p class="text-xs mb-0.5" style="color:var(--ta-muted)">Pemandu Ditugaskan</p>
+                <p class="font-medium"><?= htmlspecialchars($vehicle['driver_name'] ?: '—') ?></p>
+              </div>
+              <div class="sm:col-span-2">
+                <p class="text-xs mb-0.5" style="color:var(--ta-muted)">Catatan</p>
+                <p class="font-medium"><?= nl2br(htmlspecialchars($vehicle['description'] ?: '—')) ?></p>
+              </div>
+            </div>
           </div>
 
-          <!-- ===================== LAJUR KANAN (sisi) ===================== -->
-          <div class="flex flex-col gap-5">
-
-            <!-- Kad: Road Tax -->
-            <div class="card p-5 sm:p-6">
-              <div class="flex items-center gap-2 mb-4">
-                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" style="color:var(--ta-brand)" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                <h6 class="font-semibold">Road Tax</h6>
-              </div>
-
-              <div class="flex flex-col gap-4 text-sm">
-                <div>
-                  <p class="text-xs mb-0.5" style="color:var(--ta-muted)">Tamat Tempoh</p>
-                  <p class="font-medium">
-                    <?= $roadTaxDate ? htmlspecialchars($roadTaxDate->format('d M Y')) : '—' ?>
-                    <?php if ($daysRemaining !== null && $daysRemaining < 0): ?>
-                      <span class="ta-badge badge badge-error ml-1">Tamat</span>
-                    <?php elseif ($daysRemaining !== null && $daysRemaining <= 30): ?>
-                      <span class="ta-badge badge badge-warning ml-1"><?= $daysRemaining ?> hari lagi</span>
-                    <?php endif; ?>
-                  </p>
-                </div>
-                <div>
-                  <p class="text-xs mb-0.5" style="color:var(--ta-muted)">Dokumen</p>
-                  <?php if ($roadTaxAbsolutePath && is_file($roadTaxAbsolutePath)): ?>
-                    <div class="flex flex-wrap gap-2 mt-1">
-                      <a class="btn btn-sm btn-outline" href="vehicles.php?road_tax=view&amp;vehicle_id=<?= (int)$vehicleId ?>" target="_blank" rel="noopener">Lihat Dokumen</a>
-                      <a class="btn btn-sm btn-outline" href="vehicles.php?road_tax=download&amp;vehicle_id=<?= (int)$vehicleId ?>">Muat Turun Dokumen</a>
-                    </div>
-                  <?php else: ?>
-                    <p class="text-sm text-slate-400 mt-1">Tiada dokumen dimuat naik</p>
-                  <?php endif; ?>
-                </div>
-              </div>
+          <!-- Kad: Cukai Jalan -->
+          <div class="card p-5 sm:p-6">
+            <div class="flex items-center gap-2 mb-4">
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" style="color:var(--ta-brand)" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+              <h6 class="font-semibold">Cukai Jalan</h6>
             </div>
 
+            <div class="flex flex-col gap-4 text-sm">
+              <div>
+                <p class="text-xs mb-0.5" style="color:var(--ta-muted)">Tamat Tempoh</p>
+                <p class="font-medium">
+                  <?= $roadTaxDate ? htmlspecialchars($roadTaxDate->format('d M Y')) : '—' ?>
+                  <?php if ($daysRemaining !== null && $daysRemaining < 0): ?>
+                    <span class="ta-badge badge badge-error ml-1">Tamat</span>
+                  <?php elseif ($daysRemaining !== null && $daysRemaining <= 30): ?>
+                    <span class="ta-badge badge badge-warning ml-1"><?= $daysRemaining ?> hari lagi</span>
+                  <?php endif; ?>
+                </p>
+              </div>
+              <div>
+                <p class="text-xs mb-0.5" style="color:var(--ta-muted)">Dokumen</p>
+                <?php if ($roadTaxAbsolutePath && is_file($roadTaxAbsolutePath)): ?>
+                  <div class="mt-1 p-4 rounded-xl border flex items-center justify-between gap-3" style="border-color: var(--ta-border); background: var(--ta-canvas);">
+                      <div class="flex items-center gap-3 min-w-0">
+                          <div class="p-2.5 rounded-lg bg-error/10 text-error shrink-0">
+                              <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                  <path stroke-linecap="round" stroke-linejoin="round" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                              </svg>
+                          </div>
+                          <div class="min-w-0">
+                              <p class="text-xs font-semibold truncate">Dokumen Cukai Jalan</p>
+                              <p class="text-[11px] text-slate-400">Sijil cukai jalan kenderaan ini.</p>
+                          </div>
+                      </div>
+                      <div class="flex items-center gap-1.5 shrink-0">
+                          <a href="vehicles.php?road_tax=view&amp;vehicle_id=<?= (int)$vehicleId ?>" target="_blank" rel="noopener" class="btn btn-sm btn-outline btn-primary gap-1.5">
+                              <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178z" /><path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
+                              Papar
+                          </a>
+                          <a href="vehicles.php?road_tax=download&amp;vehicle_id=<?= (int)$vehicleId ?>" class="btn btn-sm btn-outline gap-1.5">
+                              <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" /></svg>
+                              Muat Turun
+                          </a>
+                      </div>
+                  </div>
+                <?php else: ?>
+                  <p class="text-sm text-slate-400 mt-1">Tiada dokumen dimuat naik</p>
+                <?php endif; ?>
+              </div>
+            </div>
           </div>
 
         </div>
@@ -664,10 +679,9 @@ $roadTaxAbsolutePath = !empty($vehicle['road_tax_document']) ? roadTaxAbsolutePa
             <!-- Butiran Kenderaan -->
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
-                <label class="text-xs font-medium block mb-1">Nombor Plat <span class="text-error">*</span></label>
-                <input class="input validator" name="plate_no" required autocomplete="off"
+                <label class="text-xs font-medium block mb-1">Nombor Plat</label>
+                <input type="text" name="plate_no" required autocomplete="off"
                        class="input input-bordered w-full" value="<?= htmlspecialchars($vehicle['plate_no']) ?>" />
-                    <div class="validator-hint">Sila masukkan nombor plat</div>
               </div>
               <div>
                 <label class="text-xs font-medium block mb-1">Nama Kenderaan</label>
@@ -683,12 +697,9 @@ $roadTaxAbsolutePath = !empty($vehicle['road_tax_document']) ? roadTaxAbsolutePa
                        class="input input-bordered w-full" value="<?= htmlspecialchars($vehicle['vehicle_type'] ?? '') ?>" />
               </div>
               <div>
-                <label class="text-xs font-medium block mb-1">Kapasiti Penumpang <span class="text-error">*</span></label>
-                <input type="number" class="input validator" name="capacity" required min="1" autocomplete="off"
-                       class="input input-bordered w-full" value="<?= htmlspecialchars((string)($vehicle['capacity'] ?? '')) ?>"
-                       min="1"
-                        title="Kapasiti penumpang mestilah lebih dari 1" />
-                        <p class="validator-hint">Kapasiti penumpang mestilah lebih dari 1</p>
+                <label class="text-xs font-medium block mb-1">Kapasiti Penumpang</label>
+                <input type="number" name="capacity" min="1" autocomplete="off"
+                       class="input input-bordered w-full" value="<?= htmlspecialchars((string)($vehicle['capacity'] ?? '')) ?>" />
               </div>
             </div>
 
@@ -721,13 +732,12 @@ $roadTaxAbsolutePath = !empty($vehicle['road_tax_document']) ? roadTaxAbsolutePa
 
             <div class="border-t" style="border-color:var(--ta-border)"></div>
 
-            <!-- Road Tax -->
+            <!-- Cukai Jalan -->
             <div>
-              <label class="text-xs font-medium block mb-1">Tamat Tempoh Cukai Jalan <span class="text-error">*</label>
-              <input type="text" name="road_tax_expiry" required id="road-tax-date-input" autocomplete="off"
-                     class="input validator w-full" placeholder="Pilih tarikh"
+              <label class="text-xs font-medium block mb-1">Tamat Tempoh Cukai Jalan</label>
+              <input type="text" name="road_tax_expiry" id="road-tax-date-input" autocomplete="off"
+                     class="input input-bordered w-full" placeholder="Pilih tarikh"
                      value="<?= htmlspecialchars($vehicle['road_tax_expiry'] ?? '') ?>" />
-                     <p class="validator-hint">Tarikh tamat tempoh cukai jalan mestilah dipilih</p>
             </div>
 
             <div>

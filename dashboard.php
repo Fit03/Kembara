@@ -98,7 +98,7 @@ $deptRows = $pdo->query(
 
 // -- Dokumen kenderaan tamat tempoh dalam masa 30 hari -------------
 $expiringDocs = $pdo->query(
-   "SELECT plate_no, vehicle_name, road_tax_expiry
+   "SELECT vehicle_id, plate_no, vehicle_name, road_tax_expiry
      FROM vehicles
     WHERE road_tax_expiry IS NOT NULL
      AND road_tax_expiry <= DATE_ADD(CURRENT_DATE(), INTERVAL 30 DAY)
@@ -129,7 +129,7 @@ $drivers = $pdo->query(
 
 // -- Perjalanan akan datang (Menunggu / Diluluskan, paling awal dahulu) -
 $upcomingTrips = $pdo->query(
-    "SELECT vb.booking_no, u.fullname AS requester, v.plate_no, v.vehicle_name,
+    "SELECT vb.booking_id, vb.booking_no, u.fullname AS requester, v.plate_no, v.vehicle_name,
             vb.destination, vb.depart_datetime, vb.status
      FROM vehicle_bookings vb
      JOIN users u ON u.user_id = vb.user_id
@@ -861,50 +861,55 @@ if ($role === 'User') {
 
                   <li class="py-3">
 
-                    <!-- Vehicle -->
-                    <div class="flex items-start justify-between gap-3">
+                    <a href="view-vehicle.php?id=<?= (int)$doc['vehicle_id'] ?>&amp;mode=view"
+                       class="block -mx-2 px-2 rounded-lg transition-colors hover:bg-base-200/60">
 
-                      <div class="min-w-0">
+                      <!-- Vehicle -->
+                      <div class="flex items-start justify-between gap-3">
 
-                        <p class="mb-1 text-sm font-semibold truncate">
-                          <?= htmlspecialchars($doc['plate_no']) ?>
-                          —
-                          <?= htmlspecialchars($doc['vehicle_name'] ?? '') ?>
-                        </p>
-                        
-                      </div>
+                        <div class="min-w-0">
 
-                      <!-- Expiry badge -->
-                      <span class="ta-badge shrink-0 <?= $expiryBadgeClass ?>">
-                        <?= htmlspecialchars($expiryLabel) ?>
-                      </span>
+                          <p class="mb-1 text-sm font-semibold truncate link link-hover">
+                            <?= htmlspecialchars($doc['plate_no']) ?>
+                            —
+                            <?= htmlspecialchars($doc['vehicle_name'] ?? '') ?>
+                          </p>
 
-                    </div>
+                        </div>
 
-                    <!-- Nearest expiry -->
-                    <?php if ($nearestDate): ?>
-
-                      <div class="mt-2 flex items-center gap-1.5 text-xs">
-
-                        <svg xmlns="http://www.w3.org/2000/svg"
-                            class="h-3.5 w-3.5 text-error"
-                            fill="none"
-                            viewBox="0 0 24 24"
-                            stroke="currentColor"
-                            stroke-width="2">
-                          <path stroke-linecap="round"
-                                stroke-linejoin="round"
-                                d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z" />
-                        </svg>
-
-                        <span class="text-error font-semibold">
-                              Cukai Jalan:
-                              <span class="font-semibold text-error"><?= $nearestDate->format('d/m/Y') ?></span>
+                        <!-- Expiry badge -->
+                        <span class="ta-badge shrink-0 <?= $expiryBadgeClass ?>">
+                          <?= htmlspecialchars($expiryLabel) ?>
                         </span>
 
                       </div>
 
-                    <?php endif; ?>
+                      <!-- Nearest expiry -->
+                      <?php if ($nearestDate): ?>
+
+                        <div class="mt-2 flex items-center gap-1.5 text-xs">
+
+                          <svg xmlns="http://www.w3.org/2000/svg"
+                              class="h-3.5 w-3.5 text-error"
+                              fill="none"
+                              viewBox="0 0 24 24"
+                              stroke="currentColor"
+                              stroke-width="2">
+                            <path stroke-linecap="round"
+                                  stroke-linejoin="round"
+                                  d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z" />
+                          </svg>
+
+                          <span class="text-error font-semibold">
+                                Cukai Jalan:
+                                <span class="font-semibold text-error"><?= $nearestDate->format('d/m/Y') ?></span>
+                          </span>
+
+                        </div>
+
+                      <?php endif; ?>
+
+                    </a>
 
                   </li>
 
@@ -1055,11 +1060,12 @@ if ($role === 'User') {
                   <?php endif; ?>
                   <?php foreach ($upcomingTrips as $t): ?>
                     <?php $badgeInfo = $statusBadge($t['status']); ?>
-                    <tr class="hover:bg-slate-50/70 transition-colors">
+                    <tr class="hover:bg-slate-50/70 transition-colors cursor-pointer"
+                        data-href="view.php?id=<?= (int)$t['booking_id'] ?>&amp;from=status%3D<?= urlencode($t['status']) ?>">
                       <td class="px-3 py-3 text-sm border-b whitespace-nowrap font-medium" style="border-color:var(--ta-border)"><?= htmlspecialchars($t['booking_no']) ?></td>
                       <td class="px-3 py-3 text-sm border-b whitespace-nowrap" style="border-color:var(--ta-border)"><?= htmlspecialchars($t['requester']) ?></td>
                       <td class="px-3 py-3 text-sm border-b whitespace-nowrap" style="border-color:var(--ta-border)"><?= htmlspecialchars($t['plate_no']) ?></td>
-                      <td class="px-3 py-3 text-sm border-b whitespace-nowrap" style="border-color:var(--ta-border)"><?= htmlspecialchars($t['destination'] ?? '—') ?></td>
+                      <td class="px-3 py-3 text-sm border-b max-w-[220px] truncate" style="border-color:var(--ta-border)" title="<?= htmlspecialchars($t['destination'] ?? '—') ?>"><?= htmlspecialchars($t['destination'] ?? '—') ?></td>
                       <td class="px-3 py-3 text-sm border-b whitespace-nowrap" style="border-color:var(--ta-border)"><?= htmlspecialchars(date('d M, H:i', strtotime($t['depart_datetime']))) ?></td>
                       <td class="px-3 py-3 text-sm border-b text-center whitespace-nowrap" style="border-color:var(--ta-border)">
                         <span class="ta-badge <?= $badgeInfo['class'] ?>"><?= htmlspecialchars($badgeInfo['label']) ?></span>
@@ -1351,20 +1357,28 @@ if ($role === 'User') {
     <script src="./assets/js/plugins/perfect-scrollbar.min.js" async></script>
     <script>
     (function () {
-        document.querySelectorAll('.card[data-href]').forEach(function (card) {
-            card.classList.add('clickable');
-            card.addEventListener('click', function (event) {
+        function makeClickable(el, clickableClass) {
+            if (clickableClass) el.classList.add(clickableClass);
+            el.addEventListener('click', function (event) {
                 if (event.target.closest('a, button, input, select, textarea')) return;
-                window.location.href = card.dataset.href;
+                window.location.href = el.dataset.href;
             });
-            card.setAttribute('tabindex', '0');
-            card.addEventListener('keypress', function (event) {
+            el.setAttribute('tabindex', '0');
+            el.addEventListener('keypress', function (event) {
                 if (event.key === 'Enter') {
-                    card.click();
+                    el.click();
                 }
             });
+        }
+
+        document.querySelectorAll('.card[data-href]').forEach(function (card) {
+            makeClickable(card, 'clickable');
+        });
+
+        document.querySelectorAll('tr[data-href]').forEach(function (row) {
+            makeClickable(row);
         });
     })();
-    </script>l
+    </script>
 </body>
 </html>

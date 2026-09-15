@@ -751,7 +751,7 @@ $pendingApprovals = $pdo->query(
                   ?>
                   <tr class="hover:bg-slate-50/70 transition-colors">
                     <td class="px-3 py-3 text-sm border-b whitespace-nowrap" style="border-color:var(--ta-border)">
-                      <p class="mb-0 font-medium"><a href="view-vehicle.php?id=<?= (int)$v['vehicle_id'] ?>&amp;mode=view" class="link link-primary"><?= htmlspecialchars($v['plate_no']) ?></a></p>
+                      <p class="mb-0 font-medium"><a href="view-vehicle.php?id=<?= (int)$v['vehicle_id'] ?>&amp;mode=view" class="link link-hover"><?= htmlspecialchars($v['plate_no']) ?></a></p>
                       <p class="mb-0 text-xs text-slate-400"><?= htmlspecialchars($v['vehicle_name'] ?? '') ?: '—' ?></p>
                     </td>
                     <td class="px-3 py-3 text-sm border-b whitespace-nowrap" style="border-color:var(--ta-border)">
