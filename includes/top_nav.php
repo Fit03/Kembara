@@ -9,6 +9,16 @@ $searchAction = $searchAction ?? '';
 $searchPlaceholder = $searchPlaceholder ?? 'Cari...';
 $backUrl = $backUrl ?? null;
 $breadcrumbs = $breadcrumbs ?? null;
+
+// Semak sama ada e-mel sudah disimpan dalam sesi daripada log masuk
+$email = $_SESSION['email'] ?? null;
+
+// Jika tiada dalam sesi, ambil terus dari pangkalan data menggunakan $pdo
+if (!$email) {
+    $stmt = $pdo->prepare("SELECT email FROM users WHERE user_id = ?");
+    $stmt->execute([$_SESSION['user_id']]);
+    $email = $stmt->fetchColumn() ?: 'tiada-emel@selangor.gov.my';
+}
 ?>
 <nav class="sticky top-0 z-50 flex items-center justify-between gap-4 px-4 sm:px-6 py-3 bg-white border-b" style="border-color:var(--ta-border)">
     <div class="flex items-center gap-3">

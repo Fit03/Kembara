@@ -379,6 +379,48 @@ include 'includes/layout_header.php';
             </div>
           </div>
         </div>
+        <div class="card p-5 sm:p-6 mb-5">
+          <!-- Kad Tandatangan Digital -->
+            <h6 class="font-semibold mb-1">Tandatangan Digital</h6>
+            <p class="text-sm mb-4" style="color:var(--ta-muted)">Tandatangan ini akan digunakan secara automatik pada borang cetakan (cth. Tandatangan/Cop Pemohon).</p>
+  
+            <div class="flex flex-col sm:flex-row items-start gap-5">
+              <div class="shrink-0 rounded-xl border flex items-center justify-center overflow-hidden" style="width:220px; height:110px; border-color:var(--ta-border); background:#fff;">
+                <?php if ($hasSignature): ?>
+                  <img src="<?= htmlspecialchars($user['signature_path']) ?>?v=<?= time() ?>" alt="Tandatangan" class="max-w-full max-h-full object-contain p-2" />
+                <?php else: ?>
+                  <span class="text-xs text-slate-400 px-3 text-center">Tiada tandatangan disimpan</span>
+                <?php endif; ?>
+              </div>
+  
+              <div class="flex-1 flex flex-col gap-2">
+                <div class="flex flex-wrap gap-2">
+                  <label for="signature-file-input" class="btn btn-sm btn-outline gap-1.5 cursor-pointer">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" /></svg>
+                    Muat Naik Fail
+                  </label>
+                  <button type="button" class="btn btn-sm btn-outline gap-1.5" onclick="openSignaturePad()">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931z" /><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 13.5v6a2.25 2.25 0 01-2.25 2.25H6.75A2.25 2.25 0 014.5 19.5V8.25A2.25 2.25 0 016.75 6h6" /></svg>
+                    Lukis Tandatangan
+                  </button>
+                  <?php if ($hasSignature): ?>
+                  <form action="profile.php" method="POST" onsubmit="return confirm('Buang tandatangan tersimpan?');">
+                    <input type="hidden" name="action" value="remove_signature" />
+                    <input type="hidden" name="csrf_token" value="<?= generate_csrf_token() ?>" />
+                    <button type="submit" class="btn btn-sm btn-ghost text-error">Buang</button>
+                  </form>
+                  <?php endif; ?>
+                </div>
+                <p class="text-xs text-slate-400">JPG atau PNG, saiz maksimum 1MB. Latar belakang putih/lutsinar disyorkan.</p>
+  
+                <form action="profile.php" method="POST" enctype="multipart/form-data" id="signature-file-form">
+                  <input type="hidden" name="action" value="upload_signature" />
+                  <input type="hidden" name="csrf_token" value="<?= generate_csrf_token() ?>" />
+                  <input type="file" name="signature" id="signature-file-input" accept=".jpg,.jpeg,.png" class="hidden" onchange="document.getElementById('signature-file-form').submit()" />
+                </form>
+              </div>
+            </div>
+        </div>
 
         <div class="grid grid-cols-1 lg:grid-cols-2 gap-5">
           <!-- Kad Maklumat Peribadi -->
@@ -447,48 +489,6 @@ include 'includes/layout_header.php';
           </div>
         </div>
 
-        <!-- Kad Tandatangan Digital -->
-        <div class="card p-5 sm:p-6 mt-5">
-          <h6 class="font-semibold mb-1">Tandatangan Digital</h6>
-          <p class="text-sm mb-4" style="color:var(--ta-muted)">Tandatangan ini akan digunakan secara automatik pada borang cetakan (cth. Tandatangan/Cop Pemohon).</p>
-
-          <div class="flex flex-col sm:flex-row items-start gap-5">
-            <div class="shrink-0 rounded-xl border flex items-center justify-center overflow-hidden" style="width:220px; height:110px; border-color:var(--ta-border); background:#fff;">
-              <?php if ($hasSignature): ?>
-                <img src="<?= htmlspecialchars($user['signature_path']) ?>?v=<?= time() ?>" alt="Tandatangan" class="max-w-full max-h-full object-contain p-2" />
-              <?php else: ?>
-                <span class="text-xs text-slate-400 px-3 text-center">Tiada tandatangan disimpan</span>
-              <?php endif; ?>
-            </div>
-
-            <div class="flex-1 flex flex-col gap-2">
-              <div class="flex flex-wrap gap-2">
-                <label for="signature-file-input" class="btn btn-sm btn-outline gap-1.5 cursor-pointer">
-                  <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" /></svg>
-                  Muat Naik Fail
-                </label>
-                <button type="button" class="btn btn-sm btn-outline gap-1.5" onclick="openSignaturePad()">
-                  <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931z" /><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 13.5v6a2.25 2.25 0 01-2.25 2.25H6.75A2.25 2.25 0 014.5 19.5V8.25A2.25 2.25 0 016.75 6h6" /></svg>
-                  Lukis Tandatangan
-                </button>
-                <?php if ($hasSignature): ?>
-                <form action="profile.php" method="POST" onsubmit="return confirm('Buang tandatangan tersimpan?');">
-                  <input type="hidden" name="action" value="remove_signature" />
-                  <input type="hidden" name="csrf_token" value="<?= generate_csrf_token() ?>" />
-                  <button type="submit" class="btn btn-sm btn-ghost text-error">Buang</button>
-                </form>
-                <?php endif; ?>
-              </div>
-              <p class="text-xs text-slate-400">JPG atau PNG, saiz maksimum 1MB. Latar belakang putih/lutsinar disyorkan.</p>
-
-              <form action="profile.php" method="POST" enctype="multipart/form-data" id="signature-file-form">
-                <input type="hidden" name="action" value="upload_signature" />
-                <input type="hidden" name="csrf_token" value="<?= generate_csrf_token() ?>" />
-                <input type="file" name="signature" id="signature-file-input" accept=".jpg,.jpeg,.png" class="hidden" onchange="document.getElementById('signature-file-form').submit()" />
-              </form>
-            </div>
-          </div>
-        </div>
 
         <!-- Modal: Lukis Tandatangan -->
         <dialog id="modal-signature-pad" class="modal">
