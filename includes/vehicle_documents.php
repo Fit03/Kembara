@@ -29,8 +29,13 @@ function validateRoadTaxUpload(array $file, string $uploadDir, array $allowedTyp
     if (!in_array($mime, $allowedTypes[$extension], true)) {
         throw new RuntimeException('Jenis kandungan dokumen tidak sah.');
     }
-    if (str_starts_with($mime, 'image/') && @getimagesize($file['tmp_name']) === false) {
-        throw new RuntimeException('Fail imej yang dimuat naik tidak sah.');
+    if (str_starts_with($mime, 'image/')) {
+        set_error_handler(fn() => true);
+        $imageInfo = getimagesize($file['tmp_name']);
+        restore_error_handler();
+        if ($imageInfo === false) {
+            throw new RuntimeException('Fail imej yang dimuat naik tidak sah.');
+        }
     }
 
     if (!is_dir($uploadDir) && !mkdir($uploadDir, 0755, true) && !is_dir($uploadDir)) {
@@ -47,12 +52,24 @@ function validateRoadTaxUpload(array $file, string $uploadDir, array $allowedTyp
 }
 
 function roadTaxAbsolutePath(string $relativePath): ?string {
-    $relativePath = str_replace('\\', '/', $relativePath);
-    $filename = basename($relativePath);
-    if ($relativePath !== 'assets/uploads/road_tax/' . $filename
-        || !preg_match('/^road_tax_[a-f0-9]{32}\.(pdf|jpg|jpeg|png)$/', $filename)) {
+    $baseDir = realpath(dirname(__DIR__) . '/assets/uploads/road_tax');
+    if (!$baseDir) {
         return null;
     }
 
-    return dirname(__DIR__) . '/assets/uploads/road_tax/' . $filename;
+    $filename = basename($relativePath);
+
+    // Validate filename format
+    if (!preg_match('/^road_tax_[a-f0-9]{32}\.(pdf|jpg|jpeg|png)$/', $filename)) {
+        return null;
+    }
+
+    $absolutePath = $baseDir . DIRECTORY_SEPARATOR . $filename;
+    $realPath = realpath($absolutePath);
+
+    if ($realPath === false || strpos($realPath, $baseDir) !== 0) {
+        return null;
+    }
+
+    return $realPath;
 }

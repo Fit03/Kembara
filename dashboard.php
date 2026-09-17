@@ -1,13 +1,9 @@
 <?php
 // dashboard.php
-session_start();
+require_once __DIR__ . '/includes/auth.php';
+require_login();
 require_once __DIR__ . '/config/database.php';
 
-// Dialihkan ke log masuk jika pengguna belum diabsahkan
-if (!isset($_SESSION['user_id'])) {
-    header("Location: login.php");
-    exit();
-}
 
 $fullname = $_SESSION['fullname'];
 $role = $_SESSION['role']; // Boleh jadi 'SuperAdmin', 'Admin', atau 'User'
@@ -108,7 +104,7 @@ $expiringDocs = $pdo->query(
 
 // -- Ketersediaan pemandu + kenderaan yang didedikasikan kepada pemandu --
 $drivers = $pdo->query(
-    "SELECT 
+    "SELECT
         dr.driver_id,
         dr.status,
         u.fullname,
@@ -117,11 +113,11 @@ $drivers = $pdo->query(
         v.plate_no,
         v.status AS vehicle_status
      FROM drivers dr
-     JOIN users u 
+     JOIN users u
         ON u.user_id = dr.user_id
-     LEFT JOIN vehicles v 
+     LEFT JOIN vehicles v
         ON v.driver_id = dr.driver_id
-     ORDER BY 
+     ORDER BY
         FIELD(dr.status, 'Available', 'Leave', 'Inactive'),
         u.fullname
      LIMIT 6"
@@ -238,377 +234,19 @@ if ($role === 'User') {
     $myHistoryStmt->execute([$uid]);
     $myBookingHistory = $myHistoryStmt->fetchAll(PDO::FETCH_ASSOC);
 }
+
+// --- Layout Config ---
+$pageTitle = "Dashboard";
+$showSearch = true;
+$searchAction = "dashboard.php";
+$searchPlaceholder = "Cari tempahan, kenderaan...";
+$extraCSS = '<!-- ApexCharts CDN --><script src="https://cdn.jsdelivr.net/npm/apexcharts"></script>';
+
+include 'includes/layout_header.php';
 ?>
-<!DOCTYPE html>
-<html lang="ms" data-theme="garden">
-<head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, shrink-to-fit=no" />
-    <title>Kembara - Dashboard</title>
-    <link rel="icon" type="image/png" href="assets/img/favicon.png" />
-
-    <script>
-        (function () {
-            try {
-                const savedTheme = localStorage.getItem('theme');
-                const systemPrefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
-                const preferredTheme = savedTheme || (systemPrefersDark ? 'dracula' : 'garden');
-                document.documentElement.setAttribute('data-theme', preferredTheme);
-            } catch (e) {}
-        })();
-    </script>
-
-    <!-- Font: Outfit -->
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700&display=swap" rel="stylesheet" />
-
-    <!-- Tailwind CSS CDN & daisyUI Framework (v5 — needed for the light & dracula themes) -->
-    <link href="https://cdn.jsdelivr.net/npm/daisyui@5" rel="stylesheet" type="text/css" />
-    <link href="https://cdn.jsdelivr.net/npm/daisyui@5/themes.css" rel="stylesheet" type="text/css" />
-    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
-
-    <!-- Custom CSS -->
-    <link rel="stylesheet" href="assets/css/style.css" />
-
-    <!-- ApexCharts CDN -->
-    <script src="https://cdn.jsdelivr.net/npm/apexcharts"></script>
-
-
-</head>
-<body class="min-h-screen">
-
-    <!-- Menu Sisi (Sidebar) — Desktop sahaja; mobile guna dock bawah -->
-    <aside id="sidenav-main" class="fixed inset-y-0 left-0 z-[70] w-64 hidden xl:flex xl:flex-col overflow-y-auto ta-sidebar">
-        <div class="h-16 flex items-center px-6 border-b" style="border-color:var(--ta-border)">
-            <a class="flex items-center gap-2.5" href="dashboard.php">
-            <img src="assets/img/logo.png" alt="Logo Kembara" class="h-8 w-auto object-contain shrink-0" />
-            <span class="font-bold tracking-tight text-[1.05rem]">Kembara</span>
-            </a>
-        </div>
-
-      <div class="flex-1 px-4 py-5">
-        <p class="px-3 mb-2 text-[0.65rem] font-semibold uppercase tracking-widest text-slate-400">Menu Utama</p>
-        <ul class="flex flex-col gap-1">
-          <li>
-            <a class="ta-nav-link active" href="dashboard.php">
-              <svg class="ta-nav-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M3.75 3v11.25A2.25 2.25 0 006 16.5h2.25M3.75 3h-1.5M3.75 3h16.5M21.75 3v11.25A2.25 2.25 0 0119.5 16.5H17.25m-10.5 0h6m-6 0v3.75A1.5 1.5 0 007.5 21.75h9a1.5 1.5 0 001.5-1.5V16.5m-10.5 0h10.5" /></svg>
-              <span>Dashboard</span>
-            </a>
-          </li>
-          <li>
-            <a class="ta-nav-link" href="bookings.php">
-              <svg class="ta-nav-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 012.25-2.25h13.5A2.25 2.25 0 0121 7.5v11.25m-18 0A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75m-18 0v-7.5A2.25 2.25 0 015.25 9h13.5A2.25 2.25 0 0121 11.25v7.5m-13.5-6h.008v.008h-.008v-.008zm0 3h.008v.008h-.008v-.008zm3-3h.008v.008h-.008v-.008zm0 3h.008v.008h-.008v-.008z" /></svg>
-              <span>Tempahan</span>
-            </a>
-          </li>
-          <li>
-            <a class="ta-nav-link" href="vehicles.php">
-              <svg class="ta-nav-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M8.25 18.75a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m3 0h6m-9 0H3.375a1.125 1.125 0 01-1.125-1.125V14.25m17.25 4.5a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m3 0h1.125c.621 0 1.129-.504 1.09-1.124a17.902 17.902 0 00-3.213-9.193 2.056 2.056 0 00-1.58-.86H14.25M16.5 18.75h-2.25m0-11.177v-.958c0-.568-.422-1.048-.987-1.106a48.554 48.554 0 00-10.026 0 1.106 1.106 0 00-.987 1.106v7.635m12-6.677v6.677m0 0h-12" /></svg>
-              <span>Kenderaan</span>
-            </a>
-          </li>
-          <li>
-            <a class="ta-nav-link" href="drivers.php">
-              <svg class="ta-nav-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M2.25 8.25h19.5M2.25 9h19.5m-16.5 5.25h6m-6 2.25h3m-3.75 3h15a2.25 2.25 0 002.25-2.25V6.75A2.25 2.25 0 0019.5 4.5h-15a2.25 2.25 0 00-2.25 2.25v10.5A2.25 2.25 0 004.5 19.5z" /></svg>
-              <span>Pemandu</span>
-            </a>
-          </li>
-
-          <?php if ($role === 'SuperAdmin'): ?>
-          <li>
-            <a class="ta-nav-link" href="users.php">
-              <svg class="ta-nav-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M15 19.128a9.38 9.38 0 002.625.372 9.337 9.337 0 004.121-.952 4.125 4.125 0 00-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 018.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0111.964-3.07M12 6.375a3.375 3.375 0 11-6.75 0 3.375 3.375 0 016.75 0zm8.25 2.25a2.625 2.625 0 11-5.25 0 2.625 2.625 0 015.25 0z" /></svg>
-              <span>Pengguna</span>
-            </a>
-          </li>
-          <?php endif; ?>
-        </ul>
-
-        <?php if (in_array($role, ['SuperAdmin', 'Admin'], true)): ?>
-        <p class="mt-6 px-3 mb-2 text-[0.65rem] font-semibold uppercase tracking-widest text-slate-400">Log</p>
-        <ul class="flex flex-col gap-1">
-          <li>
-            <a class="ta-nav-link" href="activity_log.php">
-              <svg class="ta-nav-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-              <span>Log Aktiviti</span>
-            </a>
-          </li>
-        </ul>
-        <?php endif; ?>
-      </div>
-
-      <div class="p-4 border-t" style="border-color:var(--ta-border)">
-        <div class="rounded-xl p-3.5" style="background:var(--ta-brand-50)">
-          <p class="text-xs font-semibold mb-0.5" style="color:var(--ta-brand)">Perbendaharaan Negeri Selangor</p>
-          <p class="text-xs text-slate-500 leading-relaxed">Sistem tempahan kenderaan rasmi Negeri Selangor.</p>
-        </div>
-      </div>
-    </aside>
-
-    <div class="fixed inset-x-0 bottom-0 z-[70] xl:hidden px-4 pb-4 pointer-events-none">
-      <div class="relative max-w-md mx-auto pointer-events-auto">
-
-        <!-- Central Floating Action Button (Dashboard) -->
-        <a href="dashboard.php"
-          id="nav-dashboard"
-          class="nav-item absolute left-1/2 -translate-x-1/2 -top-7 z-30 flex flex-col items-center group transition-transform duration-300 ease-[cubic-bezier(0.175,0.885,0.32,2.2)] active:scale-90">
-          <span class="relative w-14 h-14 rounded-full flex items-center justify-center transition-all duration-300 group-hover:-translate-y-1"
-                style="background: linear-gradient(135deg, color-mix(in oklch, var(--ta-brand) 85%, white), var(--ta-brand));
-                      color:#fff;
-                      box-shadow: 0 12px 28px -6px color-mix(in oklch, var(--ta-brand) 50%, transparent),
-                                  0 0 0 1px rgba(255,255,255,0.5) inset,
-                                  0 0 0 4px var(--ta-canvas, #ffffff);">
-            <span class="absolute inset-0 rounded-full bg-gradient-to-b from-white/45 via-white/10 to-transparent opacity-80 pointer-events-none"></span>
-            <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 relative z-10" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8">
-              <path stroke-linecap="round" stroke-linejoin="round" d="M3.75 3v11.25A2.25 2.25 0 006 16.5h2.25M3.75 3h-1.5M3.75 3h16.5M21.75 3v11.25A2.25 2.25 0 0119.5 16.5H17.25m-10.5 0h6m-6 0v3.75A1.5 1.5 0 007.5 21.75h9a1.5 1.5 0 001.5-1.5V16.5m-10.5 0h10.5" />
-            </svg>
-          </span>
-          <span class="text-[11px] font-medium tracking-tight mt-1" style="color: var(--ta-muted)">Dashboard</span>
-        </a>
-
-        <!-- Liquid Glass Dock Base -->
-        <div class="glass-dock flex items-center justify-around px-2 pt-2.5 pb-2 rounded-[32px] overflow-visible">
-
-          <!-- Sliding active pill -->
-          <div id="liquid-pill"
-              class="absolute top-1.5 bottom-1.5 rounded-[22px] transition-all duration-300 ease-[cubic-bezier(0.175,0.885,0.32,1.2)] opacity-0 pointer-events-none z-0"
-              style="background: color-mix(in oklch, var(--ta-brand) 14%, rgba(255,255,255,0.55));
-                    border: 1px solid rgba(255,255,255,0.6);
-                    box-shadow: 0 4px 14px rgba(0,0,0,0.06), inset 0 1px 1px rgba(255,255,255,0.9);">
-          </div>
-
-          <a href="bookings.php" id="nav-bookings"
-            class="nav-item flex flex-col items-center gap-1 flex-1 py-1 z-10 transition-transform duration-200 active:scale-90" style="color: var(--ta-muted)">
-            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 012.25-2.25h13.5A2.25 2.25 0 0121 7.5v11.25m-18 0A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75m-18 0v-7.5A2.25 2.25 0 015.25 9h13.5A2.25 2.25 0 0121 11.25v7.5m-13.5-6h.008v.008h-.008v-.008zm0 3h.008v.008h-.008v-.008zm3-3h.008v.008h-.008v-.008zm0 3h.008v.008h-.008v-.008z" /></svg>
-            <span class="text-[11px] font-medium tracking-tight">Tempahan</span>
-          </a>
-
-          <a href="vehicles.php" id="nav-vehicles"
-            class="nav-item flex flex-col items-center gap-1 flex-1 py-1 z-10 transition-transform duration-200 active:scale-90" style="color: var(--ta-muted)">
-            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M8.25 18.75a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m3 0h6m-9 0H3.375a1.125 1.125 0 01-1.125-1.125V14.25m17.25 4.5a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m3 0h1.125c.621 0 1.129-.504 1.09-1.124a17.902 17.902 0 00-3.213-9.193 2.056 2.056 0 00-1.58-.86H14.25M16.5 18.75h-2.25m0-11.177v-.958c0-.568-.422-1.048-.987-1.106a48.554 48.554 0 00-10.026 0 1.106 1.106 0 00-.987 1.106v7.635m12-6.677v6.677m0 0h-12" /></svg>
-            <span class="text-[11px] font-medium tracking-tight">Kenderaan</span>
-          </a>
-
-          <div class="flex-1 flex justify-center pointer-events-none"><span class="w-14"></span></div>
-
-          <a href="drivers.php" id="nav-drivers"
-            class="nav-item flex flex-col items-center gap-1 flex-1 py-1 z-10 transition-transform duration-200 active:scale-90" style="color: var(--ta-muted)">
-            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M2.25 8.25h19.5M2.25 9h19.5m-16.5 5.25h6m-6 2.25h3m-3.75 3h15a2.25 2.25 0 002.25-2.25V6.75A2.25 2.25 0 0019.5 4.5h-15a2.25 2.25 0 00-2.25 2.25v10.5A2.25 2.25 0 004.5 19.5z" /></svg>
-            <span class="text-[11px] font-medium tracking-tight">Pemandu</span>
-          </a>
-
-          <!-- "Lagi" — same look/behaviour as Tempahan, Kenderaan, Pemandu; opens a glass popover instead of the FAB flower -->
-          <div id="nav-more" role="button" tabindex="0" aria-haspopup="true" aria-expanded="false"
-            class="nav-item relative flex flex-col items-center gap-1 flex-1 py-1 z-10 transition-transform duration-200 active:scale-90" style="color: var(--ta-muted)">
-            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8">
-              <circle cx="5" cy="12" r="1.5" fill="currentColor" stroke="none"/>
-              <circle cx="12" cy="12" r="1.5" fill="currentColor" stroke="none"/>
-              <circle cx="19" cy="12" r="1.5" fill="currentColor" stroke="none"/>
-            </svg>
-            <span class="text-[11px] font-medium tracking-tight">Lagi</span>
-
-            <!-- Popover menu -->
-            <div id="more-menu"
-              class="more-popover absolute bottom-full right-0 mb-3 w-38 rounded-2xl p-1.5 opacity-0 scale-95 pointer-events-none transition-all duration-200 origin-bottom-right">
-              
-              <?php if ($role === 'SuperAdmin'): ?>
-              <a href="users.php" class="flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-sm font-medium transition-colors" style="color: var(--ta-text, #1c1c1e)">
-                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M15 19.128a9.38 9.38 0 002.625.372 9.337 9.337 0 004.121-.952 4.125 4.125 0 00-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 018.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0111.964-3.07M12 6.375a3.375 3.375 0 11-6.75 0 3.375 3.375 0 016.75 0zm8.25 2.25a2.625 2.625 0 11-5.25 0 2.625 2.625 0 015.25 0z" /></svg>
-                Pengguna
-              </a>
-              <?php endif; ?>
-
-              <?php if (in_array($role, ['SuperAdmin', 'Admin'], true)): ?>
-              <a href="activity_log.php" class="flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-sm font-medium transition-colors" style="color: var(--ta-text, #1c1c1e)">
-                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                Log Aktiviti
-              </a>
-              <?php endif; ?>
-
-              <a href="profile.php" class="flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-sm font-medium transition-colors" style="color: var(--ta-text, #1c1c1e)">
-                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8">
-                  <circle cx="12" cy="8" r="4" stroke-linecap="round" stroke-linejoin="round"/>
-                  <path stroke-linecap="round" stroke-linejoin="round" d="M4 20c0-4.418 3.582-8 8-8s8 3.582 8 8" />
-                </svg>
-                Profil Saya
-              </a>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <script>
-      document.addEventListener('DOMContentLoaded', () => {
-        const currentPath = window.location.pathname.split('/').pop() || 'dashboard.php';
-        let activeItem = null;
-
-        if (currentPath.includes('dashboard')) activeItem = document.getElementById('nav-dashboard');
-        else if (currentPath.includes('bookings') || currentPath.includes('book-vehicle')) activeItem = document.getElementById('nav-bookings');
-        else if (currentPath.includes('vehicles')) activeItem = document.getElementById('nav-vehicles');
-        else if (currentPath.includes('drivers')) activeItem = document.getElementById('nav-drivers');
-        else if (currentPath.includes('users') || currentPath.includes('activity_log')) activeItem = document.getElementById('nav-more');
-
-        function setFloatingActive(element) {
-          if (!element) return;
-
-          document.querySelectorAll('.nav-item').forEach(el => {
-            el.style.color = 'var(--ta-muted)';
-            const svg = el.querySelector('svg');
-            if (svg) svg.style.transform = 'translateY(0px)';
-          });
-
-          if (element.id === 'nav-dashboard') {
-            const label = element.querySelector('span:last-child');
-            if (label) label.style.color = 'var(--ta-brand, #007AFF)';
-            return;
-          }
-
-          element.style.color = 'var(--ta-brand, #007AFF)';
-          const svg = element.querySelector('svg');
-          if (svg) svg.style.transform = 'translateY(-2px)';
-        }
-
-        if (activeItem) setFloatingActive(activeItem);
-        window.addEventListener('resize', () => { if (activeItem) setFloatingActive(activeItem); });
-
-        // "Lagi" popover — open/close (alternative to the old FAB flower)
-        const moreBtn = document.getElementById('nav-more');
-        const moreMenu = document.getElementById('more-menu');
-        if (moreBtn && moreMenu) {
-          const toggleMenu = (open) => {
-            const isOpen = open !== undefined ? open : !moreMenu.classList.contains('open');
-            moreMenu.classList.toggle('open', isOpen);
-            moreBtn.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
-          };
-          moreBtn.addEventListener('click', (e) => {
-            e.stopPropagation();
-            toggleMenu();
-          });
-          moreBtn.addEventListener('keydown', (e) => {
-            if (e.key === 'Enter' || e.key === ' ') {
-              e.preventDefault();
-              toggleMenu();
-            } else if (e.key === 'Escape') {
-              toggleMenu(false);
-            }
-          });
-          document.addEventListener('click', (e) => {
-            if (!moreBtn.contains(e.target)) toggleMenu(false);
-          });
-        }
-      });
-    </script>
-
-    <main class="xl:ml-64 relative min-h-screen pb-24 xl:pb-0">
-      <!-- Navigasi Atas -->
-      <nav class="sticky top-0 z-50 flex items-center justify-between gap-4 px-4 sm:px-6 py-3 bg-white border-b" style="border-color:var(--ta-border)">
-        <div class="flex items-center gap-3">
-            <div>
-                <h6 class="font-bold text-base leading-tight">Dashboard</h6>
-                <p class="text-xs leading-tight" style="color:var(--ta-muted)">
-                    <span class="opacity-70">Halaman</span>
-                    <span class="mx-1 opacity-40">/</span>
-                    <span>Dashboard</span>
-                </p>
-            </div>
-        </div>
-
-        <!-- Carian -->
-        <label class="hidden md:flex items-center gap-2 rounded-lg px-3 py-2 flex-1 max-w-sm" style="background:var(--ta-canvas); border:1px solid var(--ta-border)">
-            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 shrink-0" style="color:var(--ta-muted)" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" /></svg>
-            <input type="text" placeholder="Cari tempahan, kenderaan..." class="bg-transparent border-0 outline-none text-sm w-full placeholder:text-slate-400" />
-        </label>
-
-            <div class="flex items-center gap-1.5 sm:gap-2">
-                <!-- Theme Toggle Button -->
-                <button type="button" id="theme-toggle" class="btn btn-ghost btn-circle text-slate-500 hover:bg-slate-100 border-0 h-10 w-10 min-h-0">
-                    <span id="theme-toggle-icon"></span>
-                </button>
-
-                <!-- Notification Dropdown -->
-                <div class="dropdown dropdown-end">
-                    <div tabindex="0" role="button" class="btn btn-ghost btn-circle border-0 h-10 w-10 min-h-0 relative text-slate-500 hover:bg-slate-100">
-                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8">
-                            <path stroke-linecap="round" stroke-linejoin="round" d="M14.857 17.082a23.848 23.848 0 005.454-1.31A8.967 8.967 0 0118 9.75v-.7V9A6 6 0 006 9v.75a8.967 8.967 0 01-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 01-5.714 0m5.714 0a3 3 0 11-5.714 0" />
-                        </svg>
-                        <?php if ($pendingApprovals > 0): ?>
-                            <span class="absolute top-2 right-2 flex h-2.5 w-2.5">
-                                <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-error opacity-75"></span>
-                                <span class="relative inline-flex rounded-full h-2.5 w-2.5 bg-error"></span>
-                            </span>
-                        <?php endif; ?>
-                    </div>
-
-                    <div tabindex="0" class="dropdown-content z-[99] menu p-0 shadow-xl card rounded-2xl w-80 max-w-[90vw] mt-2 border" style="border-color: var(--ta-border);">
-                        <!-- Header Notifikasi -->
-                        <div class="px-4 py-3 border-b flex items-center justify-between" style="border-color: var(--ta-border);">
-                            <div class="flex items-center gap-2">
-                                <span class="font-bold text-sm">Notifikasi</span>
-                                <?php if ($pendingApprovals > 0): ?>
-                                    <span class="badge badge-error badge-sm text-white font-semibold"><?= $pendingApprovals ?> baru</span>
-                                <?php endif; ?>
-                            </div>
-                        </div>
-
-                        <!-- Content List -->
-                        <div class="max-h-64 overflow-y-auto divide-y" style="border-color: var(--ta-border);">
-                            <?php if ($pendingApprovals > 0): ?>
-                                <a href="bookings.php?status=Pending" class="flex items-start gap-3 p-3.5 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
-                                    <div class="p-2 rounded-full bg-warning/15 text-warning shrink-0 mt-0.5">
-                                        <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                                    </div>
-                                    <div class="flex-1 min-w-0">
-                                        <p class="text-xs font-semibold text-slate-800 dark:text-slate-100">Tempahan Menunggu Kelulusan</p>
-                                        <p class="text-[11px] text-slate-400 mt-0.5">Terdapat <?= $pendingApprovals ?> tempahan kenderaan baharu yang memerlukan tindakan anda.</p>
-                                    </div>
-                                </a>
-                            <?php else: ?>
-                                <div class="p-6 text-center text-slate-400 text-xs">
-                                    <svg class="w-8 h-8 mx-auto mb-2 opacity-40" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" /></svg>
-                                    Tiada notifikasi baharu.
-                                </div>
-                            <?php endif; ?>
-                        </div>
-
-                        <!-- Footer Link -->
-                        <div class="p-2 border-t text-center" style="border-color: var(--ta-border);">
-                            <a href="bookings.php" class="text-xs text-primary font-semibold hover:underline block py-1">Lihat Semak Tempahan</a>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- User Profile Dropdown -->
-                <div class="dropdown dropdown-end">
-                    <div tabindex="0" role="button" class="btn btn-ghost rounded-full pl-1 pr-2 py-1 flex items-center gap-2 h-auto min-h-0">
-                        <div class="avatar <?= $hasPhoto ? '' : 'placeholder' ?>">
-                            <?php if ($hasPhoto): ?>
-                                <div class="rounded-full w-8 h-8"><img src="<?= htmlspecialchars($profilePicture) ?>" alt="Avatar" /></div>
-                            <?php else: ?>
-                                <div class="rounded-full w-8 h-8 flex items-center justify-center font-bold text-xs uppercase text-white" style="background:var(--ta-brand)">
-                                    <?= htmlspecialchars(substr($fullname, 0, 1)) ?>
-                                </div>
-                            <?php endif; ?>
-                        </div>
-                        <span class="text-sm font-semibold hidden sm:inline-block"><?= htmlspecialchars($fullname) ?></span>
-                    </div>
-                    <ul tabindex="0" class="dropdown-content z-[99] menu p-3 shadow-lg card rounded-2xl w-64 mt-2 border" style="border-color: var(--ta-border);">
-                        <li class="px-3 py-2 border-b mb-1" style="border-color:var(--ta-border)">
-                            <div class="flex items-center justify-between gap-2">
-                                <p class="font-bold text-sm truncate"><?= htmlspecialchars($fullname) ?></p>
-                                <span class="ta-badge <?= $badgeColor ?>"><?= htmlspecialchars($role) ?></span>
-                            </div>
-                            <p class="text-xs text-slate-400 mt-1 truncate"><?= htmlspecialchars($email) ?></p>
-                        </li>
-                        <li><a href="profile.php" class="py-2.5 text-xs font-medium">Profil Saya</a></li>
-                        <div class="divider my-1"></div>
-                        <li><a href="logout.php" class="py-2.5 text-xs font-semibold text-red-600">Log Keluar</a></li>
-                    </ul>
-                </div>
-            </div>
-      </nav>
-
-      <div class="w-full px-4 sm:px-6 py-6 mx-auto">
+<main class="xl:ml-64 relative min-h-screen pb-24 xl:pb-0">
+    <?php include 'includes/top_nav.php'; ?>
+    <div class="w-full px-4 sm:px-6 py-6 mx-auto">
 
         <!-- Ucapan & Tarikh -->
         <div class="card p-6 mb-5">
@@ -921,7 +559,6 @@ if ($role === 'User') {
 
           </div>
 
-
           <!-- ==========================================================
               CARD 2: STATUS KETERSEDIAAN PEMANDU
               ========================================================== -->
@@ -1106,7 +743,7 @@ if ($role === 'User') {
             <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" style="color:var(--ta-muted)" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M21.75 6.75v10.5a2.25 2.25 0 01-2.25 2.25h-15a2.25 2.25 0 01-2.25-2.25V6.75m19.5 0A2.25 2.25 0 0019.5 4.5h-15a2.25 2.25 0 00-2.25 2.25m19.5 0v.243a2.25 2.25 0 01-1.07 1.916l-7.5 4.615a2.25 2.25 0 01-2.36 0L3.32 8.91a2.25 2.25 0 01-1.07-1.916V6.75" /></svg>
             Status Penghantaran Notifikasi E-mel
           </h6>
-          <?php 
+          <?php
             $emailStatusMap = [
               'Pending' => 'Belum Dihantar',
               'Sent'    => 'Berjaya Dihantar',
@@ -1210,9 +847,9 @@ if ($role === 'User') {
           title: {
             text: 'Status Tempahan Kenderaan',
             align: 'left',
-            style: { 
-              fontSize: '14px', 
-              fontWeight: '600', 
+            style: {
+              fontSize: '14px',
+              fontWeight: '600',
               color: getComputedStyle(document.documentElement).getPropertyValue('--color-base-content').trim()
             }
           },
@@ -1268,9 +905,9 @@ if ($role === 'User') {
           title: {
             text: 'Status Agihan Kenderaan',
             align: 'left',
-            style: { 
-              fontSize: '14px', 
-              fontWeight: '600', 
+            style: {
+              fontSize: '14px',
+              fontWeight: '600',
               color: getComputedStyle(document.documentElement).getPropertyValue('--color-base-content').trim()
             }
           },
@@ -1285,100 +922,4 @@ if ($role === 'User') {
         } // tutup semakan wujud carta
     </script>
 
-    <!-- Skrip Tukar Mod Tema Terang/Gelap -->
-    <script>
-        const themeToggleBtn = document.getElementById('theme-toggle');
-        const themeToggleIcon = document.getElementById('theme-toggle-icon');
-
-        // The two daisyUI themes this dashboard switches between
-        const LIGHT_THEME = 'garden';
-        const DARK_THEME  = 'dracula';
-
-        const moonIcon = `<svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M21.752 15.002A9.72 9.72 0 0118 15.75c-5.385 0-9.75-4.365-9.75-9.75 0-1.33.266-2.597.748-3.752A9.753 9.753 0 003 11.25C3 16.635 7.365 21 12.75 21a9.753 9.753 0 009.002-5.998z" /></svg>`;
-        const sunIcon = `<svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M12 3v2.25m6.364.386l-1.591 1.591M21 12h-2.25m-.386 6.364l-1.591-1.591M12 18.75V21m-4.773-4.227l-1.591 1.591M5.25 12H3m4.227-4.773L5.636 5.636M15.75 12a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0z" /></svg>`;
-
-        function applyTheme(theme) {
-            document.documentElement.setAttribute('data-theme', theme);
-            localStorage.setItem('theme', theme);
-            themeToggleIcon.innerHTML = theme === DARK_THEME ? sunIcon : moonIcon;
-
-            // Dynamic update for ApexCharts title and legend colors — read
-            // straight from daisyUI's own theme variable so this keeps
-            // working even if the themes change later.
-            const textColor = getComputedStyle(document.documentElement)
-                .getPropertyValue('--color-base-content').trim();
-
-            if (bookingChart && vehicleChart) {
-                bookingChart.updateOptions({
-                    title: { style: { color: textColor } },
-                    legend: { labels: { colors: textColor } },
-                    plotOptions: {
-                        pie: {
-                            donut: {
-                                labels: {
-                                    total: { color: textColor },
-                                    value: { color: textColor }
-                                }
-                            }
-                        }
-                    }
-                });
-                vehicleChart.updateOptions({
-                    title: { style: { color: textColor } },
-                    legend: { labels: { colors: textColor } },
-                    plotOptions: {
-                        pie: {
-                            donut: {
-                                labels: {
-                                    total: { color: textColor },
-                                    value: { color: textColor }
-                                }
-                            }
-                        }
-                    }
-                });
-            }
-        }
-
-        // Load saved theme or system preference
-        const savedTheme = localStorage.getItem('theme');
-        const systemPrefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-        const initialTheme = savedTheme || (systemPrefersDark ? DARK_THEME : LIGHT_THEME);
-
-        applyTheme(initialTheme);
-
-        themeToggleBtn.addEventListener('click', () => {
-            const currentTheme = document.documentElement.getAttribute('data-theme');
-            const newTheme = currentTheme === DARK_THEME ? LIGHT_THEME : DARK_THEME;
-            applyTheme(newTheme);
-        });
-    </script>
-
-    <script src="./assets/js/plugins/perfect-scrollbar.min.js" async></script>
-    <script>
-    (function () {
-        function makeClickable(el, clickableClass) {
-            if (clickableClass) el.classList.add(clickableClass);
-            el.addEventListener('click', function (event) {
-                if (event.target.closest('a, button, input, select, textarea')) return;
-                window.location.href = el.dataset.href;
-            });
-            el.setAttribute('tabindex', '0');
-            el.addEventListener('keypress', function (event) {
-                if (event.key === 'Enter') {
-                    el.click();
-                }
-            });
-        }
-
-        document.querySelectorAll('.card[data-href]').forEach(function (card) {
-            makeClickable(card, 'clickable');
-        });
-
-        document.querySelectorAll('tr[data-href]').forEach(function (row) {
-            makeClickable(row);
-        });
-    })();
-    </script>
-</body>
-</html>
+    <?php include 'includes/layout_footer.php'; ?>

@@ -12,6 +12,10 @@ if (isset($_SESSION['user_id'])) {
 $error = '';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    if (!verify_csrf_token($_POST['csrf_token'] ?? '')) {
+        http_response_code(403);
+        exit('Ralat Keselamatan: Token CSRF tidak sah atau telah tamat tempoh.');
+    }
     $email = trim($_POST['email'] ?? '');
     $password = $_POST['password'] ?? '';
 
@@ -37,6 +41,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $error = "Kata laluan yang dimasukkan adalah salah.";
             log_activity($pdo, (int)$user['user_id'], 'Log Masuk', 'Log Masuk Gagal', "Kata laluan salah untuk e-mel: {$email}");
         } else {
+            session_regenerate_id(true);
             $_SESSION['user_id']  = $user['user_id'];
             $_SESSION['fullname'] = $user['fullname'];
             $_SESSION['role']     = $user['role'];
@@ -89,6 +94,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         <div class="container mx-auto px-4 mb-auto">
             <div class="card shrink-0 w-full max-w-sm mx-auto shadow-2xl bg-base-100/90 backdrop-blur-md rounded-2xl border border-white/20">
                 <form class="card-body" action="login.php" method="POST">
+                    <input type="hidden" name="csrf_token" value="<?= generate_csrf_token() ?>" />
                     <h2 class="card-title text-2xl font-bold justify-center mb-1">Log Masuk</h2>
 
                     <!-- Dynamic daisyUI Alert -->

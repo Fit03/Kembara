@@ -1,15 +1,12 @@
 <?php
-session_start();
+require_once __DIR__ . '/includes/auth.php';
+require_login();
 require_once __DIR__ . '/config/database.php';
 require_once __DIR__ . '/vendor/setasign/fpdf/fpdf.php';
 require_once __DIR__ . '/vendor/autoload.php'; // for FPDI (composer require setasign/fpdi)
 
 use setasign\Fpdi\Fpdi;
 
-if (!isset($_SESSION['user_id'])) {
-    header('Location: login.php');
-    exit();
-}
 
 $currentUserId = (int)$_SESSION['user_id'];
 $role = $_SESSION['role'] ?? 'User';

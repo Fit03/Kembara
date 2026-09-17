@@ -1,12 +1,9 @@
 <?php
 // book-vehicle.php — Borang Tempahan Kenderaan Baharu (dengan pemilih lokasi peta)
-session_start();
+require_once __DIR__ . '/includes/auth.php';
+require_login();
 require_once __DIR__ . '/config/database.php';
 
-if (!isset($_SESSION['user_id'])) {
-    header("Location: login.php");
-    exit();
-}
 
 $fullname      = $_SESSION['fullname'];
 $role          = $_SESSION['role'];
@@ -346,8 +343,9 @@ $fullyBookedDatesJson = json_encode(array_values($fullyBookedDates));
           <p class="text-sm mb-5" style="color:var(--ta-muted)">Lengkapkan butiran tempahan kenderaan anda. Pemandu &amp; kenderaan akan ditugaskan oleh pentadbir semasa kelulusan.</p>
 
           <!-- Corrected tag -->
-          <form action="bookings.php" method="POST" enctype="multipart/form-data" class="flex flex-col gap-5" id="booking-form">  
+          <form action="bookings.php" method="POST" enctype="multipart/form-data" class="flex flex-col gap-5" id="booking-form">
             <input type="hidden" name="action" value="add_booking" />
+            <input type="hidden" name="csrf_token" value="<?= generate_csrf_token() ?>" />
 
             <!-- Pemilih Lokasi Peta (gaya Grab) -->
             <div>
