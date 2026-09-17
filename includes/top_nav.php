@@ -19,6 +19,12 @@ if (!$email) {
     $stmt->execute([$_SESSION['user_id']]);
     $email = $stmt->fetchColumn() ?: 'tiada-emel@selangor.gov.my';
 }
+
+// Sahkan gambar profil sedia ada; jangan bergantung sepenuhnya pada halaman pemanggil
+if (empty($profilePicture) || !is_file(__DIR__ . '/../' . $profilePicture)) {
+    $profilePicture = null;
+}
+$hasPhoto = $profilePicture !== null;
 ?>
 <nav class="sticky top-0 z-50 flex items-center justify-between gap-4 px-4 sm:px-6 py-3 bg-white border-b" style="border-color:var(--ta-border)">
     <div class="flex items-center gap-3">

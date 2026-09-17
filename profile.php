@@ -216,6 +216,7 @@ if ($user['profile_picture']) {
 }
 
 $hasPhoto = $user['profile_picture'] && is_file(__DIR__ . '/' . $user['profile_picture']);
+$profilePicture = $user['profile_picture'];
 $hasSignature = $user['signature_path'] && is_file(__DIR__ . '/' . $user['signature_path']);
 
 $pendingApprovals = $pdo->query("SELECT COUNT(*) FROM vehicle_bookings WHERE status = 'Pending'")->fetchColumn();

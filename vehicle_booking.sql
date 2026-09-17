@@ -3,7 +3,7 @@
 -- https://www.phpmyadmin.net/
 --
 -- Host: 127.0.0.1
--- Generation Time: Sep 17, 2026 at 08:41 AM
+-- Generation Time: Sep 17, 2026 at 06:29 PM
 -- Server version: 10.4.32-MariaDB
 -- PHP Version: 8.0.30
 
@@ -149,7 +149,13 @@ INSERT INTO `activity_log` (`log_id`, `user_id`, `role_at_time`, `module`, `acti
 (103, 11, 'SuperAdmin', 'Log Keluar', 'Log Keluar', 'Fit log keluar daripada sistem.', '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Safari/537.36', '2026-09-17 11:19:53'),
 (104, 2, 'Admin', 'Log Masuk', 'Log Masuk', 'Admin log masuk ke sistem.', '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Safari/537.36', '2026-09-17 11:20:00'),
 (105, 2, 'Admin', 'Log Keluar', 'Log Keluar', 'Admin log keluar daripada sistem.', '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Safari/537.36', '2026-09-17 11:21:54'),
-(106, 11, 'SuperAdmin', 'Log Masuk', 'Log Masuk', 'Fit log masuk ke sistem.', '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Safari/537.36', '2026-09-17 11:22:04');
+(106, 11, 'SuperAdmin', 'Log Masuk', 'Log Masuk', 'Fit log masuk ke sistem.', '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Safari/537.36', '2026-09-17 11:22:04'),
+(107, 11, 'SuperAdmin', 'Log Masuk', 'Log Masuk', 'Fit log masuk ke sistem.', '192.168.110.77', 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_7 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/27.0 Mobile/15E148 Safari/604.1', '2026-09-17 15:06:19'),
+(108, 3, 'User', 'Log Masuk', 'Log Masuk', 'User log masuk ke sistem.', '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Safari/537.36 Edg/153.0.0.0', '2026-09-17 15:12:29'),
+(109, 11, 'SuperAdmin', 'Log Keluar', 'Log Keluar', 'Fit log keluar daripada sistem.', '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Safari/537.36', '2026-09-17 16:15:58'),
+(110, 3, 'User', 'Log Masuk', 'Log Masuk', 'User log masuk ke sistem.', '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Safari/537.36', '2026-09-17 16:16:09'),
+(111, 3, 'User', 'Log Keluar', 'Log Keluar', 'User log keluar daripada sistem.', '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Safari/537.36', '2026-09-17 16:41:11'),
+(112, 11, 'SuperAdmin', 'Log Masuk', 'Log Masuk', 'Fit log masuk ke sistem.', '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Safari/537.36', '2026-09-17 16:41:18');
 
 -- --------------------------------------------------------
 
@@ -238,7 +244,16 @@ INSERT INTO `booking_history` (`history_id`, `booking_id`, `module`, `action`, `
 (64, 31, 'Vehicle', 'Driver Assigned', 'Pemandu telah ditugaskan dan menunggu pengesahan.', 2, '2026-09-17 11:13:53'),
 (65, 31, 'Vehicle', 'Driver Accepted', 'Pemandu menerima tugasan.', 5, '2026-09-17 11:17:29'),
 (66, 32, 'Vehicle', 'Dicipta', 'Tempahan VB2609171ADF1 dicipta.', 11, '2026-09-17 11:28:40'),
-(67, 33, 'Vehicle', 'Dicipta', 'Tempahan VB26091702018 dicipta.', 11, '2026-09-17 11:58:27');
+(67, 33, 'Vehicle', 'Dicipta', 'Tempahan VB26091702018 dicipta.', 11, '2026-09-17 11:58:27'),
+(68, 24, 'Vehicle', 'Selesai', 'Perjalanan selesai.', 11, '2026-09-17 14:53:49'),
+(69, 34, 'Vehicle', 'Dicipta', 'Tempahan VB26091794084 dicipta.', 11, '2026-09-17 14:58:40'),
+(70, 20, 'Vehicle', 'Selesai', 'Perjalanan selesai.', 11, '2026-09-17 14:58:59'),
+(71, 31, 'Vehicle', 'Diluluskan', 'Tempahan diluluskan, pemandu & kenderaan ditugaskan.', 11, '2026-09-17 15:11:38'),
+(72, 34, 'Vehicle', 'Diluluskan', 'Tempahan diluluskan, pemandu & kenderaan ditugaskan.', 11, '2026-09-17 15:12:08'),
+(73, 35, 'Vehicle', 'Dicipta', 'Tempahan VB2609173F0EF dicipta.', 3, '2026-09-17 15:12:52'),
+(74, 34, 'Vehicle', 'Selesai', 'Perjalanan selesai.', 11, '2026-09-17 15:21:42'),
+(75, 31, 'Vehicle', 'Selesai', 'Perjalanan selesai.', 11, '2026-09-17 15:21:44'),
+(76, 35, 'Vehicle', 'Diluluskan', 'Tempahan diluluskan, pemandu & kenderaan ditugaskan.', 11, '2026-09-17 16:42:05');
 
 -- --------------------------------------------------------
 
@@ -355,6 +370,7 @@ CREATE TABLE `users` (
   `department_id` int(11) DEFAULT NULL,
   `password` varchar(255) NOT NULL,
   `profile_picture` varchar(255) DEFAULT NULL,
+  `signature_path` varchar(255) DEFAULT NULL,
   `role` enum('Admin','User','SuperAdmin') NOT NULL DEFAULT 'User',
   `created_at` datetime DEFAULT current_timestamp(),
   `updated_at` datetime DEFAULT current_timestamp() ON UPDATE current_timestamp()
@@ -364,16 +380,16 @@ CREATE TABLE `users` (
 -- Dumping data for table `users`
 --
 
-INSERT INTO `users` (`user_id`, `fullname`, `email`, `phone_no`, `department_id`, `password`, `profile_picture`, `role`, `created_at`, `updated_at`) VALUES
-(1, 'Super Admin', 'superadmin@selangor.gov.my', '0123456789', 4, '$2y$10$tE6nqLIki9yC8pNEqtBkMefGxWJ102b7jEeWUwpiDZ7pfAKBcHCvC', NULL, 'SuperAdmin', '2026-08-03 15:03:18', '2026-08-18 14:35:34'),
-(2, 'Admin', 'admin@selangor.gov.my', '0123456780', 4, '$2y$10$tE6nqLIki9yC8pNEqtBkMefGxWJ102b7jEeWUwpiDZ7pfAKBcHCvC', NULL, 'Admin', '2026-08-03 15:03:18', '2026-08-03 15:19:53'),
-(3, 'User', 'user@selangor.gov.my', '0123456781', 4, '$2y$10$tE6nqLIki9yC8pNEqtBkMefGxWJ102b7jEeWUwpiDZ7pfAKBcHCvC', 'assets/uploads/avatars/user_3_1788426065.png', 'User', '2026-08-03 15:03:18', '2026-09-04 16:28:40'),
-(5, 'Ahmad Firdaus', 'ahmad.firdaus@selangor.gov.my', '0121111111', 1, '$2y$10$tE6nqLIki9yC8pNEqtBkMefGxWJ102b7jEeWUwpiDZ7pfAKBcHCvC', NULL, 'User', '2026-08-04 14:24:11', '2026-08-04 14:29:35'),
-(6, 'Nur Aisyah', 'nur.aisyah@selangor.gov.my', '0122222222', 2, '$2y$10$tE6nqLIki9yC8pNEqtBkMefGxWJ102b7jEeWUwpiDZ7pfAKBcHCvC', NULL, 'User', '2026-08-04 14:24:11', '2026-08-04 14:29:42'),
-(7, 'Mohd Faiz', 'mohd.faiz@selangor.gov.my', '0123333334', 4, '$2y$10$tE6nqLIki9yC8pNEqtBkMefGxWJ102b7jEeWUwpiDZ7pfAKBcHCvC', NULL, 'User', '2026-08-04 14:24:11', '2026-08-12 16:16:13'),
-(11, 'Fit', 'fit@selangor.gov.my', '1', 4, '$2y$10$dOce5WQMZ8aVqFgrxtEFrePFmX25rSajVu0vZxiKsXCP2lgl/iIcy', 'assets/uploads/avatars/user_11_1787034964.jpg', 'SuperAdmin', '2026-08-18 14:35:16', '2026-09-04 16:28:22'),
-(12, 'Nureen Afriena', 'nureen@selangor.gov.my', NULL, 4, '$2y$10$K2zlXMEmQlAXGv3qu.ds4umV29nq0bBvb9G.ClU2SsabYDDJhCSyS', NULL, 'SuperAdmin', '2026-09-04 11:13:21', '2026-09-04 16:28:52'),
-(13, 'Atika', 'atika@selangor.gov.my', NULL, 4, '$2y$10$O3fcoCX.P5EeHA4SoR6PyuulZTBoBCvCbguCfURRvFK531ydD81iC', 'assets/uploads/avatars/user_13_1789014307.jpg', 'User', '2026-09-04 11:43:46', '2026-09-10 12:25:07');
+INSERT INTO `users` (`user_id`, `fullname`, `email`, `phone_no`, `department_id`, `password`, `profile_picture`, `signature_path`, `role`, `created_at`, `updated_at`) VALUES
+(1, 'Super Admin', 'superadmin@selangor.gov.my', '0123456789', 4, '$2y$10$tE6nqLIki9yC8pNEqtBkMefGxWJ102b7jEeWUwpiDZ7pfAKBcHCvC', NULL, NULL, 'SuperAdmin', '2026-08-03 15:03:18', '2026-08-18 14:35:34'),
+(2, 'Admin', 'admin@selangor.gov.my', '0123456780', 4, '$2y$10$tE6nqLIki9yC8pNEqtBkMefGxWJ102b7jEeWUwpiDZ7pfAKBcHCvC', NULL, NULL, 'Admin', '2026-08-03 15:03:18', '2026-08-03 15:19:53'),
+(3, 'User', 'user@selangor.gov.my', '0123456781', 4, '$2y$10$tE6nqLIki9yC8pNEqtBkMefGxWJ102b7jEeWUwpiDZ7pfAKBcHCvC', 'assets/uploads/avatars/user_3_1788426065.png', 'assets/uploads/signatures/sig_3_1789634453_b89c8e.png', 'User', '2026-08-03 15:03:18', '2026-09-17 16:40:53'),
+(5, 'Ahmad Firdaus', 'ahmad.firdaus@selangor.gov.my', '0121111111', 1, '$2y$10$tE6nqLIki9yC8pNEqtBkMefGxWJ102b7jEeWUwpiDZ7pfAKBcHCvC', NULL, NULL, 'User', '2026-08-04 14:24:11', '2026-08-04 14:29:35'),
+(6, 'Nur Aisyah', 'nur.aisyah@selangor.gov.my', '0122222222', 2, '$2y$10$tE6nqLIki9yC8pNEqtBkMefGxWJ102b7jEeWUwpiDZ7pfAKBcHCvC', NULL, NULL, 'User', '2026-08-04 14:24:11', '2026-08-04 14:29:42'),
+(7, 'Mohd Faiz', 'mohd.faiz@selangor.gov.my', '0123333334', 4, '$2y$10$tE6nqLIki9yC8pNEqtBkMefGxWJ102b7jEeWUwpiDZ7pfAKBcHCvC', NULL, NULL, 'User', '2026-08-04 14:24:11', '2026-08-12 16:16:13'),
+(11, 'Fit', 'fit@selangor.gov.my', '1', 4, '$2y$10$dOce5WQMZ8aVqFgrxtEFrePFmX25rSajVu0vZxiKsXCP2lgl/iIcy', 'assets/uploads/avatars/user_11_1789632861.jpg', 'assets/uploads/signatures/sig_11_1789634525_4b183a.png', 'SuperAdmin', '2026-08-18 14:35:16', '2026-09-17 16:42:05'),
+(12, 'Nureen Afriena', 'nureen@selangor.gov.my', NULL, 4, '$2y$10$K2zlXMEmQlAXGv3qu.ds4umV29nq0bBvb9G.ClU2SsabYDDJhCSyS', NULL, NULL, 'SuperAdmin', '2026-09-04 11:13:21', '2026-09-04 16:28:52'),
+(13, 'Atika', 'atika@selangor.gov.my', NULL, 4, '$2y$10$O3fcoCX.P5EeHA4SoR6PyuulZTBoBCvCbguCfURRvFK531ydD81iC', 'assets/uploads/avatars/user_13_1789014307.jpg', NULL, 'User', '2026-09-04 11:43:46', '2026-09-10 12:25:07');
 
 -- --------------------------------------------------------
 
@@ -402,7 +418,7 @@ INSERT INTO `vehicles` (`vehicle_id`, `plate_no`, `vehicle_name`, `vehicle_type`
 (1, 'BPK1234', 'Toyota Hiace', 'Van', 12, '2027-10-31', 'Available', 'Official transport van', 6, NULL),
 (2, 'BQN5678', 'Toyota Vios', 'Sedan', 5, '2027-11-30', 'Available', 'Department vehicle', 2, NULL),
 (3, 'WXY8888', 'Perodua Alza', 'MPV', 7, '2026-12-31', 'Inactive', 'Under maintenance', NULL, NULL),
-(4, 'JTM2026', 'Proton X70', 'SUV', 5, '2026-08-31', 'Available', 'Management vehicle', 1, NULL),
+(4, 'JTM2026', 'Proton X70', 'SUV', 5, '2026-08-31', 'Booked', 'Management vehicle', 1, NULL),
 (5, 'asd15', 'asdfasd', 'adsfasdf', 234, '2026-10-11', 'Available', 'fasdfasdfasf', NULL, 'assets/uploads/road_tax/road_tax_c4a582b2522991c70cd54cb074f00bf0.jpg');
 
 -- --------------------------------------------------------
@@ -426,9 +442,10 @@ CREATE TABLE `vehicle_bookings` (
   `purpose` text DEFAULT NULL,
   `vehicle_id` int(11) DEFAULT NULL,
   `driver_id` int(11) DEFAULT NULL,
-  `status` enum('Submitted','Driver_Assigned','Driver_Accepted','Approved','Rejected','Cancelled','Completed') NOT NULL DEFAULT 'Submitted',
+  `status` enum('Pending','Approved','Rejected','Cancelled','Completed') NOT NULL DEFAULT 'Pending',
   `approved_by` int(11) DEFAULT NULL,
   `approved_at` datetime DEFAULT NULL,
+  `approver_signature_path` varchar(255) DEFAULT NULL,
   `created_at` datetime DEFAULT current_timestamp()
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
@@ -436,37 +453,39 @@ CREATE TABLE `vehicle_bookings` (
 -- Dumping data for table `vehicle_bookings`
 --
 
-INSERT INTO `vehicle_bookings` (`booking_id`, `booking_no`, `user_id`, `depart_datetime`, `return_datetime`, `trip_type`, `origin`, `destination`, `passenger_total`, `passenger_names`, `passenger_memo_path`, `purpose`, `vehicle_id`, `driver_id`, `status`, `approved_by`, `approved_at`, `created_at`) VALUES
-(1, 'VB202608001', 5, '2026-08-10 08:00:00', '2026-08-10 17:00:00', 'Return', 'Shah Alam', 'Putrajaya', 4, NULL, NULL, 'Meeting with ministry officials', 2, 2, 'Completed', 2, '2026-08-05 09:00:00', '2026-09-07 12:35:58'),
-(2, 'VB202608002', 6, '2026-08-12 09:00:00', '2026-08-12 18:00:00', 'Return', 'Shah Alam', 'Cyberjaya', 6, NULL, NULL, 'ICT system audit visit', 2, 2, 'Completed', 1, '2026-08-12 15:19:49', '2026-09-07 12:35:58'),
-(3, 'VB202608003', 5, '2026-08-15 07:30:00', '2026-08-15 20:00:00', 'Return', 'Shah Alam', 'Johor Bahru', 5, NULL, NULL, 'Data centre inspection', 4, 1, 'Rejected', 2, '2026-08-06 11:30:00', '2026-09-07 12:35:58'),
-(4, 'VB202608004', 7, '2026-08-18 08:30:00', '2026-08-18 16:30:00', 'One Way', 'Shah Alam', 'Klang', 3, NULL, NULL, 'Hardware delivery', 2, 2, 'Completed', 2, '2026-08-07 10:15:00', '2026-09-07 12:35:58'),
-(8, 'VB2608122EAF7', 3, '2026-08-12 15:33:00', NULL, 'One Way', 'Selangor State Government Secretary Office, Jalan Takbir 5/1, Section 5, Shah Alam', 'Malacca International Airport, Jalan Tunku Abdul Rahman, Taman Mekar, Ayer Keroh', 2, NULL, NULL, 'Bengkel', 2, 2, 'Completed', 1, '2026-08-12 16:01:29', '2026-09-07 12:35:58'),
-(9, 'VB2608131275E', 1, '2026-08-17 04:28:00', '2026-08-17 19:28:00', 'Return', 'Wet World, Persiaran Dato Menteri, Section 2, Shah Alam', 'Persiaran Perbandaran, Section 14, Shah Alam, Petaling', 13, NULL, NULL, 'jalan2', NULL, NULL, 'Cancelled', NULL, NULL, '2026-09-07 12:35:58'),
-(10, 'VB260813A5054', 3, '2026-08-13 15:32:00', NULL, 'One Way', 'Selangor State Government Secretary Office, Jalan Takbir 5/1, Section 5, Shah Alam', 'Jalan Sultan Ibrahim 9/8, Section 9, Shah Alam, Petaling', 1, NULL, NULL, 'Hardware Delivery', 2, 2, 'Completed', 1, '2026-08-13 16:05:03', '2026-09-07 12:35:58'),
-(11, 'VB26081381D84', 3, '2026-08-14 09:00:00', '2026-08-14 11:30:00', 'Return', 'Selangor State Government Secretary Office, Persiaran Raja Muda, Section 6, Shah Alam', 'Stadium JKR, Jalan Sepat 17/57, Malaysian Public Works Department, Section 17', 41, NULL, NULL, 'Latihan Perbarisan', NULL, NULL, 'Cancelled', NULL, NULL, '2026-09-07 12:35:58'),
-(12, 'VB2608141DE82', 1, '2026-08-17 08:00:00', NULL, 'One Way', 'Selangor State Government Secretary Office, Jalan Takbir 5/1, Section 5, Shah Alam', 'Gombak', 4, NULL, NULL, 'Hardware Delivery', 2, 2, 'Completed', 1, '2026-08-17 16:03:29', '2026-09-07 12:35:58'),
-(13, 'VB2608175330B', 3, '2026-08-18 08:00:00', NULL, 'One Way', 'Selangor State Government Secretary Office, Jalan Takbir 5/1, Section 5, Shah Alam', 'UTC Selangor, 5, Jalan 14/8, Section 14', 1, NULL, NULL, 'Hardware Delivery', 1, 1, 'Completed', 11, '2026-08-18 15:52:10', '2026-09-07 12:35:58'),
-(14, 'VB260817ECF72', 1, '2026-08-18 08:00:00', '2026-08-20 17:00:00', 'Return', 'Selangor State Government Secretary Office, Jalan Takbir 5/1, Section 5, Shah Alam', 'Stadium Bukit Jalil, Jalan Barat, Bukit Jalil, Kuala Lumpur', 5, NULL, NULL, 'SUKMA Selangor', 2, 2, 'Completed', 11, '2026-08-18 15:52:14', '2026-09-07 12:35:58'),
-(15, 'VB260818FB295', 3, '2026-08-19 08:00:00', '2026-08-19 16:00:00', 'Return', 'Selangor State Government Secretary Office, Jalan Takbir 5/1, Section 5, Shah Alam', 'Bukit Jalil National Stadium, Persiaran Putra, Sri Petaling, Kuala Lumpur', 3, NULL, NULL, 'Hardware Delivery', 4, 1, 'Completed', 11, '2026-08-18 16:32:02', '2026-09-07 12:35:58'),
-(16, 'VB260819C5F38', 3, '2026-08-21 08:00:00', '2026-08-21 17:00:00', 'Return', 'Selangor State Government Secretary Office, Jalan Takbir 5/1, Section 5, Shah Alam', 'Pusat Kesihatan UiTM, Jalan Ilmu 1/1, Section 1, Shah Alam', 3, NULL, NULL, 'Hardware Delivery', 4, 1, 'Completed', 11, '2026-08-19 12:13:54', '2026-09-07 12:35:58'),
-(17, 'VB260819F2DD9', 3, '2026-08-19 16:00:00', NULL, 'One Way', 'Selangor State Government Secretary Office, Jalan Nuri 6/1, Section 6, Shah Alam', 'Jalan Kelab, New Kajang Garden, Kampung Sungai Jernih, Kajang Municipal Council', 1, '[\"Fitri\"]', NULL, 'Site Visit', 2, 2, 'Completed', 11, '2026-08-19 15:39:09', '2026-09-07 12:35:58'),
-(18, 'VB260827845A8', 11, '2026-08-28 14:30:00', NULL, 'One Way', 'Selangor State Government Secretary Office, Jalan Takbir 5/1, Section 5, Shah Alam', 'Stadium Kajang, Jalan Kelab, New Kajang Garden, Kampung Sungai Jernih', 1, '[\"Fitri\"]', NULL, 'Raptai Hari Kemerdekaan', NULL, NULL, 'Rejected', 11, '2026-09-02 09:53:51', '2026-09-07 12:35:58'),
-(19, 'VB260902E7DFB', 11, '2026-09-10 08:00:00', NULL, 'One Way', 'Selangor State Government Secretary Office, Jalan Takbir 5/1, Section 5, Shah Alam', 'UiTM Marching Field, Section 1, Shah Alam, Petaling', 1, '[\"Fitri\"]', NULL, 'Urusan', 4, 1, 'Approved', 1, '2026-09-03 16:36:17', '2026-09-07 12:35:58'),
-(20, 'VB260902AA835', 3, '2026-09-11 08:00:00', '2026-09-11 18:00:00', 'Return', 'Selangor State Government Secretary Office, Jalan Takbir 5/1, Section 5, Shah Alam', 'Putrajaya International Convention Centre, Jalan P5 A/1, Precinct 5, Putrajaya', 1, '[\"Fitri\"]', NULL, 'Stanco', 4, 1, 'Approved', 1, '2026-09-03 16:36:24', '2026-09-03 16:36:24'),
-(21, 'VB2609036FB52', 3, '2026-09-04 09:00:00', '2026-09-04 13:00:00', 'Return', 'Selangor State Government Secretary Office, Jalan Takbir 5/1, Section 5, Shah Alam', 'i-City, Section 7, Shah Alam, Petaling', 3, '[\"nor\",\"ayu\",\"nureen\"]', NULL, 'kursus', NULL, NULL, 'Cancelled', NULL, NULL, '2026-09-07 12:35:58'),
-(22, 'VB2609045C49A', 11, '2026-09-04 12:00:00', NULL, 'One Way', 'Selangor State Government Secretary Office, Jalan Takbir 5/1, Section 5, Shah Alam', 'Central i-City, 1, Persiaran Multimedia, Section 7', 1, '[\"Fitri\"]', NULL, 'Hardware Delivery', 2, 2, 'Completed', 11, '2026-09-04 11:02:00', '2026-09-07 12:35:58'),
-(23, 'VB26090450800', 1, '2026-09-05 09:00:00', '2026-09-05 17:00:00', 'Return', 'Selangor State Government Secretary Office, Jalan Takbir 5/1, Section 5, Shah Alam', 'Stadium Kajang, Jalan Kelab, New Kajang Garden, Kampung Sungai Jernih', 1, '[\"k\"]', NULL, 'jBHJ', 4, 1, 'Completed', 1, '2026-09-04 11:28:17', '2026-09-07 12:35:58'),
-(24, 'VB260904B6F1C', 13, '2026-09-14 09:00:00', NULL, 'One Way', 'Selangor State Government Secretary Office, Jalan Takbir 5/1, Section 5, Shah Alam', 'Kompleks Kerajaan Parcel D, Persiaran Sultan Salahuddin Abdul Aziz Shah, Precinct 1, Putrajaya', 2, '[\"ayu\",\"atika\"]', NULL, 'Kursus', 2, 2, 'Approved', 1, '2026-09-04 11:53:20', '2026-09-07 12:35:58'),
-(25, 'VB260904F0E01', 11, '2026-09-16 12:00:00', NULL, 'One Way', 'Selangor State Government Secretary Office, Jalan Takbir 5/1, Section 5, Shah Alam', 'SMK Seksyen 9, Jalan Tengku Ampuan Rahimah 9/20, Section 9, Shah Alam', 1, '[\"asdfasd\"]', NULL, 'asdfasfas', NULL, NULL, '', NULL, NULL, '2026-09-07 12:35:58'),
-(26, 'VB260907606E5', 11, '2026-09-07 14:00:00', NULL, 'One Way', 'Selangor State Government Secretary Office, Persiaran Raja Muda, Section 5, Shah Alam', 'Setia City Mall, Persiaran Setia Dagang, Section U13, Setia Alam', NULL, NULL, 'assets/uploads/memos/memo_6a9e2f0188a54.pdf', 'fasdfasdf', 1, 6, 'Completed', 11, '2026-09-10 12:11:22', '2026-09-07 12:35:58'),
-(27, 'VB260907AFD44', 7, '2026-09-08 14:00:00', NULL, 'One Way', 'Selangor State Government Secretary Office, Persiaran Raja Muda, Section 6, Shah Alam', 'Setia City Mall, 7, Persiaran Setia Dagang, Section U13', 1, '[\"Mohd Faiz Bin Zamri\"]', NULL, 'Hardware', NULL, NULL, 'Cancelled', NULL, NULL, '2026-09-07 16:10:54'),
-(28, 'VB260907C4965', 7, '2026-09-08 08:00:00', '2026-09-08 16:00:00', 'Return', 'Selangor State Government Secretary Office, Persiaran Raja Muda, Section 6, Shah Alam', 'Putrajaya International Convention Centre, Lebuh Gemilang, Precinct 5, Putrajaya', 5, '[\"Ali\",\"Abu\",\"Ahmad\",\"Zamri\",\"Shahrul\"]', NULL, 'asdfasdf', NULL, NULL, '', NULL, NULL, '2026-09-07 16:12:28'),
-(29, 'VB2609179274B', 11, '2026-09-18 08:00:00', NULL, 'One Way', 'Selangor State Government Secretary Office, Jalan Takbir 5/1, Section 5, Shah Alam', 'Decathlon, Persiaran Damai, Section 14, Shah Alam', 1, '[\"asd\"]', NULL, 'asdfasd', NULL, NULL, '', NULL, NULL, '2026-09-17 10:54:34'),
-(30, 'VB2609170FEEE', 2, '2026-09-18 12:00:00', NULL, 'One Way', 'Selangor State Government Secretary Office, Jalan Takbir 5/1, Section 5, Shah Alam', 'SMK Seksyen 9, Jalan Tengku Ampuan Rahimah 9/20, Section 9, Shah Alam', 1, '[\"asdfasd\"]', NULL, 'asdfasdfas', NULL, NULL, '', NULL, NULL, '2026-09-17 11:08:32'),
-(31, 'VB260917B637C', 2, '2026-09-23 12:00:00', NULL, 'One Way', 'Selangor State Government Secretary Office, Jalan Takbir 5/1, Section 5, Shah Alam', 'Jalan SS 24/1, Taman SEA, SS 23, Petaling Jaya', 1, '[\"asdfasdf\"]', NULL, 'asdfasdf', 4, 1, '', NULL, NULL, '2026-09-17 11:13:02'),
-(32, 'VB2609171ADF1', 11, '2026-09-21 12:00:00', NULL, 'One Way', 'Selangor State Government Secretary Office, Jalan Nuri 6/1, Section 6, Shah Alam', 'SMK Seksyen 9, Jalan Tengku Ampuan Rahimah 9/20, Section 9, Shah Alam', 1, '[\"asdfasd\"]', NULL, 'asdfasdfasfd', NULL, NULL, '', NULL, NULL, '2026-09-17 11:28:40'),
-(33, 'VB26091702018', 11, '2026-09-18 12:00:00', NULL, 'One Way', 'Selangor State Government Secretary Office, Jalan Takbir 5/1, Section 5, Shah Alam', 'Persiaran Raja Muda, Section 5, Shah Alam, Petaling', 1, '[\"asdfasd\"]', NULL, 'asdfasdf', NULL, NULL, '', NULL, NULL, '2026-09-17 11:58:27');
+INSERT INTO `vehicle_bookings` (`booking_id`, `booking_no`, `user_id`, `depart_datetime`, `return_datetime`, `trip_type`, `origin`, `destination`, `passenger_total`, `passenger_names`, `passenger_memo_path`, `purpose`, `vehicle_id`, `driver_id`, `status`, `approved_by`, `approved_at`, `approver_signature_path`, `created_at`) VALUES
+(1, 'VB202608001', 5, '2026-08-10 08:00:00', '2026-08-10 17:00:00', 'Return', 'Shah Alam', 'Putrajaya', 4, NULL, NULL, 'Meeting with ministry officials', 2, 2, 'Completed', 2, '2026-08-05 09:00:00', NULL, '2026-09-07 12:35:58'),
+(2, 'VB202608002', 6, '2026-08-12 09:00:00', '2026-08-12 18:00:00', 'Return', 'Shah Alam', 'Cyberjaya', 6, NULL, NULL, 'ICT system audit visit', 2, 2, 'Completed', 1, '2026-08-12 15:19:49', NULL, '2026-09-07 12:35:58'),
+(3, 'VB202608003', 5, '2026-08-15 07:30:00', '2026-08-15 20:00:00', 'Return', 'Shah Alam', 'Johor Bahru', 5, NULL, NULL, 'Data centre inspection', 4, 1, 'Rejected', 2, '2026-08-06 11:30:00', NULL, '2026-09-07 12:35:58'),
+(4, 'VB202608004', 7, '2026-08-18 08:30:00', '2026-08-18 16:30:00', 'One Way', 'Shah Alam', 'Klang', 3, NULL, NULL, 'Hardware delivery', 2, 2, 'Completed', 2, '2026-08-07 10:15:00', NULL, '2026-09-07 12:35:58'),
+(8, 'VB2608122EAF7', 3, '2026-08-12 15:33:00', NULL, 'One Way', 'Selangor State Government Secretary Office, Jalan Takbir 5/1, Section 5, Shah Alam', 'Malacca International Airport, Jalan Tunku Abdul Rahman, Taman Mekar, Ayer Keroh', 2, NULL, NULL, 'Bengkel', 2, 2, 'Completed', 1, '2026-08-12 16:01:29', NULL, '2026-09-07 12:35:58'),
+(9, 'VB2608131275E', 1, '2026-08-17 04:28:00', '2026-08-17 19:28:00', 'Return', 'Wet World, Persiaran Dato Menteri, Section 2, Shah Alam', 'Persiaran Perbandaran, Section 14, Shah Alam, Petaling', 13, NULL, NULL, 'jalan2', NULL, NULL, 'Cancelled', NULL, NULL, NULL, '2026-09-07 12:35:58'),
+(10, 'VB260813A5054', 3, '2026-08-13 15:32:00', NULL, 'One Way', 'Selangor State Government Secretary Office, Jalan Takbir 5/1, Section 5, Shah Alam', 'Jalan Sultan Ibrahim 9/8, Section 9, Shah Alam, Petaling', 1, NULL, NULL, 'Hardware Delivery', 2, 2, 'Completed', 1, '2026-08-13 16:05:03', NULL, '2026-09-07 12:35:58'),
+(11, 'VB26081381D84', 3, '2026-08-14 09:00:00', '2026-08-14 11:30:00', 'Return', 'Selangor State Government Secretary Office, Persiaran Raja Muda, Section 6, Shah Alam', 'Stadium JKR, Jalan Sepat 17/57, Malaysian Public Works Department, Section 17', 41, NULL, NULL, 'Latihan Perbarisan', NULL, NULL, 'Cancelled', NULL, NULL, NULL, '2026-09-07 12:35:58'),
+(12, 'VB2608141DE82', 1, '2026-08-17 08:00:00', NULL, 'One Way', 'Selangor State Government Secretary Office, Jalan Takbir 5/1, Section 5, Shah Alam', 'Gombak', 4, NULL, NULL, 'Hardware Delivery', 2, 2, 'Completed', 1, '2026-08-17 16:03:29', NULL, '2026-09-07 12:35:58'),
+(13, 'VB2608175330B', 3, '2026-08-18 08:00:00', NULL, 'One Way', 'Selangor State Government Secretary Office, Jalan Takbir 5/1, Section 5, Shah Alam', 'UTC Selangor, 5, Jalan 14/8, Section 14', 1, NULL, NULL, 'Hardware Delivery', 1, 1, 'Completed', 11, '2026-08-18 15:52:10', NULL, '2026-09-07 12:35:58'),
+(14, 'VB260817ECF72', 1, '2026-08-18 08:00:00', '2026-08-20 17:00:00', 'Return', 'Selangor State Government Secretary Office, Jalan Takbir 5/1, Section 5, Shah Alam', 'Stadium Bukit Jalil, Jalan Barat, Bukit Jalil, Kuala Lumpur', 5, NULL, NULL, 'SUKMA Selangor', 2, 2, 'Completed', 11, '2026-08-18 15:52:14', NULL, '2026-09-07 12:35:58'),
+(15, 'VB260818FB295', 3, '2026-08-19 08:00:00', '2026-08-19 16:00:00', 'Return', 'Selangor State Government Secretary Office, Jalan Takbir 5/1, Section 5, Shah Alam', 'Bukit Jalil National Stadium, Persiaran Putra, Sri Petaling, Kuala Lumpur', 3, NULL, NULL, 'Hardware Delivery', 4, 1, 'Completed', 11, '2026-08-18 16:32:02', NULL, '2026-09-07 12:35:58'),
+(16, 'VB260819C5F38', 3, '2026-08-21 08:00:00', '2026-08-21 17:00:00', 'Return', 'Selangor State Government Secretary Office, Jalan Takbir 5/1, Section 5, Shah Alam', 'Pusat Kesihatan UiTM, Jalan Ilmu 1/1, Section 1, Shah Alam', 3, NULL, NULL, 'Hardware Delivery', 4, 1, 'Completed', 11, '2026-08-19 12:13:54', NULL, '2026-09-07 12:35:58'),
+(17, 'VB260819F2DD9', 3, '2026-08-19 16:00:00', NULL, 'One Way', 'Selangor State Government Secretary Office, Jalan Nuri 6/1, Section 6, Shah Alam', 'Jalan Kelab, New Kajang Garden, Kampung Sungai Jernih, Kajang Municipal Council', 1, '[\"Fitri\"]', NULL, 'Site Visit', 2, 2, 'Completed', 11, '2026-08-19 15:39:09', NULL, '2026-09-07 12:35:58'),
+(18, 'VB260827845A8', 11, '2026-08-28 14:30:00', NULL, 'One Way', 'Selangor State Government Secretary Office, Jalan Takbir 5/1, Section 5, Shah Alam', 'Stadium Kajang, Jalan Kelab, New Kajang Garden, Kampung Sungai Jernih', 1, '[\"Fitri\"]', NULL, 'Raptai Hari Kemerdekaan', NULL, NULL, 'Rejected', 11, '2026-09-02 09:53:51', NULL, '2026-09-07 12:35:58'),
+(19, 'VB260902E7DFB', 11, '2026-09-10 08:00:00', NULL, 'One Way', 'Selangor State Government Secretary Office, Jalan Takbir 5/1, Section 5, Shah Alam', 'UiTM Marching Field, Section 1, Shah Alam, Petaling', 1, '[\"Fitri\"]', NULL, 'Urusan', 4, 1, 'Approved', 1, '2026-09-03 16:36:17', NULL, '2026-09-07 12:35:58'),
+(20, 'VB260902AA835', 3, '2026-09-11 08:00:00', '2026-09-11 18:00:00', 'Return', 'Selangor State Government Secretary Office, Jalan Takbir 5/1, Section 5, Shah Alam', 'Putrajaya International Convention Centre, Jalan P5 A/1, Precinct 5, Putrajaya', 1, '[\"Fitri\"]', NULL, 'Stanco', 4, 1, 'Completed', 1, '2026-09-03 16:36:24', NULL, '2026-09-03 16:36:24'),
+(21, 'VB2609036FB52', 3, '2026-09-04 09:00:00', '2026-09-04 13:00:00', 'Return', 'Selangor State Government Secretary Office, Jalan Takbir 5/1, Section 5, Shah Alam', 'i-City, Section 7, Shah Alam, Petaling', 3, '[\"nor\",\"ayu\",\"nureen\"]', NULL, 'kursus', NULL, NULL, 'Cancelled', NULL, NULL, NULL, '2026-09-07 12:35:58'),
+(22, 'VB2609045C49A', 11, '2026-09-04 12:00:00', NULL, 'One Way', 'Selangor State Government Secretary Office, Jalan Takbir 5/1, Section 5, Shah Alam', 'Central i-City, 1, Persiaran Multimedia, Section 7', 1, '[\"Fitri\"]', NULL, 'Hardware Delivery', 2, 2, 'Completed', 11, '2026-09-04 11:02:00', NULL, '2026-09-07 12:35:58'),
+(23, 'VB26090450800', 1, '2026-09-05 09:00:00', '2026-09-05 17:00:00', 'Return', 'Selangor State Government Secretary Office, Jalan Takbir 5/1, Section 5, Shah Alam', 'Stadium Kajang, Jalan Kelab, New Kajang Garden, Kampung Sungai Jernih', 1, '[\"k\"]', NULL, 'jBHJ', 4, 1, 'Completed', 1, '2026-09-04 11:28:17', NULL, '2026-09-07 12:35:58'),
+(24, 'VB260904B6F1C', 13, '2026-09-14 09:00:00', NULL, 'One Way', 'Selangor State Government Secretary Office, Jalan Takbir 5/1, Section 5, Shah Alam', 'Kompleks Kerajaan Parcel D, Persiaran Sultan Salahuddin Abdul Aziz Shah, Precinct 1, Putrajaya', 2, '[\"ayu\",\"atika\"]', NULL, 'Kursus', 2, 2, 'Completed', 1, '2026-09-04 11:53:20', NULL, '2026-09-07 12:35:58'),
+(25, 'VB260904F0E01', 11, '2026-09-16 12:00:00', NULL, 'One Way', 'Selangor State Government Secretary Office, Jalan Takbir 5/1, Section 5, Shah Alam', 'SMK Seksyen 9, Jalan Tengku Ampuan Rahimah 9/20, Section 9, Shah Alam', 1, '[\"asdfasd\"]', NULL, 'asdfasfas', NULL, NULL, '', NULL, NULL, NULL, '2026-09-07 12:35:58'),
+(26, 'VB260907606E5', 11, '2026-09-07 14:00:00', NULL, 'One Way', 'Selangor State Government Secretary Office, Persiaran Raja Muda, Section 5, Shah Alam', 'Setia City Mall, Persiaran Setia Dagang, Section U13, Setia Alam', NULL, NULL, 'assets/uploads/memos/memo_6a9e2f0188a54.pdf', 'fasdfasdf', 1, 6, 'Completed', 11, '2026-09-10 12:11:22', NULL, '2026-09-07 12:35:58'),
+(27, 'VB260907AFD44', 7, '2026-09-08 14:00:00', NULL, 'One Way', 'Selangor State Government Secretary Office, Persiaran Raja Muda, Section 6, Shah Alam', 'Setia City Mall, 7, Persiaran Setia Dagang, Section U13', 1, '[\"Mohd Faiz Bin Zamri\"]', NULL, 'Hardware', NULL, NULL, 'Cancelled', NULL, NULL, NULL, '2026-09-07 16:10:54'),
+(28, 'VB260907C4965', 7, '2026-09-08 08:00:00', '2026-09-08 16:00:00', 'Return', 'Selangor State Government Secretary Office, Persiaran Raja Muda, Section 6, Shah Alam', 'Putrajaya International Convention Centre, Lebuh Gemilang, Precinct 5, Putrajaya', 5, '[\"Ali\",\"Abu\",\"Ahmad\",\"Zamri\",\"Shahrul\"]', NULL, 'asdfasdf', NULL, NULL, '', NULL, NULL, NULL, '2026-09-07 16:12:28'),
+(29, 'VB2609179274B', 11, '2026-09-18 08:00:00', NULL, 'One Way', 'Selangor State Government Secretary Office, Jalan Takbir 5/1, Section 5, Shah Alam', 'Decathlon, Persiaran Damai, Section 14, Shah Alam', 1, '[\"asd\"]', NULL, 'asdfasd', NULL, NULL, 'Pending', NULL, NULL, NULL, '2026-09-17 10:54:34'),
+(30, 'VB2609170FEEE', 2, '2026-09-18 12:00:00', NULL, 'One Way', 'Selangor State Government Secretary Office, Jalan Takbir 5/1, Section 5, Shah Alam', 'SMK Seksyen 9, Jalan Tengku Ampuan Rahimah 9/20, Section 9, Shah Alam', 1, '[\"asdfasd\"]', NULL, 'asdfasdfas', NULL, NULL, 'Pending', NULL, NULL, NULL, '2026-09-17 11:08:32'),
+(31, 'VB260917B637C', 2, '2026-09-23 12:00:00', NULL, 'One Way', 'Selangor State Government Secretary Office, Jalan Takbir 5/1, Section 5, Shah Alam', 'Jalan SS 24/1, Taman SEA, SS 23, Petaling Jaya', 1, '[\"asdfasdf\"]', NULL, 'asdfasdf', 4, 1, 'Completed', 11, '2026-09-17 15:11:38', 'assets/uploads/signatures/sig_11_1789628828_609ec6.png', '2026-09-17 11:13:02'),
+(32, 'VB2609171ADF1', 11, '2026-09-21 12:00:00', NULL, 'One Way', 'Selangor State Government Secretary Office, Jalan Nuri 6/1, Section 6, Shah Alam', 'SMK Seksyen 9, Jalan Tengku Ampuan Rahimah 9/20, Section 9, Shah Alam', 1, '[\"asdfasd\"]', NULL, 'asdfasdfasfd', NULL, NULL, 'Pending', NULL, NULL, NULL, '2026-09-17 11:28:40'),
+(33, 'VB26091702018', 11, '2026-09-18 12:00:00', NULL, 'One Way', 'Selangor State Government Secretary Office, Jalan Takbir 5/1, Section 5, Shah Alam', 'Persiaran Raja Muda, Section 5, Shah Alam, Petaling', 1, '[\"asdfasd\"]', NULL, 'asdfasdf', NULL, NULL, 'Pending', NULL, NULL, NULL, '2026-09-17 11:58:27'),
+(34, 'VB26091794084', 11, '2026-09-24 02:00:00', NULL, 'One Way', 'Selangor State Government Secretary Office, Jalan Takbir 5/1, Section 5, Shah Alam', 'asdfas', 1, '[\"asdfasf\"]', NULL, 'asdfasf', 2, 2, 'Completed', 11, '2026-09-17 15:12:08', 'assets/uploads/signatures/sig_11_1789629128_eb4824.png', '2026-09-17 14:58:40'),
+(35, 'VB2609173F0EF', 3, '2026-09-26 12:00:00', NULL, 'One Way', 'Selangor State Government Secretary Office, Jalan Takbir 5/1, Section 5, Shah Alam', '9, Jalan Raja Abdullah Satu 9/19A, Section 9, Shah Alam', 1, '[\"xvbbxvcxvbcxvc\"]', NULL, 'xvxcvxvcxcvxc', 4, 1, 'Approved', 11, '2026-09-17 16:42:05', 'assets/uploads/signatures/sig_11_1789634525_4b183a.png', '2026-09-17 15:12:52');
 
 --
 -- Indexes for dumped tables
@@ -553,13 +572,13 @@ ALTER TABLE `vehicle_bookings`
 -- AUTO_INCREMENT for table `activity_log`
 --
 ALTER TABLE `activity_log`
-  MODIFY `log_id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=107;
+  MODIFY `log_id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=113;
 
 --
 -- AUTO_INCREMENT for table `booking_history`
 --
 ALTER TABLE `booking_history`
-  MODIFY `history_id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=68;
+  MODIFY `history_id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=77;
 
 --
 -- AUTO_INCREMENT for table `departments`
@@ -601,7 +620,7 @@ ALTER TABLE `vehicles`
 -- AUTO_INCREMENT for table `vehicle_bookings`
 --
 ALTER TABLE `vehicle_bookings`
-  MODIFY `booking_id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=34;
+  MODIFY `booking_id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=36;
 
 --
 -- Constraints for dumped tables
