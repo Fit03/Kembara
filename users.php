@@ -6,6 +6,10 @@ require_once __DIR__ . '/config/database.php';
 require_login();
 require_role(['SuperAdmin']);
 
+$fullname      = $_SESSION['fullname'];
+$role          = $_SESSION['role'];
+$currentUserId = (int)$_SESSION['user_id'];
+
 $email = $_SESSION['email'] ?? null;
 if (!$email) {
     $stmt = $pdo->prepare("SELECT email FROM users WHERE user_id = ?");

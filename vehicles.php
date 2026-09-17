@@ -803,6 +803,7 @@ include 'includes/layout_header.php';
           </div>
           <form method="dialog" class="modal-backdrop"><button>close</button></form>
         </dialog>
+        <?php endif; ?>
 
         <?php if ($flash): ?>
           <div id="toast-alert" class="card shadow-2xl px-4 py-3.5 rounded-2xl flex items-center gap-3 border" style="border-color: var(--color-<?= $flash['type'] === 'success' ? 'success' : 'error' ?>); max-width: 26rem; backdrop-filter: blur(16px);">

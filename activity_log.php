@@ -1,9 +1,13 @@
 <?php
 // activity_log.php — Log Aktiviti Sistem (SuperAdmin & Admin sahaja)
 require_once __DIR__ . '/includes/auth.php';
+require_login();
 require_role(['SuperAdmin', 'Admin']);
 require_once __DIR__ . '/config/database.php';
 
+$fullname      = $_SESSION['fullname'];
+$role          = $_SESSION['role'];
+$currentUserId = (int)$_SESSION['user_id'];
 
 $email = $_SESSION['email'] ?? null;
 if (!$email) {
