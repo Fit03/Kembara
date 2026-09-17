@@ -2,6 +2,7 @@
 // bookings.php — Pengurusan Tempahan Kenderaan
 require_once __DIR__ . '/includes/auth.php';
 require_once __DIR__ . '/config/database.php';
+require_once __DIR__ . '/includes/signature.php';
 
 require_login();
 
@@ -21,6 +22,11 @@ $avatarStmt = $pdo->prepare("SELECT profile_picture FROM users WHERE user_id = ?
 $avatarStmt->execute([$currentUserId]);
 $profilePicture = $avatarStmt->fetchColumn();
 $hasPhoto = $profilePicture && is_file(__DIR__ . '/' . $profilePicture);
+
+$sigStmt = $pdo->prepare("SELECT signature_path FROM users WHERE user_id = ?");
+$sigStmt->execute([$currentUserId]);
+$currentUserSignature = $sigStmt->fetchColumn() ?: null;
+$hasSavedSignature = $currentUserSignature && is_file(__DIR__ . '/' . $currentUserSignature);
 
 $badgeColor = match($role) {
   'SuperAdmin' => 'badge badge-error',
@@ -210,11 +216,32 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     throw new RuntimeException('Pemandu ini tiada kenderaan ditugaskan kepadanya.');
                 }
 
+                // Tandatangan pelulus adalah wajib untuk meluluskan tempahan
+                $signatureMode = $_POST['signature_mode'] ?? 'new';
+                $approverSignaturePath = null;
+
+                if ($signatureMode === 'saved') {
+                    if (!$hasSavedSignature) {
+                        throw new RuntimeException('Tiada tandatangan tersimpan. Sila lukis atau muat naik tandatangan.');
+                    }
+                    $approverSignaturePath = $currentUserSignature;
+                } else {
+                    if (!empty($_FILES['signature_file']['name']) && $_FILES['signature_file']['error'] === UPLOAD_ERR_OK) {
+                        $approverSignaturePath = save_signature_upload($_FILES['signature_file'], $currentUserId, $currentUserSignature);
+                    } elseif (!empty($_POST['signature_data'])) {
+                        $approverSignaturePath = save_signature_dataurl($_POST['signature_data'], $currentUserId, $currentUserSignature);
+                    } else {
+                        throw new RuntimeException('Sila sediakan tandatangan (muat naik atau lukis) sebelum meluluskan.');
+                    }
+                    // Simpan sebagai tandatangan lalai pengguna untuk kegunaan akan datang
+                    $pdo->prepare("UPDATE users SET signature_path = ? WHERE user_id = ?")->execute([$approverSignaturePath, $currentUserId]);
+                }
+
                 $upd = $pdo->prepare(
-                    "UPDATE vehicle_bookings SET status='Approved', driver_id=?, vehicle_id=?, approved_by=?, approved_at=NOW()
+                    "UPDATE vehicle_bookings SET status='Approved', driver_id=?, vehicle_id=?, approved_by=?, approved_at=NOW(), approver_signature_path=?
                      WHERE booking_id=?"
                 );
-                $upd->execute([$driverId, $drv['vehicle_id'], $currentUserId, $bid]);
+                $upd->execute([$driverId, $drv['vehicle_id'], $currentUserId, $approverSignaturePath, $bid]);
                 $pdo->prepare("UPDATE vehicles SET status='Booked' WHERE vehicle_id=?")->execute([$drv['vehicle_id']]);
                 $pdo->prepare("INSERT INTO booking_history (booking_id, action, remarks, action_by) VALUES (?, 'Diluluskan', 'Tempahan diluluskan, pemandu & kenderaan ditugaskan.', ?)")->execute([$bid, $currentUserId]);
 
@@ -395,6 +422,18 @@ $extraJS = '
             if (select) select.value = "";
             const preview = document.getElementById("approve-vehicle-preview");
             if (preview) preview.textContent = "—";
+
+            const savedRadio = document.querySelector(\'input[name="signature_mode"][value="saved"]\');
+            if (savedRadio) savedRadio.checked = true;
+            toggleApproveSignatureMode();
+
+            const fileInput = document.getElementById("approve-signature-file");
+            if (fileInput) fileInput.value = "";
+            const dataInput = document.getElementById("approve-signature-data");
+            if (dataInput) dataInput.value = "";
+            const sigPreview = document.getElementById("approve-signature-preview");
+            if (sigPreview) sigPreview.textContent = "Tiada tandatangan dipilih.";
+
             document.getElementById("modal-approve").showModal();
         }
 
@@ -402,6 +441,113 @@ $extraJS = '
             const select = document.getElementById("approve-driver-select");
             const opt = select.options[select.selectedIndex];
             document.getElementById("approve-vehicle-preview").textContent = (opt && opt.dataset.vehicle) ? opt.dataset.vehicle : "—";
+        }
+
+        function toggleApproveSignatureMode() {
+            const selected = document.querySelector(\'input[name="signature_mode"]:checked\');
+            const fields = document.getElementById("approve-signature-new-fields");
+            if (!fields) return;
+            fields.classList.toggle("hidden", selected && selected.value === "saved");
+        }
+
+        function previewApproveSignatureFile(input) {
+            const preview = document.getElementById("approve-signature-preview");
+            const dataInput = document.getElementById("approve-signature-data");
+            if (dataInput) dataInput.value = "";
+            if (preview) preview.textContent = (input.files && input.files[0]) ? input.files[0].name : "Tiada tandatangan dipilih.";
+        }
+
+        let apprSigCtx, apprSigDrawing = false, apprSigHasStroke = false;
+
+        function openApproveSignaturePad() {
+            document.getElementById("modal-approve-signature-pad").showModal();
+            requestAnimationFrame(initApproveSignaturePad);
+        }
+
+        function initApproveSignaturePad() {
+            const canvas = document.getElementById("approve-signature-pad-canvas");
+            if (!canvas) return;
+            const rect = canvas.getBoundingClientRect();
+            const ratio = window.devicePixelRatio || 1;
+            canvas.width = rect.width * ratio;
+            canvas.height = 220 * ratio;
+            apprSigCtx = canvas.getContext("2d");
+            apprSigCtx.scale(ratio, ratio);
+            apprSigCtx.lineWidth = 2.2;
+            apprSigCtx.lineCap = "round";
+            apprSigCtx.strokeStyle = "#1e293b";
+            apprSigCtx.fillStyle = "#ffffff";
+            apprSigCtx.fillRect(0, 0, rect.width, 220);
+            apprSigHasStroke = false;
+
+            function pos(e) {
+                const r = canvas.getBoundingClientRect();
+                const t = e.touches ? e.touches[0] : e;
+                return { x: t.clientX - r.left, y: t.clientY - r.top };
+            }
+            function start(e) {
+                e.preventDefault();
+                apprSigDrawing = true;
+                const p = pos(e);
+                apprSigCtx.beginPath();
+                apprSigCtx.moveTo(p.x, p.y);
+            }
+            function move(e) {
+                if (!apprSigDrawing) return;
+                e.preventDefault();
+                const p = pos(e);
+                apprSigCtx.lineTo(p.x, p.y);
+                apprSigCtx.stroke();
+                apprSigHasStroke = true;
+            }
+            function end() { apprSigDrawing = false; }
+
+            canvas.onmousedown = start;
+            canvas.onmousemove = move;
+            canvas.onmouseup = end;
+            canvas.onmouseleave = end;
+            canvas.ontouchstart = start;
+            canvas.ontouchmove = move;
+            canvas.ontouchend = end;
+        }
+
+        function clearApproveSignaturePad() {
+            const canvas = document.getElementById("approve-signature-pad-canvas");
+            if (!canvas || !apprSigCtx) return;
+            const rect = canvas.getBoundingClientRect();
+            apprSigCtx.fillStyle = "#ffffff";
+            apprSigCtx.fillRect(0, 0, rect.width, 220);
+            apprSigHasStroke = false;
+        }
+
+        function saveApproveSignaturePad() {
+            if (!apprSigHasStroke) {
+                alert("Sila tandatangan dahulu.");
+                return;
+            }
+            const canvas = document.getElementById("approve-signature-pad-canvas");
+            document.getElementById("approve-signature-data").value = canvas.toDataURL("image/png");
+            const fileInput = document.getElementById("approve-signature-file");
+            if (fileInput) fileInput.value = "";
+            const preview = document.getElementById("approve-signature-preview");
+            if (preview) preview.textContent = "Tandatangan dilukis sedia untuk dihantar.";
+            document.getElementById("modal-approve-signature-pad").close();
+        }
+
+        function validateApproveForm() {
+            const selected = document.querySelector(\'input[name="signature_mode"]:checked\');
+            const mode = selected ? selected.value : "new";
+            if (mode === "saved") return true;
+
+            const fileInput = document.getElementById("approve-signature-file");
+            const dataInput = document.getElementById("approve-signature-data");
+            const hasFile = fileInput && fileInput.files && fileInput.files.length > 0;
+            const hasDrawn = dataInput && dataInput.value !== "";
+            if (!hasFile && !hasDrawn) {
+                alert("Sila muat naik atau lukis tandatangan sebelum meluluskan.");
+                return false;
+            }
+            return true;
         }
 
         function openActionModal(id, action, text, buttonLabel, isDanger) {
@@ -620,7 +766,7 @@ include 'includes/layout_header.php';
                 <button type="button" class="btn btn-ghost" onclick="document.getElementById('modal-approve').close()">Tutup</button>
               </div>
             <?php else: ?>
-            <form action="bookings.php<?= $search !== '' || $statusFilter !== 'All' ? '?' . http_build_query(array_filter(['q' => $search !== '' ? $search : null, 'status' => $statusFilter !== 'All' ? $statusFilter : null])) : '' ?>" method="POST" class="flex flex-col gap-3">
+            <form action="bookings.php<?= $search !== '' || $statusFilter !== 'All' ? '?' . http_build_query(array_filter(['q' => $search !== '' ? $search : null, 'status' => $statusFilter !== 'All' ? $statusFilter : null])) : '' ?>" method="POST" enctype="multipart/form-data" class="flex flex-col gap-3" onsubmit="return validateApproveForm()">
               <input type="hidden" name="action" value="approve_booking" />
               <input type="hidden" name="csrf_token" value="<?= generate_csrf_token() ?>" />
               <input type="hidden" name="booking_id" id="approve-booking-id" />
@@ -644,12 +790,62 @@ include 'includes/layout_header.php';
                 <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 shrink-0" style="color:var(--ta-muted)" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M8.25 18.75a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m3 0h6m-9 0H3.375a1.125 1.125 0 01-1.125-1.125V14.25m17.25 4.5a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m3 0h1.125c.621 0 1.129-.504 1.09-1.124a17.902 17.902 0 00-3.213-9.193 2.056 2.056 0 00-1.58-.86H14.25M16.5 18.75h-2.25m0-11.177v-.958c0-.568-.422-1.048-.987-1.106a48.554 48.554 0 00-10.026 0 1.106 1.106 0 00-.987 1.106v7.635m12-6.677v6.677m0 0h-12" /></svg>
                 <span>Kenderaan ditugaskan: <span id="approve-vehicle-preview" class="font-semibold" style="color:var(--ta-ink)">—</span></span>
               </div>
+
+              <div class="border-t pt-3" style="border-color:var(--ta-border)">
+                <label class="text-xs font-medium block mb-2">Tandatangan Pelulus <span class="text-error">*</span></label>
+
+                <?php if ($hasSavedSignature): ?>
+                  <label class="flex items-center gap-2 mb-2 p-2 rounded-lg border cursor-pointer" style="border-color:var(--ta-border)">
+                    <input type="radio" name="signature_mode" value="saved" class="radio radio-sm" checked onchange="toggleApproveSignatureMode()" />
+                    <img src="<?= htmlspecialchars($currentUserSignature) ?>?v=<?= time() ?>" alt="Tandatangan Tersimpan" class="h-8 object-contain" />
+                    <span class="text-xs">Guna tandatangan tersimpan</span>
+                  </label>
+                  <label class="flex items-center gap-2 mb-2 text-xs cursor-pointer">
+                    <input type="radio" name="signature_mode" value="new" class="radio radio-sm" onchange="toggleApproveSignatureMode()" />
+                    Tandatangan baharu
+                  </label>
+                <?php else: ?>
+                  <input type="hidden" name="signature_mode" value="new" />
+                  <p class="text-xs text-slate-400 mb-2">Anda belum mempunyai tandatangan tersimpan. Sila lukis atau muat naik sekarang.</p>
+                <?php endif; ?>
+
+                <div id="approve-signature-new-fields" class="<?= $hasSavedSignature ? 'hidden' : '' ?> flex flex-col gap-2">
+                  <div class="flex gap-2">
+                    <label for="approve-signature-file" class="btn btn-sm btn-outline gap-1.5 flex-1 cursor-pointer">Muat Naik</label>
+                    <button type="button" class="btn btn-sm btn-outline gap-1.5 flex-1" onclick="openApproveSignaturePad()">Lukis</button>
+                  </div>
+                  <input type="file" name="signature_file" id="approve-signature-file" accept=".jpg,.jpeg,.png" class="hidden" onchange="previewApproveSignatureFile(this)" />
+                  <input type="hidden" name="signature_data" id="approve-signature-data" />
+                  <div id="approve-signature-preview" class="text-xs text-slate-400">Tiada tandatangan dipilih.</div>
+                </div>
+              </div>
+
               <div class="modal-action mt-2">
                 <button type="button" class="btn btn-ghost" onclick="document.getElementById('modal-approve').close()">Batal</button>
                 <button type="submit" class="btn text-white border-0" style="background:var(--ta-brand)">Luluskan Tempahan</button>
               </div>
             </form>
             <?php endif; ?>
+          </div>
+          <form method="dialog" class="modal-backdrop"><button>close</button></form>
+        </dialog>
+
+        <!-- Modal: Lukis Tandatangan Pelulus -->
+        <dialog id="modal-approve-signature-pad" class="modal">
+          <div class="modal-box card max-w-lg">
+            <form method="dialog"><button class="btn btn-sm btn-circle btn-ghost absolute right-3 top-3">✕</button></form>
+            <h3 class="font-bold text-lg mb-1">Lukis Tandatangan</h3>
+            <p class="text-sm text-slate-400 mb-3">Gunakan tetikus atau jari untuk menandatangani di ruang bawah.</p>
+            <div class="rounded-xl border" style="border-color:var(--ta-border); background:#fff;">
+              <canvas id="approve-signature-pad-canvas" style="width:100%; height:220px; display:block; touch-action:none; cursor:crosshair;"></canvas>
+            </div>
+            <div class="modal-action mt-3 justify-between">
+              <button type="button" class="btn btn-ghost btn-sm" onclick="clearApproveSignaturePad()">Padam</button>
+              <div class="flex gap-2">
+                <button type="button" class="btn btn-ghost" onclick="document.getElementById('modal-approve-signature-pad').close()">Batal</button>
+                <button type="button" class="btn text-white border-0" style="background:var(--ta-brand)" onclick="saveApproveSignaturePad()">Guna Tandatangan Ini</button>
+              </div>
+            </div>
           </div>
           <form method="dialog" class="modal-backdrop"><button>close</button></form>
         </dialog>

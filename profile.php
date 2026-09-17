@@ -3,6 +3,7 @@
 require_once __DIR__ . '/includes/auth.php';
 require_login();
 require_once __DIR__ . '/config/database.php';
+require_once __DIR__ . '/includes/signature.php';
 
 
 $currentUserId = (int)$_SESSION['user_id'];
@@ -141,6 +142,36 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             unset($_SESSION['profile_picture']);
 
             $flash = ['type' => 'success', 'msg' => 'Foto profil telah dibuang.'];
+
+        } elseif ($action === 'upload_signature') {
+            $stmt = $pdo->prepare("SELECT signature_path FROM users WHERE user_id = ?");
+            $stmt->execute([$currentUserId]);
+            $oldSignature = $stmt->fetchColumn();
+
+            $newPath = save_signature_upload($_FILES['signature'] ?? [], $currentUserId, $oldSignature ?: null);
+            $pdo->prepare("UPDATE users SET signature_path = ? WHERE user_id = ?")->execute([$newPath, $currentUserId]);
+
+            $flash = ['type' => 'success', 'msg' => 'Tandatangan berjaya dimuat naik.'];
+
+        } elseif ($action === 'save_signature_canvas') {
+            $stmt = $pdo->prepare("SELECT signature_path FROM users WHERE user_id = ?");
+            $stmt->execute([$currentUserId]);
+            $oldSignature = $stmt->fetchColumn();
+
+            $newPath = save_signature_dataurl($_POST['signature_data'] ?? '', $currentUserId, $oldSignature ?: null);
+            $pdo->prepare("UPDATE users SET signature_path = ? WHERE user_id = ?")->execute([$newPath, $currentUserId]);
+
+            $flash = ['type' => 'success', 'msg' => 'Tandatangan berjaya disimpan.'];
+
+        } elseif ($action === 'remove_signature') {
+            $stmt = $pdo->prepare("SELECT signature_path FROM users WHERE user_id = ?");
+            $stmt->execute([$currentUserId]);
+            $oldSignature = $stmt->fetchColumn();
+            signature_delete_old($oldSignature ?: null);
+
+            $pdo->prepare("UPDATE users SET signature_path = NULL WHERE user_id = ?")->execute([$currentUserId]);
+
+            $flash = ['type' => 'success', 'msg' => 'Tandatangan telah dibuang.'];
         }
     } catch (RuntimeException $e) {
         $flash = ['type' => 'error', 'msg' => $e->getMessage()];
@@ -185,6 +216,7 @@ if ($user['profile_picture']) {
 }
 
 $hasPhoto = $user['profile_picture'] && is_file(__DIR__ . '/' . $user['profile_picture']);
+$hasSignature = $user['signature_path'] && is_file(__DIR__ . '/' . $user['signature_path']);
 
 $pendingApprovals = $pdo->query("SELECT COUNT(*) FROM vehicle_bookings WHERE status = 'Pending'")->fetchColumn();
 
@@ -205,6 +237,79 @@ $extraJS = '
                 setTimeout(dismissToast, 4000);
             }
         })();
+
+        let sigCtx, sigDrawing = false, sigHasStroke = false;
+
+        function openSignaturePad() {
+            document.getElementById("modal-signature-pad").showModal();
+            requestAnimationFrame(initSignaturePad);
+        }
+
+        function initSignaturePad() {
+            const canvas = document.getElementById("signature-pad-canvas");
+            if (!canvas) return;
+            const rect = canvas.getBoundingClientRect();
+            const ratio = window.devicePixelRatio || 1;
+            canvas.width = rect.width * ratio;
+            canvas.height = 220 * ratio;
+            sigCtx = canvas.getContext("2d");
+            sigCtx.scale(ratio, ratio);
+            sigCtx.lineWidth = 2.2;
+            sigCtx.lineCap = "round";
+            sigCtx.strokeStyle = "#1e293b";
+            sigCtx.fillStyle = "#ffffff";
+            sigCtx.fillRect(0, 0, rect.width, 220);
+            sigHasStroke = false;
+
+            function pos(e) {
+                const r = canvas.getBoundingClientRect();
+                const t = e.touches ? e.touches[0] : e;
+                return { x: t.clientX - r.left, y: t.clientY - r.top };
+            }
+            function start(e) {
+                e.preventDefault();
+                sigDrawing = true;
+                const p = pos(e);
+                sigCtx.beginPath();
+                sigCtx.moveTo(p.x, p.y);
+            }
+            function move(e) {
+                if (!sigDrawing) return;
+                e.preventDefault();
+                const p = pos(e);
+                sigCtx.lineTo(p.x, p.y);
+                sigCtx.stroke();
+                sigHasStroke = true;
+            }
+            function end() { sigDrawing = false; }
+
+            canvas.onmousedown = start;
+            canvas.onmousemove = move;
+            canvas.onmouseup = end;
+            canvas.onmouseleave = end;
+            canvas.ontouchstart = start;
+            canvas.ontouchmove = move;
+            canvas.ontouchend = end;
+        }
+
+        function clearSignaturePad() {
+            const canvas = document.getElementById("signature-pad-canvas");
+            if (!canvas || !sigCtx) return;
+            const rect = canvas.getBoundingClientRect();
+            sigCtx.fillStyle = "#ffffff";
+            sigCtx.fillRect(0, 0, rect.width, 220);
+            sigHasStroke = false;
+        }
+
+        function saveSignaturePad() {
+            if (!sigHasStroke) {
+                alert("Sila tandatangan dahulu sebelum menyimpan.");
+                return;
+            }
+            const canvas = document.getElementById("signature-pad-canvas");
+            document.getElementById("signature-data-input").value = canvas.toDataURL("image/png");
+            document.getElementById("signature-canvas-form").submit();
+        }
     </script>
 ';
 
@@ -341,6 +446,75 @@ include 'includes/layout_header.php';
             </form>
           </div>
         </div>
+
+        <!-- Kad Tandatangan Digital -->
+        <div class="card p-5 sm:p-6 mt-5">
+          <h6 class="font-semibold mb-1">Tandatangan Digital</h6>
+          <p class="text-sm mb-4" style="color:var(--ta-muted)">Tandatangan ini akan digunakan secara automatik pada borang cetakan (cth. Tandatangan/Cop Pemohon).</p>
+
+          <div class="flex flex-col sm:flex-row items-start gap-5">
+            <div class="shrink-0 rounded-xl border flex items-center justify-center overflow-hidden" style="width:220px; height:110px; border-color:var(--ta-border); background:#fff;">
+              <?php if ($hasSignature): ?>
+                <img src="<?= htmlspecialchars($user['signature_path']) ?>?v=<?= time() ?>" alt="Tandatangan" class="max-w-full max-h-full object-contain p-2" />
+              <?php else: ?>
+                <span class="text-xs text-slate-400 px-3 text-center">Tiada tandatangan disimpan</span>
+              <?php endif; ?>
+            </div>
+
+            <div class="flex-1 flex flex-col gap-2">
+              <div class="flex flex-wrap gap-2">
+                <label for="signature-file-input" class="btn btn-sm btn-outline gap-1.5 cursor-pointer">
+                  <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" /></svg>
+                  Muat Naik Fail
+                </label>
+                <button type="button" class="btn btn-sm btn-outline gap-1.5" onclick="openSignaturePad()">
+                  <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931z" /><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 13.5v6a2.25 2.25 0 01-2.25 2.25H6.75A2.25 2.25 0 014.5 19.5V8.25A2.25 2.25 0 016.75 6h6" /></svg>
+                  Lukis Tandatangan
+                </button>
+                <?php if ($hasSignature): ?>
+                <form action="profile.php" method="POST" onsubmit="return confirm('Buang tandatangan tersimpan?');">
+                  <input type="hidden" name="action" value="remove_signature" />
+                  <input type="hidden" name="csrf_token" value="<?= generate_csrf_token() ?>" />
+                  <button type="submit" class="btn btn-sm btn-ghost text-error">Buang</button>
+                </form>
+                <?php endif; ?>
+              </div>
+              <p class="text-xs text-slate-400">JPG atau PNG, saiz maksimum 1MB. Latar belakang putih/lutsinar disyorkan.</p>
+
+              <form action="profile.php" method="POST" enctype="multipart/form-data" id="signature-file-form">
+                <input type="hidden" name="action" value="upload_signature" />
+                <input type="hidden" name="csrf_token" value="<?= generate_csrf_token() ?>" />
+                <input type="file" name="signature" id="signature-file-input" accept=".jpg,.jpeg,.png" class="hidden" onchange="document.getElementById('signature-file-form').submit()" />
+              </form>
+            </div>
+          </div>
+        </div>
+
+        <!-- Modal: Lukis Tandatangan -->
+        <dialog id="modal-signature-pad" class="modal">
+          <div class="modal-box card max-w-lg">
+            <form method="dialog"><button class="btn btn-sm btn-circle btn-ghost absolute right-3 top-3">✕</button></form>
+            <h3 class="font-bold text-lg mb-1">Lukis Tandatangan</h3>
+            <p class="text-sm text-slate-400 mb-3">Gunakan tetikus atau jari untuk menandatangani di ruang bawah.</p>
+            <div class="rounded-xl border" style="border-color:var(--ta-border); background:#fff;">
+              <canvas id="signature-pad-canvas" style="width:100%; height:220px; display:block; touch-action:none; cursor:crosshair;"></canvas>
+            </div>
+            <div class="modal-action mt-3 justify-between">
+              <button type="button" class="btn btn-outline btn-error btn-sm" onclick="clearSignaturePad()">Padam</button>
+              <div class="flex gap-2">
+                <button type="button" class="btn btn-ghost" onclick="document.getElementById('modal-signature-pad').close()">Batal</button>
+                <button type="button" class="btn text-white border-0" style="background:var(--ta-brand)" onclick="saveSignaturePad()">Simpan Tandatangan</button>
+              </div>
+            </div>
+          </div>
+          <form method="dialog" class="modal-backdrop"><button>close</button></form>
+        </dialog>
+
+        <form action="profile.php" method="POST" id="signature-canvas-form" class="hidden">
+          <input type="hidden" name="action" value="save_signature_canvas" />
+          <input type="hidden" name="csrf_token" value="<?= generate_csrf_token() ?>" />
+          <input type="hidden" name="signature_data" id="signature-data-input" />
+        </form>
 
     </div>
 </main>

@@ -18,7 +18,7 @@ if ($bookingId <= 0) {
 }
 
 $stmt = $pdo->prepare(
-    "SELECT vb.*, u.fullname AS requester_name, u.phone_no,
+    "SELECT vb.*, u.fullname AS requester_name, u.phone_no, u.signature_path AS requester_signature,
                 d.department_name,
                 v.plate_no, v.vehicle_name,
                 du.fullname AS driver_name,
@@ -195,9 +195,21 @@ $pdf->SetFont('Arial', '', 11);
 $pdf->MultiCell($RIGHT - $LEFT, 6, $utf8($cert), 0, 'J');
 
 // Signature blocks
-$pdf->Ln(18);
+$pdf->Ln(24);
 $y = $pdf->GetY();
 $col1_x = $LEFT; $col2_x = 112;
+$sigW = 40; $sigH = 14;
+
+$requesterSigAbs = !empty($booking['requester_signature']) ? __DIR__ . '/' . ltrim($booking['requester_signature'], '/') : null;
+if ($requesterSigAbs && is_file($requesterSigAbs)) {
+    $pdf->Image($requesterSigAbs, $col1_x + (65 - $sigW) / 2, $y - $sigH - 1, $sigW, $sigH);
+}
+
+$approverSigAbs = !empty($booking['approver_signature_path']) ? __DIR__ . '/' . ltrim($booking['approver_signature_path'], '/') : null;
+if ($approverSigAbs && is_file($approverSigAbs)) {
+    $pdf->Image($approverSigAbs, $col2_x + (65 - $sigW) / 2, $y - $sigH - 1, $sigW, $sigH);
+}
+
 $pdf->DottedLine($col1_x, $y, $col1_x + 65);
 $pdf->DottedLine($col2_x, $y, $col2_x + 65);
 $pdf->SetFont('Arial', '', 10);
@@ -207,8 +219,9 @@ $pdf->SetXY($col2_x, $y + 2); $pdf->Cell(65, 6, $utf8('(Tandatangan/Cop Ketua Ba
 $pdf->Ln(20);
 $pdf->SetFont('Arial', '', 11);
 $y = $pdf->GetY();
+$approvedDate = !empty($booking['approved_at']) ? date('d/m/Y', strtotime($booking['approved_at'])) : '';
 $pdf->SetXY($col1_x, $y); $pdf->Cell(65, 6, $utf8('Tarikh: ' . $createdDate));
-$pdf->SetXY($col2_x, $y); $pdf->Cell(65, 6, $utf8('Tarikh:'));
+$pdf->SetXY($col2_x, $y); $pdf->Cell(65, 6, $utf8('Tarikh: ' . $approvedDate));
 
 if (!empty($booking['passenger_memo_path'])) {
     $pdf->Ln(14);
