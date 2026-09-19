@@ -60,11 +60,27 @@ $totalBookingsThisMonth = $pdo->query(
 )->fetchColumn();
 
 $pendingApprovals = $pdo->query(
-    "SELECT COUNT(*) FROM vehicle_bookings WHERE status = 'Pending'"
+  "SELECT COUNT(*) FROM vehicle_bookings
+   WHERE status = 'Pending' AND workflow_stage IN ('Submitted', 'ReassignmentRequired')"
 )->fetchColumn();
 
 $vehicleCounts = $pdo->query(
-    "SELECT status, COUNT(*) AS total FROM vehicles GROUP BY status"
+    "SELECT effective_status AS status, COUNT(*) AS total
+     FROM (
+       SELECT v.vehicle_id,
+              CASE
+                WHEN EXISTS (
+                  SELECT 1
+                  FROM vehicle_bookings vb
+                  WHERE vb.vehicle_id = v.vehicle_id
+                    AND vb.status IN ('Pending', 'Approved')
+                    AND vb.workflow_stage IN ('DriverAssigned', 'DriverAccepted', 'AdminApproved')
+                ) THEN 'Booked'
+                ELSE v.status
+              END AS effective_status
+       FROM vehicles v
+     ) effective_vehicles
+     GROUP BY effective_status"
 )->fetchAll(PDO::FETCH_KEY_PAIR);
 $totalVehicles     = array_sum($vehicleCounts);
 $availableVehicles = $vehicleCounts['Available'] ?? 0;
@@ -186,14 +202,28 @@ if ($role === 'User') {
     $uid = $_SESSION['user_id'];
 
     $myActiveBookingsCount = (function () use ($pdo, $uid) {
-        $s = $pdo->prepare("SELECT COUNT(*) FROM vehicle_bookings WHERE user_id = ? AND status IN ('Pending','Approved')");
-        $s->execute([$uid]);
+      $s = $pdo->prepare(
+        "SELECT COUNT(*)
+         FROM vehicle_bookings vb
+         LEFT JOIN drivers assigned_driver ON assigned_driver.driver_id = vb.driver_id
+         WHERE (vb.user_id = :uid AND vb.status IN ('Pending','Approved'))
+          OR (assigned_driver.user_id = :driver_uid AND vb.status IN ('Pending','Approved'))"
+      );
+      $s->execute([':uid' => $uid, ':driver_uid' => $uid]);
         return (int) $s->fetchColumn();
     })();
 
     $myPendingCount = (function () use ($pdo, $uid) {
-        $s = $pdo->prepare("SELECT COUNT(*) FROM vehicle_bookings WHERE user_id = ? AND status = 'Pending'");
-        $s->execute([$uid]);
+      $s = $pdo->prepare(
+        "SELECT COUNT(*)
+         FROM vehicle_bookings vb
+         LEFT JOIN drivers assigned_driver ON assigned_driver.driver_id = vb.driver_id
+         WHERE (vb.user_id = :uid AND vb.status = 'Pending')
+          OR (assigned_driver.user_id = :driver_uid
+            AND vb.status = 'Pending'
+            AND vb.workflow_stage = 'DriverAssigned')"
+      );
+      $s->execute([':uid' => $uid, ':driver_uid' => $uid]);
         return (int) $s->fetchColumn();
     })();
 
@@ -211,11 +241,13 @@ if ($role === 'User') {
     $myUpcomingStmt = $pdo->prepare(
         "SELECT vb.booking_no, v.plate_no, v.vehicle_name, vb.destination, vb.depart_datetime, vb.status
          FROM vehicle_bookings vb
-         JOIN vehicles v ON v.vehicle_id = vb.vehicle_id
-         WHERE vb.user_id = ? AND vb.status IN ('Pending', 'Approved')
+         LEFT JOIN vehicles v ON v.vehicle_id = vb.vehicle_id
+         LEFT JOIN drivers assigned_driver ON assigned_driver.driver_id = vb.driver_id
+         WHERE ((vb.user_id = :uid) OR (assigned_driver.user_id = :driver_uid))
+           AND vb.status IN ('Pending', 'Approved')
          ORDER BY vb.depart_datetime ASC"
     );
-    $myUpcomingStmt->execute([$uid]);
+    $myUpcomingStmt->execute([':uid' => $uid, ':driver_uid' => $uid]);
     $myUpcomingTrips = $myUpcomingStmt->fetchAll(PDO::FETCH_ASSOC);
 
     $myNextTrip = $myUpcomingTrips[0] ?? null;
@@ -224,14 +256,15 @@ if ($role === 'User') {
         : null;
 
     $myHistoryStmt = $pdo->prepare(
-        "SELECT vb.booking_no, v.plate_no, v.vehicle_name, vb.destination, vb.depart_datetime, vb.status
+           "SELECT vb.booking_no, v.plate_no, v.vehicle_name, vb.destination, vb.depart_datetime, vb.status
          FROM vehicle_bookings vb
-         JOIN vehicles v ON v.vehicle_id = vb.vehicle_id
-         WHERE vb.user_id = ?
+            LEFT JOIN vehicles v ON v.vehicle_id = vb.vehicle_id
+            LEFT JOIN drivers assigned_driver ON assigned_driver.driver_id = vb.driver_id
+            WHERE vb.user_id = :uid OR assigned_driver.user_id = :driver_uid
          ORDER BY vb.depart_datetime DESC
          LIMIT 8"
     );
-    $myHistoryStmt->execute([$uid]);
+          $myHistoryStmt->execute([':uid' => $uid, ':driver_uid' => $uid]);
     $myBookingHistory = $myHistoryStmt->fetchAll(PDO::FETCH_ASSOC);
 }
 
@@ -276,7 +309,7 @@ include 'includes/layout_header.php';
               <div class="ta-icon-box ta-icon-box-green mb-4">
                 <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.6"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
               </div>
-              <p class="text-sm mb-1" style="color:var(--ta-muted)">Menunggu Kelulusan</p>
+              <p class="text-sm mb-1" style="color:var(--ta-muted)">Menunggu Tindakan</p>
               <h5 class="text-2xl font-bold"><?= (int)$myPendingCount ?></h5>
             </div>
           <?php if ($myPendingCount > 0): ?>

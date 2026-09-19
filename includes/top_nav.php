@@ -10,6 +10,43 @@ $searchPlaceholder = $searchPlaceholder ?? 'Cari...';
 $backUrl = $backUrl ?? null;
 $breadcrumbs = $breadcrumbs ?? null;
 
+$navUserId = (int)($_SESSION['user_id'] ?? 0);
+$navRole = $_SESSION['role'] ?? 'User';
+$notificationCount = 0;
+$notificationTitle = 'Tiada notifikasi baharu.';
+$notificationDescription = '';
+$notificationUrl = 'bookings.php';
+
+if (in_array($navRole, ['Admin', 'SuperAdmin'], true)) {
+    $notificationCount = (int)$pdo->query(
+        "SELECT COUNT(*) FROM vehicle_bookings
+         WHERE status='Pending' AND workflow_stage IN ('Submitted', 'ReassignmentRequired')"
+    )->fetchColumn();
+    $notificationTitle = 'Tempahan Menunggu Tugasan';
+    $notificationDescription = 'Tempahan yang memerlukan admin menetapkan atau menetapkan semula pemandu.';
+    $notificationUrl = 'bookings.php?status=Pending';
+} else {
+    $notificationStmt = $pdo->prepare(
+        "SELECT COUNT(*) FROM vehicle_bookings vb
+         LEFT JOIN drivers assigned_driver ON assigned_driver.driver_id = vb.driver_id
+         WHERE (
+             vb.user_id = :user_id AND vb.status IN ('Pending', 'Approved')
+         ) OR (
+             assigned_driver.user_id = :driver_user_id
+             AND vb.status = 'Pending'
+             AND vb.workflow_stage = 'DriverAssigned'
+         )"
+    );
+    $notificationStmt->execute([
+        ':user_id' => $navUserId,
+        ':driver_user_id' => $navUserId,
+    ]);
+    $notificationCount = (int)$notificationStmt->fetchColumn();
+    $notificationTitle = 'Kemas Kini Tempahan';
+    $notificationDescription = 'Terdapat tempahan anda atau tugasan pemandu yang memerlukan semakan.';
+    $notificationUrl = 'bookings.php';
+}
+
 // Semak sama ada e-mel sudah disimpan dalam sesi daripada log masuk
 $email = $_SESSION['email'] ?? null;
 
@@ -76,7 +113,7 @@ $hasPhoto = $profilePicture !== null;
                 <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8">
                     <path stroke-linecap="round" stroke-linejoin="round" d="M14.857 17.082a23.848 23.848 0 005.454-1.31A8.967 8.967 0 0118 9.75v-.7V9A6 6 0 006 9v.75a8.967 8.967 0 01-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 01-5.714 0m5.714 0a3 3 0 11-5.714 0" />
                 </svg>
-                <?php if (isset($pendingApprovals) && $pendingApprovals > 0): ?>
+                <?php if ($notificationCount > 0): ?>
                     <span class="absolute top-2 right-2 flex h-2.5 w-2.5">
                         <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-error opacity-75"></span>
                         <span class="relative inline-flex rounded-full h-2.5 w-2.5 bg-error"></span>
@@ -89,22 +126,22 @@ $hasPhoto = $profilePicture !== null;
                 <div class="px-4 py-3 border-b flex items-center justify-between" style="border-color: var(--ta-border);">
                     <div class="flex items-center gap-2">
                         <span class="font-bold text-sm">Notifikasi</span>
-                        <?php if (isset($pendingApprovals) && $pendingApprovals > 0): ?>
-                            <span class="badge badge-error badge-sm text-white font-semibold"><?= (int)$pendingApprovals ?> baru</span>
+                        <?php if ($notificationCount > 0): ?>
+                            <span class="badge badge-error badge-sm text-white font-semibold"><?= $notificationCount ?> baru</span>
                         <?php endif; ?>
                     </div>
                 </div>
 
                 <!-- Content List -->
                 <div class="max-h-64 overflow-y-auto divide-y" style="border-color: var(--ta-border);">
-                    <?php if (isset($pendingApprovals) && $pendingApprovals > 0): ?>
-                        <a href="bookings.php?status=Pending" class="flex items-start gap-3 p-3.5 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
+                    <?php if ($notificationCount > 0): ?>
+                        <a href="<?= htmlspecialchars($notificationUrl) ?>" class="flex items-start gap-3 p-3.5 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
                             <div class="p-2 rounded-full bg-warning/15 text-warning shrink-0 mt-0.5">
                                 <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
                             </div>
                             <div class="flex-1 min-w-0">
-                                <p class="text-xs font-semibold text-slate-800 dark:text-slate-100">Tempahan Menunggu Kelulusan</p>
-                                <p class="text-[11px] text-slate-400 mt-0.5">Terdapat <?= (int)$pendingApprovals ?> tempahan kenderaan baharu yang memerlukan tindakan anda.</p>
+                                <p class="text-xs font-semibold text-slate-800 dark:text-slate-100"><?= htmlspecialchars($notificationTitle) ?></p>
+                                <p class="text-[11px] text-slate-400 mt-0.5"><?= htmlspecialchars($notificationDescription) ?></p>
                             </div>
                         </a>
                     <?php else: ?>

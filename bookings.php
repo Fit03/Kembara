@@ -285,6 +285,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                      WHERE booking_id=?"
                 );
                 $upd->execute([$driverId, $drv['vehicle_id'], $currentUserId, $approverSignaturePath, $bid]);
+                $pdo->prepare("UPDATE vehicles SET status='Booked' WHERE vehicle_id=?")->execute([$drv['vehicle_id']]);
                 $pdo->prepare("INSERT INTO booking_history (booking_id, action, remarks, action_by) VALUES (?, 'Driver Assigned', 'Pemandu telah ditugaskan dan menunggu pengesahan.', ?)")->execute([$bid, $currentUserId]);
 
                 $flash = ['type' => 'success', 'msg' => "Pemandu telah ditugaskan untuk tempahan {$booking['booking_no']}."];
@@ -344,6 +345,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                      SET status='Pending', workflow_stage='ReassignmentRequired', driver_id=NULL, vehicle_id=NULL, approved_by=NULL, approved_at=NULL, approver_signature_path=NULL
                      WHERE booking_id=?"
                   )->execute([$bid]);
+                  $pdo->prepare("UPDATE vehicles SET status='Available' WHERE vehicle_id=?")->execute([$booking['vehicle_id']]);
                   $pdo->prepare("INSERT INTO booking_history (booking_id, action, remarks, action_by) VALUES (?, 'Driver Rejected', 'Pemandu menolak tugasan. Menunggu penetapan pemandu baharu.', ?)")->execute([$bid, $currentUserId]);
                   $flash = ['type' => 'success', 'msg' => "Tugasan ditolak. Admin perlu menetapkan pemandu baharu untuk {$booking['booking_no']}."];
                 }
@@ -363,7 +365,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 if (!in_array($booking['status'], ['Pending', 'Approved'], true)) throw new RuntimeException('Tempahan ini tidak boleh dibatalkan.');
 
                 $pdo->prepare("UPDATE vehicle_bookings SET status='Cancelled', workflow_stage='Cancelled' WHERE booking_id=?")->execute([$bid]);
-                if ($booking['status'] === 'Approved') {
+                if (!empty($booking['vehicle_id'])) {
                     $pdo->prepare("UPDATE vehicles SET status='Available' WHERE vehicle_id=?")->execute([$booking['vehicle_id']]);
                 }
                 $pdo->prepare("INSERT INTO booking_history (booking_id, action, remarks, action_by) VALUES (?, 'Dibatalkan', 'Tempahan dibatalkan.', ?)")->execute([$bid, $currentUserId]);

@@ -42,6 +42,20 @@ $vehicleStatusLabel = fn(string $s) => match ($s) {
     'Inactive'    => 'Tidak Aktif',
     default       => $s,
 };
+  $activeVehicleStatus = static function (array $vehicle) use ($vehicleStatusBadge, $vehicleStatusLabel): array {
+    if (empty($vehicle['active_booking_id'])) {
+      return [$vehicleStatusBadge($vehicle['status']), $vehicleStatusLabel($vehicle['status'])];
+    }
+
+    $now = time();
+    $departed = !empty($vehicle['active_depart_datetime'])
+      && strtotime($vehicle['active_depart_datetime']) <= $now;
+    $notReturned = empty($vehicle['active_return_datetime'])
+      || strtotime($vehicle['active_return_datetime']) >= $now;
+    $label = $departed && $notReturned ? 'Sedang Digunakan' : 'Ditempah';
+
+    return ['badge badge-info', $label];
+  };
 
 require_once __DIR__ . '/includes/vehicle_documents.php';
 
@@ -276,7 +290,17 @@ function buildVehiclesPageUrl(int $p, string $search): string {
 
 $baseFrom = "FROM vehicles v
              LEFT JOIN drivers dr ON dr.driver_id = v.driver_id
-             LEFT JOIN users u ON u.user_id = dr.user_id";
+             LEFT JOIN users u ON u.user_id = dr.user_id
+             LEFT JOIN vehicle_bookings current_booking
+               ON current_booking.booking_id = (
+                 SELECT next_booking.booking_id
+                 FROM vehicle_bookings next_booking
+                 WHERE next_booking.vehicle_id = v.vehicle_id
+                   AND next_booking.status IN ('Pending', 'Approved')
+                   AND next_booking.workflow_stage IN ('DriverAssigned', 'DriverAccepted', 'AdminApproved')
+                 ORDER BY next_booking.depart_datetime ASC, next_booking.booking_id ASC
+                 LIMIT 1
+               )";
 
 if ($search !== '') {
     $like = "%{$search}%";
@@ -287,7 +311,12 @@ if ($search !== '') {
     $totalRows = (int)$countStmt->fetchColumn();
 
     $stmt = $pdo->prepare(
-        "SELECT v.*, u.fullname AS driver_name
+        "SELECT v.*, u.fullname AS driver_name,
+          current_booking.booking_id AS active_booking_id,
+          current_booking.booking_no AS active_booking_no,
+                current_booking.workflow_stage AS active_booking_stage,
+                current_booking.depart_datetime AS active_depart_datetime,
+                current_booking.return_datetime AS active_return_datetime
          $baseFrom
          WHERE v.plate_no LIKE :like1 OR v.vehicle_name LIKE :like2 OR v.vehicle_type LIKE :like3
          ORDER BY FIELD(v.status, 'Available', 'Booked', 'Maintenance', 'Inactive'), v.plate_no
@@ -303,7 +332,12 @@ if ($search !== '') {
     $totalRows = (int)$pdo->query("SELECT COUNT(*) FROM vehicles")->fetchColumn();
 
     $stmt = $pdo->prepare(
-        "SELECT v.*, u.fullname AS driver_name
+        "SELECT v.*, u.fullname AS driver_name,
+          current_booking.booking_id AS active_booking_id,
+          current_booking.booking_no AS active_booking_no,
+                current_booking.workflow_stage AS active_booking_stage,
+                current_booking.depart_datetime AS active_depart_datetime,
+                current_booking.return_datetime AS active_return_datetime
          $baseFrom
          ORDER BY FIELD(v.status, 'Available', 'Booked', 'Maintenance', 'Inactive'), v.plate_no
          LIMIT :limit OFFSET :offset"
@@ -327,8 +361,24 @@ $driverOptions = $pdo->query(
      ORDER BY u.fullname"
 )->fetchAll(PDO::FETCH_ASSOC);
 
-$statusCounts     = $pdo->query("SELECT status, COUNT(*) AS total FROM vehicles GROUP BY status")
-    ->fetchAll(PDO::FETCH_KEY_PAIR);
+$statusCounts     = $pdo->query(
+    "SELECT effective_status AS status, COUNT(*) AS total
+     FROM (
+       SELECT v.vehicle_id,
+              CASE
+                WHEN EXISTS (
+                  SELECT 1
+                  FROM vehicle_bookings vb
+                  WHERE vb.vehicle_id = v.vehicle_id
+                    AND vb.status IN ('Pending', 'Approved')
+                    AND vb.workflow_stage IN ('DriverAssigned', 'DriverAccepted', 'AdminApproved')
+                ) THEN 'Booked'
+                ELSE v.status
+              END AS effective_status
+       FROM vehicles v
+     ) effective_vehicles
+     GROUP BY effective_status"
+)->fetchAll(PDO::FETCH_KEY_PAIR);
 $totalVehicles    = (int)array_sum($statusCounts);
 $availableCount   = (int)($statusCounts['Available'] ?? 0);
 $bookedCount      = (int)($statusCounts['Booked'] ?? 0);
@@ -594,7 +644,17 @@ include 'includes/layout_header.php';
                       </div>
                     </td>
                     <td class="px-3 py-3 text-sm border-b text-center whitespace-nowrap" style="border-color:var(--ta-border)">
-                      <span class="ta-badge <?= $vehicleStatusBadge($v['status']) ?>"><?= htmlspecialchars($vehicleStatusLabel($v['status'])) ?></span>
+                      <?php [$effectiveBadge, $effectiveLabel] = $activeVehicleStatus($v); ?>
+                      <?php $hasActiveBooking = !empty($v['active_booking_id']); ?>
+                      <span class="ta-badge <?= $effectiveBadge ?>"><?= htmlspecialchars($effectiveLabel) ?></span>
+                      <?php if ($hasActiveBooking): ?>
+                        <a href="view.php?id=<?= (int)$v['active_booking_id'] ?>" class="block text-xs text-primary hover:underline mt-1">
+                          <?= htmlspecialchars($v['active_booking_no']) ?>
+                          <?php if (!empty($v['active_depart_datetime'])): ?>
+                            · <?= htmlspecialchars(date('d/m/Y', strtotime($v['active_depart_datetime']))) ?>
+                          <?php endif; ?>
+                        </a>
+                      <?php endif; ?>
                     </td>
                     <?php if ($canManage): ?>
                     <td class="px-3 py-3 text-sm border-b text-center whitespace-nowrap" style="border-color:var(--ta-border)">

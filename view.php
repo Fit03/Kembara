@@ -144,6 +144,15 @@ $pageTitle = "Butiran Tempahan";
 $showSearch = false;
 $extraJS = '
     <script>
+    function toggleBookingHistory() {
+      const body = document.getElementById("booking-history-body");
+      const button = document.getElementById("booking-history-toggle");
+      if (!body || !button) return;
+      const expanded = body.classList.toggle("max-h-none");
+      body.classList.toggle("max-h-72", !expanded);
+      button.textContent = expanded ? "Ringkaskan" : "Lihat Semua";
+    }
+
         function dismissToast() {
             const toast = document.getElementById("toast-alert");
             if (!toast) return;
@@ -372,13 +381,18 @@ include 'includes/layout_header.php';
 
             <!-- Kad: Sejarah Tindakan -->
             <?php if (!empty($history)): ?>
-            <div class="card p-5 sm:p-6">
-              <div class="flex items-center gap-2 mb-4">
+            <div class="card p-5 sm:p-6 min-h-[24rem] flex flex-col">
+              <div class="flex items-center justify-between gap-3 mb-4">
+                <div class="flex items-center gap-2">
                 <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" style="color:var(--ta-brand)" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                <h6 class="font-semibold">Sejarah Tindakan</h6>
+                  <h6 class="font-semibold">Sejarah Tindakan</h6>
+                </div>
+                <?php if (count($history) > 4): ?>
+                  <button type="button" id="booking-history-toggle" class="btn btn-ghost btn-xs text-primary" onclick="toggleBookingHistory()">Lihat Semua</button>
+                <?php endif; ?>
               </div>
 
-              <div class="flex flex-col">
+              <div id="booking-history-body" class="flex flex-col overflow-y-auto max-h-72 pr-1">
                 <?php foreach ($history as $i => $h): ?>
                   <div class="flex gap-3 <?= $i < count($history) - 1 ? 'pb-4' : '' ?>">
                     <div class="flex flex-col items-center">
