@@ -233,19 +233,51 @@ if (!empty($booking['passenger_memo_path'])) {
 }
 
 // ============================================================ MEMO PAGES ====
-// Append the uploaded memo PDF (passenger_memo_path) as extra pages, if present
+function convertPdfTo14(string $src): ?string {
+    $out = sys_get_temp_dir() . DIRECTORY_SEPARATOR . 'memo_' . uniqid() . '.pdf';
+    foreach (['gswin64c', 'gswin32c', 'gs'] as $gs) {
+        $cmd = $gs . ' -q -dNOPAUSE -dBATCH -dSAFER -sDEVICE=pdfwrite -dCompatibilityLevel=1.4'
+             . ' -sOutputFile=' . escapeshellarg($out) . ' ' . escapeshellarg($src) . ' 2>&1';
+        @exec($cmd, $o, $rc);
+        if ($rc === 0 && is_file($out) && filesize($out) > 0) return $out;
+    }
+    return null;
+}
+
+$tmpMemo = null;
 if (!empty($booking['passenger_memo_path'])) {
     $memoPath = __DIR__ . '/' . ltrim($booking['passenger_memo_path'], '/');
 
     if (is_file($memoPath)) {
-        $pageCount = $pdf->setSourceFile($memoPath);
-        for ($i = 1; $i <= $pageCount; $i++) {
-            $tplId = $pdf->importPage($i);
-            $size  = $pdf->getTemplateSize($tplId);
-            $pdf->AddPage($size['orientation'], [$size['width'], $size['height']]);
-            $pdf->useTemplate($tplId);
+        $pageCount = 0;
+        try {
+            $pageCount = $pdf->setSourceFile($memoPath);
+        } catch (\Throwable $e) {
+            // Unsupported PDF (compressed xref). Try converting to PDF 1.4 via Ghostscript.
+            $tmpMemo = convertPdfTo14($memoPath);
+            if ($tmpMemo) {
+                try { $pageCount = $pdf->setSourceFile($tmpMemo); } catch (\Throwable $e2) { $pageCount = 0; }
+            }
+        }
+
+        if ($pageCount > 0) {
+            for ($i = 1; $i <= $pageCount; $i++) {
+                $tplId = $pdf->importPage($i);
+                $size  = $pdf->getTemplateSize($tplId);
+                $pdf->AddPage($size['orientation'], [$size['width'], $size['height']]);
+                $pdf->useTemplate($tplId);
+            }
+        } else {
+            // Could not merge: add a notice page instead of crashing
+            $pdf->AddPage('P', 'A4');
+            $pdf->SetFont('Arial', 'I', 11);
+            $pdf->SetXY(20, 40);
+            $pdf->MultiCell(170, 6, $utf8('Memo senarai pengguna tidak dapat digabungkan (format PDF tidak disokong). Sila rujuk fail memo yang dimuat naik dalam sistem.'), 0, 'C');
         }
     }
 }
+
+$pdf->Output('I', 'Borang_Permohonan_' . $booking['booking_no'] . '.pdf');
+if ($tmpMemo) @unlink($tmpMemo);
 
 $pdf->Output('I', 'Borang_Permohonan_' . $booking['booking_no'] . '.pdf');
