@@ -3,7 +3,6 @@
 require_once __DIR__ . '/includes/auth.php';
 require_once __DIR__ . '/config/database.php';
 require_once __DIR__ . '/includes/signature.php';
-require_once __DIR__ . '/includes/notify.php';
 
 require_login();
 
@@ -199,8 +198,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
             $bookingNo = generateBookingNo($pdo);
 
-            $pdo->beginTransaction();
-
             // Pemandu & kenderaan belum ditetapkan — ditugaskan oleh Admin/SuperAdmin semasa kelulusan
             $stmt = $pdo->prepare(
                 "INSERT INTO vehicle_bookings
@@ -216,28 +213,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
             $hist = $pdo->prepare("INSERT INTO booking_history (booking_id, action, remarks, action_by) VALUES (?, 'Dicipta', ?, ?)");
             $hist->execute([$newId, "Tempahan {$bookingNo} dicipta.", $currentUserId]);
-
-            $bookingDate = date('d M Y, H:i', strtotime($departRaw));
-            notify_admins(
-              $pdo,
-              $newId,
-              'booking_submitted',
-              "Tempahan baharu {$bookingNo}",
-              "Tempahan baharu {$bookingNo} daripada {$fullname}, {$bookingDate}, {$dest}. Perlu pemandu.",
-              'view.php?id=' . $newId,
-              true
-            );
-            notify_user(
-              $pdo,
-              $currentUserId,
-              $newId,
-              'booking_confirmation',
-              "Tempahan {$bookingNo} diterima",
-              "Tempahan anda untuk {$dest} telah dihantar dan menunggu penetapan pemandu.",
-              'view.php?id=' . $newId,
-              true
-            );
-            $pdo->commit();
 
             $flash = ['type' => 'success', 'msg' => "Tempahan {$bookingNo} berjaya dihantar dan menunggu kelulusan."];
             $redirectAfterPost = 'view.php?id=' . $newId;
@@ -275,7 +250,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
                 // Setiap pemandu mempunyai kenderaan khusus mereka sendiri (vehicles.driver_id)
                 $dstmt = $pdo->prepare(
-                    "SELECT dr.driver_id, dr.user_id AS driver_user_id, dr.status AS driver_status, v.vehicle_id
+                    "SELECT dr.driver_id, dr.status AS driver_status, v.vehicle_id
                      FROM drivers dr LEFT JOIN vehicles v ON v.driver_id = dr.driver_id
                      WHERE dr.driver_id = ? FOR UPDATE"
                 );
@@ -287,31 +262,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 }
                 if (!$drv['vehicle_id']) {
                     throw new RuntimeException('Pemandu ini tiada kenderaan ditugaskan kepadanya.');
-                }
-
-                $conflictStmt = $pdo->prepare(
-                  "SELECT vb.booking_no
-                   FROM vehicle_bookings vb
-                   WHERE vb.booking_id <> ?
-                     AND (vb.driver_id = ? OR vb.vehicle_id = ?)
-                     AND vb.status IN ('Pending', 'Approved')
-                     AND vb.workflow_stage IN ('DriverAssigned', 'AdminApproved')
-                     AND COALESCE(vb.return_datetime, DATE_ADD(vb.depart_datetime, INTERVAL 1 DAY)) > ?
-                     AND vb.depart_datetime < COALESCE(?, DATE_ADD(?, INTERVAL 1 DAY))
-                   LIMIT 1
-                   FOR UPDATE"
-                );
-                $conflictStmt->execute([
-                  $bid,
-                  $driverId,
-                  (int)$drv['vehicle_id'],
-                  $booking['depart_datetime'],
-                  $booking['return_datetime'],
-                  $booking['depart_datetime'],
-                ]);
-                $conflictBookingNo = $conflictStmt->fetchColumn();
-                if ($conflictBookingNo) {
-                  throw new RuntimeException("Pemandu atau kenderaan tersebut sudah bertindih dengan tempahan {$conflictBookingNo}.");
                 }
 
                 $signatureMode = $_POST['signature_mode'] ?? 'new';
@@ -337,17 +287,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $upd->execute([$driverId, $drv['vehicle_id'], $currentUserId, $approverSignaturePath, $bid]);
                 $pdo->prepare("UPDATE vehicles SET status='Booked' WHERE vehicle_id=?")->execute([$drv['vehicle_id']]);
                 $pdo->prepare("INSERT INTO booking_history (booking_id, action, remarks, action_by) VALUES (?, 'Driver Assigned', 'Pemandu telah ditugaskan dan menunggu pengesahan.', ?)")->execute([$bid, $currentUserId]);
-
-                notify_user(
-                  $pdo,
-                  (int)$drv['driver_user_id'],
-                  $bid,
-                  'driver_assigned',
-                  "Tugasan baharu {$booking['booking_no']}",
-                  "Tugasan baharu {$booking['booking_no']}, " . date('d M Y, H:i', strtotime($booking['depart_datetime'])) . ", {$booking['origin']} ke {$booking['destination']}. Sila terima atau tolak.",
-                  'view.php?id=' . $bid,
-                  true
-                );
 
                 $flash = ['type' => 'success', 'msg' => "Pemandu telah ditugaskan untuk tempahan {$booking['booking_no']}."];
 
@@ -399,34 +338,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                   )->execute([$bid]);
                   $pdo->prepare("UPDATE vehicles SET status='Booked' WHERE vehicle_id=?")->execute([$booking['vehicle_id']]);
                   $pdo->prepare("INSERT INTO booking_history (booking_id, action, remarks, action_by) VALUES (?, 'Driver Accepted', 'Pemandu menerima tugasan. Tempahan diluluskan.', ?)")->execute([$bid, $currentUserId]);
-                  notify_user(
-                      $pdo,
-                      (int)$booking['user_id'],
-                      $bid,
-                      'driver_accepted',
-                      'Tempahan diluluskan',
-                      "Tempahan {$booking['booking_no']} diluluskan. Pemandu telah menerima tugasan dan kenderaan telah ditetapkan.",
-                      'view.php?id=' . $bid,
-                      true
-                  );
-                  notify_admins($pdo, $bid, 'driver_accepted_admin', 'Pemandu menerima tugasan', "Pemandu menerima tugasan {$booking['booking_no']}.", 'view.php?id=' . $bid);
                   $flash = ['type' => 'success', 'msg' => "Tugasan diterima. Tempahan {$booking['booking_no']} telah diluluskan."];
                 } else {
-                  $rejectReason = trim($_POST['reject_reason'] ?? '');
-                  if ($rejectReason === '') {
-                    throw new RuntimeException('Sila nyatakan sebab menolak tugasan.');
-                  }
                   $pdo->prepare(
                     "UPDATE vehicle_bookings
                      SET status='Pending', workflow_stage='ReassignmentRequired', driver_id=NULL, vehicle_id=NULL, approved_by=NULL, approved_at=NULL, approver_signature_path=NULL
                      WHERE booking_id=?"
                   )->execute([$bid]);
                   $pdo->prepare("UPDATE vehicles SET status='Available' WHERE vehicle_id=?")->execute([$booking['vehicle_id']]);
-                  $pdo->prepare("INSERT INTO booking_history (booking_id, action, remarks, action_by) VALUES (?, 'Driver Rejected', ?, ?)")->execute([$bid, "Pemandu menolak tugasan: {$rejectReason} Menunggu penetapan pemandu baharu.", $currentUserId]);
-                  $driverNameStmt = $pdo->prepare('SELECT fullname FROM users WHERE user_id = ?');
-                  $driverNameStmt->execute([$currentUserId]);
-                  $driverName = $driverNameStmt->fetchColumn() ?: 'Pemandu';
-                  notify_admins($pdo, $bid, 'driver_rejected', "{$driverName} menolak {$booking['booking_no']}", "{$driverName} menolak {$booking['booking_no']}: {$rejectReason}. Sila tetapkan pemandu lain.", 'view.php?id=' . $bid, true);
+                  $pdo->prepare("INSERT INTO booking_history (booking_id, action, remarks, action_by) VALUES (?, 'Driver Rejected', 'Pemandu menolak tugasan. Menunggu penetapan pemandu baharu.', ?)")->execute([$bid, $currentUserId]);
                   $flash = ['type' => 'success', 'msg' => "Tugasan ditolak. Admin perlu menetapkan pemandu baharu untuk {$booking['booking_no']}."];
                 }
 
@@ -434,13 +354,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 if (!$canManage) throw new RuntimeException('Anda tidak mempunyai kebenaran untuk menolak tempahan.');
                 if ($booking['status'] !== 'Pending' || $booking['workflow_stage'] === 'DriverAssigned') throw new RuntimeException('Tempahan ini sedang menunggu respons pemandu dan tidak boleh ditolak oleh admin pada masa ini.');
 
-                $rejectReason = trim($_POST['reject_reason'] ?? '');
-                if ($rejectReason === '') {
-                  throw new RuntimeException('Sila nyatakan sebab menolak tempahan.');
-                }
                 $pdo->prepare("UPDATE vehicle_bookings SET status='Rejected', workflow_stage='AdminRejected', approved_by=?, approved_at=NOW() WHERE booking_id=?")->execute([$currentUserId, $bid]);
-                $pdo->prepare("INSERT INTO booking_history (booking_id, action, remarks, action_by) VALUES (?, 'Ditolak', ?, ?)")->execute([$bid, $rejectReason, $currentUserId]);
-                notify_user($pdo, (int)$booking['user_id'], $bid, 'booking_rejected', "Tempahan {$booking['booking_no']} ditolak", "Tempahan anda ditolak. Sebab: {$rejectReason}", 'view.php?id=' . $bid, true);
+                $pdo->prepare("INSERT INTO booking_history (booking_id, action, remarks, action_by) VALUES (?, 'Ditolak', 'Tempahan ditolak.', ?)")->execute([$bid, $currentUserId]);
 
                 $flash = ['type' => 'success', 'msg' => "Tempahan {$booking['booking_no']} telah ditolak."];
 
@@ -455,18 +370,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 }
                 $pdo->prepare("INSERT INTO booking_history (booking_id, action, remarks, action_by) VALUES (?, 'Dibatalkan', 'Tempahan dibatalkan.', ?)")->execute([$bid, $currentUserId]);
 
-                if ($isOwner) {
-                  notify_admins($pdo, $bid, 'booking_cancelled', "Tempahan {$booking['booking_no']} dibatalkan", "Pemohon membatalkan tempahan {$booking['booking_no']}.", 'view.php?id=' . $bid);
-                  if (!empty($booking['assigned_driver_user_id'])) {
-                    notify_user($pdo, (int)$booking['assigned_driver_user_id'], $bid, 'booking_cancelled', "Tempahan {$booking['booking_no']} dibatalkan", "Tempahan {$booking['booking_no']} telah dibatalkan oleh pemohon.", 'view.php?id=' . $bid, true);
-                  }
-                } else {
-                  notify_user($pdo, (int)$booking['user_id'], $bid, 'booking_cancelled', "Tempahan {$booking['booking_no']} dibatalkan", "Tempahan {$booking['booking_no']} telah dibatalkan oleh admin.", 'view.php?id=' . $bid, true);
-                  if (!empty($booking['assigned_driver_user_id'])) {
-                    notify_user($pdo, (int)$booking['assigned_driver_user_id'], $bid, 'booking_cancelled', "Tempahan {$booking['booking_no']} dibatalkan", "Tempahan {$booking['booking_no']} telah dibatalkan oleh admin.", 'view.php?id=' . $bid, true);
-                  }
-                }
-
                 $flash = ['type' => 'success', 'msg' => "Tempahan {$booking['booking_no']} telah dibatalkan."];
 
             } elseif ($action === 'complete_booking') {
@@ -476,7 +379,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $pdo->prepare("UPDATE vehicle_bookings SET status='Completed', workflow_stage='Completed' WHERE booking_id=?")->execute([$bid]);
                 $pdo->prepare("UPDATE vehicles SET status='Available' WHERE vehicle_id=?")->execute([$booking['vehicle_id']]);
                 $pdo->prepare("INSERT INTO booking_history (booking_id, action, remarks, action_by) VALUES (?, 'Selesai', 'Perjalanan selesai.', ?)")->execute([$bid, $currentUserId]);
-                notify_user($pdo, (int)$booking['user_id'], $bid, 'booking_completed', "Tempahan {$booking['booking_no']} selesai", "Tempahan {$booking['booking_no']} telah ditandakan selesai.", 'view.php?id=' . $bid);
 
                 $flash = ['type' => 'success', 'msg' => "Tempahan {$booking['booking_no']} ditandakan selesai."];
             }
@@ -795,14 +697,6 @@ $extraJS = '
             const submitBtn = document.getElementById("action-modal-submit");
             submitBtn.textContent = buttonLabel;
             submitBtn.style.background = isDanger ? "var(--color-error)" : "var(--ta-brand)";
-            const reasonWrap = document.getElementById("action-modal-reason-wrap");
-            const reasonInput = document.getElementById("action-modal-reason");
-            const needsReason = action === "driver_reject" || action === "reject_booking";
-            if (reasonWrap) reasonWrap.classList.toggle("hidden", !needsReason);
-            if (reasonInput) {
-              reasonInput.required = needsReason;
-              reasonInput.value = "";
-            }
             document.getElementById("modal-action").showModal();
         }
 
@@ -1109,10 +1003,6 @@ include 'includes/layout_header.php';
               <input type="hidden" name="action" id="action-modal-action" />
               <input type="hidden" name="csrf_token" value="<?= generate_csrf_token() ?>" />
               <input type="hidden" name="booking_id" id="action-modal-id" />
-              <div id="action-modal-reason-wrap" class="hidden w-full text-left">
-                <label for="action-modal-reason" class="text-xs font-medium block mb-1">Sebab</label>
-                <textarea name="reject_reason" id="action-modal-reason" rows="3" maxlength="500" class="textarea textarea-bordered w-full" placeholder="Nyatakan sebab penolakan..."></textarea>
-              </div>
               <button type="button" class="btn btn-ghost" onclick="document.getElementById('modal-action').close()">Batal</button>
               <button type="submit" id="action-modal-submit" class="btn text-white border-0" style="background:var(--ta-brand)">Sahkan</button>
             </form>

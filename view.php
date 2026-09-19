@@ -330,8 +330,6 @@ include 'includes/layout_header.php';
                     <input type="hidden" name="csrf_token" value="<?= generate_csrf_token() ?>" />
                     <input type="hidden" name="action" value="driver_reject" />
                     <input type="hidden" name="booking_id" value="<?= (int)$b['booking_id'] ?>" />
-                    <label class="block text-xs font-medium mb-1">Sebab penolakan</label>
-                    <textarea name="reject_reason" required maxlength="500" rows="3" class="textarea textarea-bordered w-full mb-2" placeholder="Nyatakan sebab menolak tugasan..."></textarea>
                     <button type="submit" class="btn btn-error btn-sm text-white">Tolak Tugasan</button>
                   </form>
                 </div>

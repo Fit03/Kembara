@@ -10,28 +10,42 @@ $searchPlaceholder = $searchPlaceholder ?? 'Cari...';
 $backUrl = $backUrl ?? null;
 $breadcrumbs = $breadcrumbs ?? null;
 
-require_once __DIR__ . '/notify.php';
-
 $navUserId = (int)($_SESSION['user_id'] ?? 0);
 $navRole = $_SESSION['role'] ?? 'User';
-$notificationStmt = $pdo->prepare(
-    'SELECT notification_id, title, message, link, created_at
-     FROM notifications
-     WHERE user_id = ? AND is_read = 0
-     ORDER BY created_at DESC, notification_id DESC
-     LIMIT 8'
-);
-$notificationStmt->execute([$navUserId]);
-$notifications = $notificationStmt->fetchAll(PDO::FETCH_ASSOC);
-$notificationCount = count($notifications);
-$notificationRelativeTime = static function (string $createdAt): string {
-    $seconds = max(0, time() - strtotime($createdAt));
-    if ($seconds < 60) return 'sebentar tadi';
-    if ($seconds < 3600) return floor($seconds / 60) . ' minit lalu';
-    if ($seconds < 86400) return floor($seconds / 3600) . ' jam lalu';
-    if ($seconds < 604800) return floor($seconds / 86400) . ' hari lalu';
-    return date('d M Y, H:i', strtotime($createdAt));
-};
+$notificationCount = 0;
+$notificationTitle = 'Tiada notifikasi baharu.';
+$notificationDescription = '';
+$notificationUrl = 'bookings.php';
+
+if (in_array($navRole, ['Admin', 'SuperAdmin'], true)) {
+    $notificationCount = (int)$pdo->query(
+        "SELECT COUNT(*) FROM vehicle_bookings
+         WHERE status='Pending' AND workflow_stage IN ('Submitted', 'ReassignmentRequired')"
+    )->fetchColumn();
+    $notificationTitle = 'Tempahan Menunggu Tugasan';
+    $notificationDescription = 'Tempahan yang memerlukan admin menetapkan atau menetapkan semula pemandu.';
+    $notificationUrl = 'bookings.php?status=Pending';
+} else {
+    $notificationStmt = $pdo->prepare(
+        "SELECT COUNT(*) FROM vehicle_bookings vb
+         LEFT JOIN drivers assigned_driver ON assigned_driver.driver_id = vb.driver_id
+         WHERE (
+             vb.user_id = :user_id AND vb.status IN ('Pending', 'Approved')
+         ) OR (
+             assigned_driver.user_id = :driver_user_id
+             AND vb.status = 'Pending'
+             AND vb.workflow_stage = 'DriverAssigned'
+         )"
+    );
+    $notificationStmt->execute([
+        ':user_id' => $navUserId,
+        ':driver_user_id' => $navUserId,
+    ]);
+    $notificationCount = (int)$notificationStmt->fetchColumn();
+    $notificationTitle = 'Kemas Kini Tempahan';
+    $notificationDescription = 'Terdapat tempahan anda atau tugasan pemandu yang memerlukan semakan.';
+    $notificationUrl = 'bookings.php';
+}
 
 // Semak sama ada e-mel sudah disimpan dalam sesi daripada log masuk
 $email = $_SESSION['email'] ?? null;
@@ -120,19 +134,16 @@ $hasPhoto = $profilePicture !== null;
 
                 <!-- Content List -->
                 <div class="max-h-64 overflow-y-auto divide-y" style="border-color: var(--ta-border);">
-                    <?php if ($notifications): ?>
-                        <?php foreach ($notifications as $notification): ?>
-                        <a href="<?= htmlspecialchars($notification['link'] ?: 'notifications.php') ?>" class="flex items-start gap-3 p-3.5 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
+                    <?php if ($notificationCount > 0): ?>
+                        <a href="<?= htmlspecialchars($notificationUrl) ?>" class="flex items-start gap-3 p-3.5 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
                             <div class="p-2 rounded-full bg-warning/15 text-warning shrink-0 mt-0.5">
-                                <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M14.857 17.082a23.848 23.848 0 005.454-1.31A8.967 8.967 0 0118 9.75v-.7V9A6 6 0 006 9v.75a8.967 8.967 0 01-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 01-5.714 0m5.714 0a3 3 0 11-5.714 0" /></svg>
+                                <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
                             </div>
                             <div class="flex-1 min-w-0">
-                                <p class="text-xs font-semibold text-slate-800 dark:text-slate-100"><?= htmlspecialchars($notification['title']) ?></p>
-                                <p class="text-[11px] text-slate-400 mt-0.5"><?= htmlspecialchars($notification['message']) ?></p>
-                                <p class="text-[10px] text-slate-400 mt-1"><?= htmlspecialchars($notificationRelativeTime($notification['created_at'])) ?></p>
+                                <p class="text-xs font-semibold text-slate-800 dark:text-slate-100"><?= htmlspecialchars($notificationTitle) ?></p>
+                                <p class="text-[11px] text-slate-400 mt-0.5"><?= htmlspecialchars($notificationDescription) ?></p>
                             </div>
                         </a>
-                        <?php endforeach; ?>
                     <?php else: ?>
                         <div class="p-6 text-center text-slate-400 text-xs">
                             <svg class="w-8 h-8 mx-auto mb-2 opacity-40" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" /></svg>
@@ -143,15 +154,7 @@ $hasPhoto = $profilePicture !== null;
 
                 <!-- Footer Link -->
                 <div class="p-2 border-t text-center" style="border-color: var(--ta-border);">
-                    <a href="notifications.php" class="text-xs text-primary font-semibold hover:underline block py-1">Lihat semua notifikasi</a>
-                    <?php if ($notificationCount > 0): ?>
-                    <form method="POST" action="notification_action.php" class="mt-1">
-                        <input type="hidden" name="csrf_token" value="<?= generate_csrf_token() ?>" />
-                        <input type="hidden" name="action" value="mark_all_read" />
-                        <input type="hidden" name="redirect" value="<?= htmlspecialchars($_SERVER['REQUEST_URI'] ?? 'notifications.php') ?>" />
-                        <button type="submit" class="text-[11px] text-slate-400 hover:underline">Tandakan semua dibaca</button>
-                    </form>
-                    <?php endif; ?>
+                    <a href="bookings.php" class="text-xs text-primary font-semibold hover:underline block py-1">Lihat Semak Tempahan</a>
                 </div>
             </div>
         </div>

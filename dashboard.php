@@ -41,16 +41,6 @@ $avatarStmt->execute([$_SESSION['user_id']]);
 $profilePicture = $avatarStmt->fetchColumn();
 $hasPhoto = $profilePicture && is_file(__DIR__ . '/' . $profilePicture);
 
-// Pemandu ialah User yang mempunyai rekod dalam jadual drivers.
-if ($role === 'User') {
-  $driverCheck = $pdo->prepare('SELECT 1 FROM drivers WHERE user_id = ? LIMIT 1');
-  $driverCheck->execute([(int)$_SESSION['user_id']]);
-  if ($driverCheck->fetchColumn()) {
-    require __DIR__ . '/includes/dashboard/driver.php';
-    exit();
-  }
-}
-
 // Warna lencana berdasarkan peranan (daisyUI badges)
 $badgeColor = match($role) {
   'SuperAdmin' => 'badge badge-error',

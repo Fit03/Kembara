@@ -40,11 +40,11 @@ function current_user() {
 }
 
 function is_admin() {
-    return in_array($_SESSION['role'] ?? '', ['Admin', 'SuperAdmin'], true);
+    return ($_SESSION['role'] ?? '') === 'admin';
 }
 
 function is_approver() {
-    return in_array($_SESSION['role'] ?? '', ['Admin', 'SuperAdmin'], true);
+    return in_array($_SESSION['role'] ?? '', ['admin', 'approver'], true);
 }
 
 function generate_csrf_token() {

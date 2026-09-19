@@ -1,7 +1,5 @@
 
 .claude/
 config/
-config/mail.php
-!config/mail.example.php
 assets/uploads/
 vendor/

@@ -1,7 +1,6 @@
 {
     "require": {
         "setasign/fpdf": "^1.8",
-        "setasign/fpdi": "^2.6",
-        "phpmailer/phpmailer": "^7.1"
+        "setasign/fpdi": "^2.6"
     }
 }
