@@ -41,6 +41,16 @@ $avatarStmt->execute([$_SESSION['user_id']]);
 $profilePicture = $avatarStmt->fetchColumn();
 $hasPhoto = $profilePicture && is_file(__DIR__ . '/' . $profilePicture);
 
+// Pemandu ialah User yang mempunyai rekod dalam jadual drivers.
+if ($role === 'User') {
+  $driverCheck = $pdo->prepare('SELECT 1 FROM drivers WHERE user_id = ? LIMIT 1');
+  $driverCheck->execute([(int)$_SESSION['user_id']]);
+  if ($driverCheck->fetchColumn()) {
+    require __DIR__ . '/includes/dashboard/driver.php';
+    exit();
+  }
+}
+
 // Warna lencana berdasarkan peranan (daisyUI badges)
 $badgeColor = match($role) {
   'SuperAdmin' => 'badge badge-error',
@@ -404,7 +414,7 @@ include 'includes/layout_header.php';
           <div class="aura aura-dual text-yellow-600 bg-orange-200 duration-3000">
           <?php endif; ?>
             <div class="card p-5" data-href="bookings.php?status=Pending" data-priority="warning">
-              <div class="ta-icon-box mb-4">
+              <div class="ta-icon-box ta-icon-box-green mb-4">
                 <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.6"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
               </div>
               <p class="text-sm mb-1" style="color:var(--ta-muted)">Menunggu Kelulusan</p>
