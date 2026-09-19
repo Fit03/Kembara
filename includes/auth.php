@@ -1,5 +1,13 @@
 <?php
 if (session_status() === PHP_SESSION_NONE) {
+    session_set_cookie_params([
+        'lifetime' => 0,
+        'path' => '/',
+        'domain' => '',
+        'secure' => false, // Set to true in production with HTTPS
+        'httponly' => true,
+        'samesite' => 'Lax',
+    ]);
     session_start();
 }
 
@@ -37,4 +45,16 @@ function is_admin() {
 
 function is_approver() {
     return in_array($_SESSION['role'] ?? '', ['admin', 'approver'], true);
+}
+
+function generate_csrf_token() {
+    if (empty($_SESSION['csrf_token'])) {
+        $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
+    }
+    return $_SESSION['csrf_token'];
+}
+
+function verify_csrf_token(string $token): bool {
+    $storedToken = $_SESSION['csrf_token'] ?? '';
+    return !empty($storedToken) && hash_equals($storedToken, $token);
 }

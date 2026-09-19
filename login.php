@@ -12,6 +12,10 @@ if (isset($_SESSION['user_id'])) {
 $error = '';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    if (!verify_csrf_token($_POST['csrf_token'] ?? '')) {
+        http_response_code(403);
+        exit('Ralat Keselamatan: Token CSRF tidak sah atau telah tamat tempoh.');
+    }
     $email = trim($_POST['email'] ?? '');
     $password = $_POST['password'] ?? '';
 
@@ -32,12 +36,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         if (!$user) {
             $error = "E-mel ini tidak berdaftar dalam sistem.";
+            log_activity($pdo, null, 'Log Masuk', 'Log Masuk Gagal', "Percubaan log masuk dengan e-mel tidak berdaftar: {$email}");
         } elseif (!password_verify($password, $user['password'])) {
             $error = "Kata laluan yang dimasukkan adalah salah.";
+            log_activity($pdo, (int)$user['user_id'], 'Log Masuk', 'Log Masuk Gagal', "Kata laluan salah untuk e-mel: {$email}");
         } else {
+            session_regenerate_id(true);
             $_SESSION['user_id']  = $user['user_id'];
             $_SESSION['fullname'] = $user['fullname'];
             $_SESSION['role']     = $user['role'];
+
+            log_activity($pdo, (int)$user['user_id'], 'Log Masuk', 'Log Masuk', "{$user['fullname']} log masuk ke sistem.");
 
             header("Location: dashboard.php");
             exit();
@@ -47,11 +56,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 ?>
 
 <!DOCTYPE html>
-<html lang="en" data-theme="light">
+<html lang="en" data-theme="garden">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Kembara</title>
+    <link rel="icon" type="image/png" href="assets/img/favicon.png" />
     
     <!-- Tailwind CSS & daisyUI CDN -->
     <link href="https://cdn.jsdelivr.net/npm/daisyui@4.12.10/dist/full.min.css" rel="stylesheet" type="text/css" />
@@ -84,6 +94,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         <div class="container mx-auto px-4 mb-auto">
             <div class="card shrink-0 w-full max-w-sm mx-auto shadow-2xl bg-base-100/90 backdrop-blur-md rounded-2xl border border-white/20">
                 <form class="card-body" action="login.php" method="POST">
+                    <input type="hidden" name="csrf_token" value="<?= generate_csrf_token() ?>" />
                     <h2 class="card-title text-2xl font-bold justify-center mb-1">Log Masuk</h2>
 
                     <!-- Dynamic daisyUI Alert -->
@@ -142,7 +153,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
                     <!-- Submit Button -->
                     <div class="form-control mt-4">
-                        <button type="submit" class="btn btn-outline btn-neutral">Log Masuk</button>
+                        <button type="submit" class="btn btn-neutral">Log Masuk</button>
                     </div>
                 </form>
             </div>

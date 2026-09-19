@@ -1,12 +1,10 @@
 <?php
 // book-vehicle.php — Borang Tempahan Kenderaan Baharu (dengan pemilih lokasi peta)
-session_start();
+require_once __DIR__ . '/includes/auth.php';
+require_login();
 require_once __DIR__ . '/config/database.php';
+require_once __DIR__ . '/includes/signature.php';
 
-if (!isset($_SESSION['user_id'])) {
-    header("Location: login.php");
-    exit();
-}
 
 $fullname      = $_SESSION['fullname'];
 $role          = $_SESSION['role'];
@@ -19,20 +17,53 @@ if (!$email) {
     $email = $stmt->fetchColumn() ?: 'tiada-emel@selangor.gov.my';
 }
 
+$avatarStmt = $pdo->prepare("SELECT profile_picture FROM users WHERE user_id = ?");
+$avatarStmt->execute([$currentUserId]);
+$profilePicture = $avatarStmt->fetchColumn();
+$hasPhoto = $profilePicture && is_file(__DIR__ . '/' . $profilePicture);
+
+$signatureStmt = $pdo->prepare("SELECT signature_path FROM users WHERE user_id = ?");
+$signatureStmt->execute([$currentUserId]);
+$currentUserSignature = $signatureStmt->fetchColumn() ?: null;
+$hasSavedSignature = $currentUserSignature && is_file(__DIR__ . '/' . $currentUserSignature);
+
 $badgeColor = match($role) {
-    'SuperAdmin' => 'badge-soft-error',
-    'Admin'      => 'badge-soft-warning',
-    default      => 'badge-soft-info',
+  'SuperAdmin' => 'badge badge-error',
+  'Admin'      => 'badge badge-warning',
+  default      => 'badge badge-info',
 };
 
 $pendingApprovals = $pdo->query("SELECT COUNT(*) FROM vehicle_bookings WHERE status = 'Pending'")->fetchColumn();
+
+// Pautan "Kembali" — kekalkan penapis/carian/halaman jadual yang asal jika ada
+$backUrl = 'bookings.php' . (isset($_GET['from']) && $_GET['from'] !== '' ? '?' . $_GET['from'] : '');
+
+// --- Tarikh Penuh Tempahan (untuk sekat kalendar) ---------------------
+// Andaian: jadual "drivers" menyimpan semua pemandu aktif, dan setiap
+// tempahan (bukan status "Rejected"/"Cancelled") menggunakan 1 pemandu
+// untuk tarikh berangkat (depart_datetime). Sesuaikan nama jadual/lajur
+// mengikut skema sebenar sistem anda jika berbeza.
+$totalDrivers = (int) $pdo->query("SELECT COUNT(*) FROM drivers WHERE status = 'Active'")->fetchColumn();
+
+$fullyBookedDates = [];
+if ($totalDrivers > 0) {
+    $bookedStmt = $pdo->query("
+        SELECT DATE(depart_datetime) AS booking_date, COUNT(*) AS total_bookings
+        FROM vehicle_bookings
+        WHERE status NOT IN ('Rejected', 'Cancelled')
+        GROUP BY DATE(depart_datetime)
+        HAVING COUNT(*) >= {$totalDrivers}
+    ");
+    $fullyBookedDates = $bookedStmt->fetchAll(PDO::FETCH_COLUMN, 0);
+}
+$fullyBookedDatesJson = json_encode(array_values($fullyBookedDates));
 ?>
 <!DOCTYPE html>
-<html lang="ms" data-theme="light">
+<html lang="ms" data-theme="garden">
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, shrink-to-fit=no" />
-    <title>Kembara - Tempah Kenderaan</title>
+    <title>e-Kenderaan - Tempah Kenderaan</title>
 
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700&display=swap" rel="stylesheet" />
@@ -45,89 +76,11 @@ $pendingApprovals = $pdo->query("SELECT COUNT(*) FROM vehicle_bookings WHERE sta
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
-    <style>
-        :root, [data-theme] {
-            --ta-canvas: var(--color-base-200);
-            --ta-surface: var(--color-base-100);
-            --ta-border: var(--color-base-300);
-            --ta-ink: var(--color-base-content);
-            --ta-muted: color-mix(in oklch, var(--color-base-content) 55%, transparent);
-            --ta-brand: var(--color-primary);
-            --ta-brand-50: color-mix(in oklch, var(--color-primary) 12%, var(--color-base-100));
-        }
+    <!-- Flatpickr (kalendar dengan sekatan tarikh) -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
 
-        .bg-white { background-color: var(--ta-surface) !important; }
-        .text-slate-400, .text-slate-500 { color: var(--ta-muted) !important; }
-        .text-slate-700, .text-slate-800 { color: var(--ta-ink) !important; }
-        .hover\:bg-slate-50:hover, .hover\:bg-slate-100:hover { background-color: var(--ta-canvas) !important; }
-        .hover\:text-slate-700:hover { color: var(--ta-ink) !important; }
-
-        * { font-family: 'Outfit', ui-sans-serif, system-ui, sans-serif; }
-
-        body {
-            background: var(--ta-canvas);
-            color: var(--ta-ink);
-            zoom: 110%;
-            transition: background-color 0.2s ease, color 0.2s ease;
-        }
-
-        .ta-card, .ta-sidebar, nav {
-            background: var(--ta-surface) !important;
-            border-color: var(--ta-border) !important;
-            color: var(--ta-ink) !important;
-        }
-
-        .ta-nav-link {
-            display: flex;
-            align-items: center;
-            gap: 0.7rem;
-            border-radius: 0.5rem;
-            padding: 0.55rem 0.75rem;
-            font-size: 0.875rem;
-            font-weight: 500;
-            color: var(--ta-muted);
-            transition: all .15s ease;
-        }
-        .ta-nav-link:hover { background: var(--ta-canvas); color: var(--ta-ink); }
-        .ta-nav-link.active { background: var(--ta-brand-50); color: var(--ta-brand); font-weight: 600; }
-        .ta-nav-icon { display: inline-flex; width: 1.25rem; height: 1.25rem; flex-shrink: 0; }
-
-        .ta-badge {
-            display: inline-flex;
-            align-items: center;
-            gap: 0.25rem;
-            border-radius: 9999px;
-            padding: 0.15rem 0.65rem;
-            font-size: 0.7rem;
-            font-weight: 600;
-        }
-        .badge-soft-warning { background: color-mix(in oklch, var(--color-warning) 18%, var(--color-base-100)); color: var(--color-warning); }
-        .badge-soft-error   { background: color-mix(in oklch, var(--color-error) 18%, var(--color-base-100));   color: var(--color-error); }
-        .badge-soft-info    { background: color-mix(in oklch, var(--color-info) 18%, var(--color-base-100));    color: var(--color-info); }
-
-        .ta-tab {
-            display: inline-flex;
-            align-items: center;
-            white-space: nowrap;
-            padding: 0.4rem 0.9rem;
-            border-radius: 9999px;
-            font-size: 0.8rem;
-            font-weight: 600;
-            color: var(--ta-muted);
-            border: 1px solid var(--ta-border);
-            transition: all .15s ease;
-            cursor: pointer;
-            background: var(--ta-surface);
-        }
-        .ta-tab:hover { color: var(--ta-ink); background: var(--ta-canvas); }
-        .ta-tab.active { background: var(--ta-brand); color: #fff; border-color: var(--ta-brand); }
-
-        #map { z-index: 0; }
-        .leaflet-control-attribution { font-size: 10px !important; }
-
-        ::-webkit-scrollbar { width: 8px; height: 8px; }
-        ::-webkit-scrollbar-thumb { background: var(--ta-border); border-radius: 999px; }
-    </style>
+    <link rel="stylesheet" href="assets/css/style.css" />
 </head>
 <body class="min-h-screen">
 
@@ -177,6 +130,18 @@ $pendingApprovals = $pdo->query("SELECT COUNT(*) FROM vehicle_bookings WHERE sta
           </li>
           <?php endif; ?>
         </ul>
+
+        <?php if ($role === 'SuperAdmin'): ?>
+        <p class="mt-6 px-3 mb-2 text-[0.65rem] font-semibold uppercase tracking-widest text-slate-400">Log</p>
+        <ul class="flex flex-col gap-1">
+          <li>
+            <a class="ta-nav-link" href="activity_log.php">
+              <svg class="ta-nav-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+              <span>Log Aktiviti</span>
+            </a>
+          </li>
+        </ul>
+        <?php endif; ?>
       </div>
 
       <div class="p-4 border-t" style="border-color:var(--ta-border)">
@@ -187,36 +152,93 @@ $pendingApprovals = $pdo->query("SELECT COUNT(*) FROM vehicle_bookings WHERE sta
       </div>
     </aside>
 
-    <!-- Navbar Bawah (mobile) -->
-    <div class="fixed inset-x-0 bottom-0 z-[70] xl:hidden">
-      <div class="relative">
-        <a href="dashboard.php" class="absolute left-1/2 -translate-x-1/2 -top-7 z-10 flex flex-col items-center gap-1">
-          <span class="w-16 h-16 rounded-full flex items-center justify-center shadow-lg" style="background:var(--ta-brand); color:#fff; box-shadow:0 6px 16px -4px color-mix(in oklch, var(--ta-brand) 60%, transparent), 0 0 0 6px var(--ta-canvas)">
-            <svg xmlns="http://www.w3.org/2000/svg" class="h-7 w-7" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M3.75 3v11.25A2.25 2.25 0 006 16.5h2.25M3.75 3h-1.5M3.75 3h16.5M21.75 3v11.25A2.25 2.25 0 0119.5 16.5H17.25m-10.5 0h6m-6 0v3.75A1.5 1.5 0 007.5 21.75h9a1.5 1.5 0 001.5-1.5V16.5m-10.5 0h10.5" /></svg>
+    <!-- Liquid Glass Floating Dock (Mobile) -->
+    <div class="fixed inset-x-0 bottom-0 z-[70] xl:hidden px-4 pb-4 pointer-events-none">
+      <div class="relative max-w-md mx-auto pointer-events-auto">
+
+        <!-- Central Floating Action Button (Dashboard) -->
+        <a href="dashboard.php"
+          id="nav-dashboard"
+          class="nav-item absolute left-1/2 -translate-x-1/2 -top-7 z-30 flex flex-col items-center group transition-transform duration-300 ease-[cubic-bezier(0.175,0.885,0.32,2.2)] active:scale-90">
+          <span class="relative w-14 h-14 rounded-full flex items-center justify-center transition-all duration-300 group-hover:-translate-y-1"
+                style="background: linear-gradient(135deg, color-mix(in oklch, var(--ta-brand) 85%, white), var(--ta-brand));
+                      color:#fff;
+                      box-shadow: 0 12px 28px -6px color-mix(in oklch, var(--ta-brand) 50%, transparent),
+                                  0 0 0 1px rgba(255,255,255,0.5) inset,
+                                  0 0 0 4px var(--ta-canvas, #ffffff);">
+            <span class="absolute inset-0 rounded-full bg-gradient-to-b from-white/45 via-white/10 to-transparent opacity-80 pointer-events-none"></span>
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 relative z-10" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M3.75 3v11.25A2.25 2.25 0 006 16.5h2.25M3.75 3h-1.5M3.75 3h16.5M21.75 3v11.25A2.25 2.25 0 0119.5 16.5H17.25m-10.5 0h6m-6 0v3.75A1.5 1.5 0 007.5 21.75h9a1.5 1.5 0 001.5-1.5V16.5m-10.5 0h10.5" />
+            </svg>
           </span>
-          <span class="text-[11px] font-semibold" style="color:var(--ta-brand)">Dashboard</span>
+          <span class="text-[11px] font-medium tracking-tight mt-1" style="color: var(--ta-muted)">Dashboard</span>
         </a>
 
-        <div class="flex items-center justify-around px-2 pt-2" style="background:var(--ta-surface); border-top:1px solid var(--ta-border); height:4.25rem; padding-bottom:env(safe-area-inset-bottom)">
-          <a href="bookings.php" class="flex flex-col items-center gap-1 flex-1 py-1" style="color:var(--ta-brand)">
+        <!-- Liquid Glass Dock Base -->
+        <div class="glass-dock flex items-center justify-around px-2 pt-2.5 pb-2 rounded-[32px] overflow-visible">
+
+          <!-- Sliding active pill -->
+          <div id="liquid-pill"
+              class="absolute top-1.5 bottom-1.5 rounded-[22px] transition-all duration-300 ease-[cubic-bezier(0.175,0.885,0.32,1.2)] opacity-0 pointer-events-none z-0"
+              style="background: color-mix(in oklch, var(--ta-brand) 14%, rgba(255,255,255,0.55));
+                    border: 1px solid rgba(255,255,255,0.6);
+                    box-shadow: 0 4px 14px rgba(0,0,0,0.06), inset 0 1px 1px rgba(255,255,255,0.9);">
+          </div>
+
+          <a href="bookings.php" id="nav-bookings"
+            class="nav-item flex flex-col items-center gap-1 flex-1 py-1 z-10 transition-transform duration-200 active:scale-90" style="color: var(--ta-muted)">
             <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 012.25-2.25h13.5A2.25 2.25 0 0121 7.5v11.25m-18 0A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75m-18 0v-7.5A2.25 2.25 0 015.25 9h13.5A2.25 2.25 0 0121 11.25v7.5m-13.5-6h.008v.008h-.008v-.008zm0 3h.008v.008h-.008v-.008zm3-3h.008v.008h-.008v-.008zm0 3h.008v.008h-.008v-.008z" /></svg>
-            <span class="text-[11px] font-medium">Tempahan</span>
+            <span class="text-[11px] font-medium tracking-tight">Tempahan</span>
           </a>
-          <a href="vehicles.php" class="flex flex-col items-center gap-1 flex-1 py-1" style="color:var(--ta-muted)">
+
+          <a href="vehicles.php" id="nav-vehicles"
+            class="nav-item flex flex-col items-center gap-1 flex-1 py-1 z-10 transition-transform duration-200 active:scale-90" style="color: var(--ta-muted)">
             <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M8.25 18.75a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m3 0h6m-9 0H3.375a1.125 1.125 0 01-1.125-1.125V14.25m17.25 4.5a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m3 0h1.125c.621 0 1.129-.504 1.09-1.124a17.902 17.902 0 00-3.213-9.193 2.056 2.056 0 00-1.58-.86H14.25M16.5 18.75h-2.25m0-11.177v-.958c0-.568-.422-1.048-.987-1.106a48.554 48.554 0 00-10.026 0 1.106 1.106 0 00-.987 1.106v7.635m12-6.677v6.677m0 0h-12" /></svg>
-            <span class="text-[11px] font-medium">Kenderaan</span>
+            <span class="text-[11px] font-medium tracking-tight">Kenderaan</span>
           </a>
-          <div class="flex-1 flex justify-center"><span class="w-16"></span></div>
-          <a href="drivers.php" class="flex flex-col items-center gap-1 flex-1 py-1" style="color:var(--ta-muted)">
+
+          <div class="flex-1 flex justify-center pointer-events-none"><span class="w-14"></span></div>
+
+          <a href="drivers.php" id="nav-drivers"
+            class="nav-item flex flex-col items-center gap-1 flex-1 py-1 z-10 transition-transform duration-200 active:scale-90" style="color: var(--ta-muted)">
             <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M2.25 8.25h19.5M2.25 9h19.5m-16.5 5.25h6m-6 2.25h3m-3.75 3h15a2.25 2.25 0 002.25-2.25V6.75A2.25 2.25 0 0019.5 4.5h-15a2.25 2.25 0 00-2.25 2.25v10.5A2.25 2.25 0 004.5 19.5z" /></svg>
-            <span class="text-[11px] font-medium">Pemandu</span>
+            <span class="text-[11px] font-medium tracking-tight">Pemandu</span>
           </a>
-          <?php if ($role === 'SuperAdmin'): ?>
-          <a href="users.php" class="flex flex-col items-center gap-1 flex-1 py-1" style="color:var(--ta-muted)">
-            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M15 19.128a9.38 9.38 0 002.625.372 9.337 9.337 0 004.121-.952 4.125 4.125 0 00-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 018.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0111.964-3.07M12 6.375a3.375 3.375 0 11-6.75 0 3.375 3.375 0 016.75 0zm8.25 2.25a2.625 2.625 0 11-5.25 0 2.625 2.625 0 015.25 0z" /></svg>
-            <span class="text-[11px] font-medium">Pengguna</span>
-          </a>
-          <?php endif; ?>
+
+          <!-- "Lagi" menu popover -->
+          <div id="nav-more" role="button" tabindex="0" aria-haspopup="true" aria-expanded="false"
+            class="nav-item relative flex flex-col items-center gap-1 flex-1 py-1 z-10 transition-transform duration-200 active:scale-90" style="color: var(--ta-muted)">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8">
+              <circle cx="5" cy="12" r="1.5" fill="currentColor" stroke="none"/>
+              <circle cx="12" cy="12" r="1.5" fill="currentColor" stroke="none"/>
+              <circle cx="19" cy="12" r="1.5" fill="currentColor" stroke="none"/>
+            </svg>
+            <span class="text-[11px] font-medium tracking-tight">Lagi</span>
+
+            <!-- Popover menu -->
+            <div id="more-menu"
+              class="more-popover absolute bottom-full right-0 mb-3 w-38 rounded-2xl p-1.5 opacity-0 scale-95 pointer-events-none transition-all duration-200 origin-bottom-right">
+              <?php if ($role === 'SuperAdmin'): ?>
+              <a href="users.php" class="flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-sm font-medium transition-colors" style="color: var(--ta-text, #1c1c1e)">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M15 19.128a9.38 9.38 0 002.625.372 9.337 9.337 0 004.121-.952 4.125 4.125 0 00-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 018.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0111.964-3.07M12 6.375a3.375 3.375 0 11-6.75 0 3.375 3.375 0 016.75 0zm8.25 2.25a2.625 2.625 0 11-5.25 0 2.625 2.625 0 015.25 0z" /></svg>
+                Pengguna
+              </a>
+              <a href="activity_log.php" class="flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-sm font-medium transition-colors" style="color: var(--ta-text, #1c1c1e)">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                Log Aktiviti
+              </a>
+              <?php endif; ?>
+              <?php if ($role === 'User' || $role === 'Admin' || $role === 'SuperAdmin'): ?>
+              <a href="profile.php" class="flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-sm font-medium transition-colors" style="color: var(--ta-text, #1c1c1e)">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8">
+                  <circle cx="12" cy="8" r="4" stroke-linecap="round" stroke-linejoin="round"/>
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M4 20c0-4.418 3.582-8 8-8s8 3.582 8 8" />
+                </svg>
+                Profil Saya
+              </a>
+              <?php endif; ?>
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -225,6 +247,9 @@ $pendingApprovals = $pdo->query("SELECT COUNT(*) FROM vehicle_bookings WHERE sta
       <!-- Navigasi Atas -->
       <nav class="sticky top-0 z-50 flex items-center justify-between gap-4 px-4 sm:px-6 py-3 bg-white border-b" style="border-color:var(--ta-border)">
         <div class="flex items-center gap-3">
+            <a href="<?= htmlspecialchars($backUrl) ?>" class="btn btn-ghost btn-circle btn-sm h-9 w-9 min-h-0" title="Kembali">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-4.5 w-4.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M10.5 19.5L3 12m0 0l7.5-7.5M3 12h18" /></svg>
+            </a>
             <div>
                 <h6 class="font-bold text-base leading-tight">Tempah Kenderaan</h6>
                 <p class="text-xs leading-tight" style="color:var(--ta-muted)">
@@ -254,7 +279,7 @@ $pendingApprovals = $pdo->query("SELECT COUNT(*) FROM vehicle_bookings WHERE sta
                         </span>
                     <?php endif; ?>
                 </div>
-                <div tabindex="0" class="dropdown-content z-[99] menu p-0 shadow-xl ta-card rounded-2xl w-80 mt-2 border" style="border-color: var(--ta-border);">
+                <div tabindex="0" class="dropdown-content z-[99] menu p-0 shadow-xl card rounded-2xl w-80 mt-2 border" style="border-color: var(--ta-border);">
                     <div class="px-4 py-3 border-b flex items-center justify-between" style="border-color: var(--ta-border);">
                         <span class="font-bold text-sm">Notifikasi</span>
                     </div>
@@ -278,14 +303,18 @@ $pendingApprovals = $pdo->query("SELECT COUNT(*) FROM vehicle_bookings WHERE sta
 
             <div class="dropdown dropdown-end">
                 <div tabindex="0" role="button" class="btn btn-ghost rounded-full pl-1 pr-2 py-1 flex items-center gap-2 h-auto min-h-0">
-                    <div class="avatar placeholder">
-                        <div class="rounded-full w-8 h-8 flex items-center justify-center font-bold text-xs uppercase text-white" style="background:var(--ta-brand)">
-                            <?= htmlspecialchars(substr($fullname, 0, 1)) ?>
-                        </div>
+                    <div class="avatar <?= $hasPhoto ? '' : 'placeholder' ?>">
+                        <?php if ($hasPhoto): ?>
+                            <div class="rounded-full w-8 h-8"><img src="<?= htmlspecialchars($profilePicture) ?>" alt="Avatar" /></div>
+                        <?php else: ?>
+                            <div class="rounded-full w-8 h-8 flex items-center justify-center font-bold text-xs uppercase text-white" style="background:var(--ta-brand)">
+                                <?= htmlspecialchars(substr($fullname, 0, 1)) ?>
+                            </div>
+                        <?php endif; ?>
                     </div>
                     <span class="text-sm font-semibold hidden sm:inline-block"><?= htmlspecialchars($fullname) ?></span>
                 </div>
-                <ul tabindex="0" class="dropdown-content z-[99] menu p-3 shadow-lg ta-card rounded-2xl w-64 mt-2 border" style="border-color: var(--ta-border);">
+                <ul tabindex="0" class="dropdown-content z-[99] menu p-3 shadow-lg card rounded-2xl w-64 mt-2 border" style="border-color: var(--ta-border);">
                     <li class="px-3 py-2 border-b mb-1" style="border-color:var(--ta-border)">
                         <div class="flex items-center justify-between gap-2">
                             <p class="font-bold text-sm truncate"><?= htmlspecialchars($fullname) ?></p>
@@ -303,74 +332,139 @@ $pendingApprovals = $pdo->query("SELECT COUNT(*) FROM vehicle_bookings WHERE sta
 
       <div class="w-full px-4 sm:px-6 py-6 mx-auto max-w-3xl">
 
-        <div class="ta-card p-5 sm:p-7">
+        <div class="card p-5 sm:p-7">
           <h6 class="font-semibold text-lg mb-1">Maklumat Perjalanan</h6>
           <p class="text-sm mb-5" style="color:var(--ta-muted)">Lengkapkan butiran tempahan kenderaan anda. Pemandu &amp; kenderaan akan ditugaskan oleh pentadbir semasa kelulusan.</p>
 
-          <form action="bookings.php" method="POST" class="flex flex-col gap-5" id="booking-form">
+          <!-- Corrected tag -->
+          <form action="bookings.php" method="POST" enctype="multipart/form-data" class="flex flex-col gap-5" id="booking-form">
             <input type="hidden" name="action" value="add_booking" />
+            <input type="hidden" name="csrf_token" value="<?= generate_csrf_token() ?>" />
 
-            <!-- Pemilih Lokasi Peta -->
+            <!-- Pemilih Lokasi Peta (gaya Grab) -->
             <div>
               <div class="flex items-center justify-between flex-wrap gap-2 mb-3">
                 <label class="text-sm font-semibold">Lokasi Perjalanan</label>
-                <div class="flex items-center gap-2 flex-wrap">
-                  <button type="button" id="mode-origin-btn" class="ta-tab active" onclick="setPinMode('origin')">
-                    <span class="inline-block w-2 h-2 rounded-full mr-1.5" style="background:#16a34a"></span>Asal
-                  </button>
-                  <button type="button" id="mode-dest-btn" class="ta-tab" onclick="setPinMode('destination')">
-                    <span class="inline-block w-2 h-2 rounded-full mr-1.5" style="background:#dc2626"></span>Destinasi
-                  </button>
-                  <button type="button" class="ta-tab" onclick="useCurrentLocation()">
-                    <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5 inline -mt-0.5 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M15 10.5a3 3 0 11-6 0 3 3 0 016 0z" /><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1115 0z" /></svg>
-                    Lokasi Semasa
-                  </button>
+                <button type="button" class="ta-tab" onclick="useCurrentLocation()">
+                  <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5 inline -mt-0.5 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M15 10.5a3 3 0 11-6 0 3 3 0 016 0z" /><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1115 0z" /></svg>
+                  Lokasi Semasa
+                </button>
+              </div>
+
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
+                <div class="loc-field" id="origin-field" data-mode="origin">
+                  <label class="text-xs font-medium block mb-1">
+                    <span class="inline-block w-2 h-2 rounded-full mr-1" style="background:#16a34a"></span>Asal (Origin)
+                  </label>
+                  <div class="relative">
+                    <svg class="loc-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M15 10.5a3 3 0 11-6 0 3 3 0 016 0z" /><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1115 0z" /></svg>
+                    <input type="text" name="origin" id="origin-input" required autocomplete="off"
+                           class="input input-bordered w-full" placeholder="Cari lokasi atau klik pada peta" />
+                  </div>
+                  <div class="loc-suggestions" id="origin-suggestions"></div>
+                </div>
+                <div class="loc-field" id="destination-field" data-mode="destination">
+                  <label class="text-xs font-medium block mb-1">
+                    <span class="inline-block w-2 h-2 rounded-full mr-1" style="background:#dc2626"></span>Destinasi
+                  </label>
+                  <div class="relative">
+                    <svg class="loc-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M15 10.5a3 3 0 11-6 0 3 3 0 016 0z" /><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1115 0z" /></svg>
+                    <input type="text" name="destination" id="destination-input" required autocomplete="off"
+                           class="input input-bordered w-full" placeholder="Cari lokasi atau klik pada peta" />
+                  </div>
+                  <div class="loc-suggestions" id="destination-suggestions"></div>
                 </div>
               </div>
 
+              <div id="route-info" class="route-info-badge hidden"></div>
               <div id="map" class="rounded-2xl overflow-hidden border" style="height:360px; border-color:var(--ta-border)"></div>
-              <p class="text-xs text-slate-400 mt-2">Klik pada peta untuk menetapkan lokasi <span id="pin-mode-label" class="font-semibold">Asal</span>. Alamat akan diisi secara automatik, dan boleh diedit jika perlu.</p>
-
-              <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-3">
-                <div>
-                  <label class="text-xs font-medium block mb-1">Asal (Origin)</label>
-                  <input type="text" name="origin" id="origin-input" required class="input input-bordered w-full" placeholder="Klik pada peta atau taip manual" />
-                </div>
-                <div>
-                  <label class="text-xs font-medium block mb-1">Destinasi</label>
-                  <input type="text" name="destination" id="destination-input" required class="input input-bordered w-full" placeholder="Klik pada peta atau taip manual" />
-                </div>
-              </div>
+              <p class="text-xs text-slate-400 mt-2">Taip untuk mencari lokasi, pilih dari cadangan, atau klik terus pada peta. Medan <span id="pin-mode-label" class="font-semibold">Asal</span> yang sedang aktif akan dikemaskini.</p>
             </div>
+            <input type="hidden" name="distance_km" id="distance-km-hidden" />
 
             <div class="border-t" style="border-color:var(--ta-border)"></div>
 
             <!-- Butiran Perjalanan -->
+            <div>
+              <label class="text-xs font-medium block mb-1">Jenis Perjalanan</label>
+              <select name="trip_type" id="trip-type" class="select select-bordered w-full" onchange="toggleReturnField()">
+                <option value="One Way">Sehala</option>
+                <option value="Return">Pergi Balik</option>
+              </select>
+            </div>
+            
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
-                <label class="text-xs font-medium block mb-1">Tarikh &amp; Masa Berangkat</label>
-                <input type="datetime-local" name="depart_datetime" required class="input input-bordered w-full" />
+                <label class="text-xs font-medium block mb-1">Tarikh Berangkat</label>
+                <input type="text" id="depart-date-input" required autocomplete="off"
+                       class="input input-bordered w-full" placeholder="Pilih tarikh" />
               </div>
               <div>
-                <label class="text-xs font-medium block mb-1">Jenis Perjalanan</label>
-                <select name="trip_type" id="trip-type" class="select select-bordered w-full" onchange="toggleReturnField()">
-                  <option value="One Way">Sehala</option>
-                  <option value="Return">Pergi Balik</option>
-                  <option value="Both">Kedua-dua</option>
-                </select>
+                <label class="text-xs font-medium block mb-1">Masa Berangkat</label>
+                <input type="text" id="depart-time-input" required autocomplete="off"
+                       class="input input-bordered w-full" placeholder="Pilih masa" />
               </div>
             </div>
+            <input type="hidden" name="depart_datetime" id="depart-datetime-hidden" />
+
 
             <div id="return-field-wrap" class="hidden">
-              <label class="text-xs font-medium block mb-1">Tarikh &amp; Masa Pulang</label>
-              <input type="datetime-local" name="return_datetime" class="input input-bordered w-full" />
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label class="text-xs font-medium block mb-1">Tarikh Pulang</label>
+                  <input type="text" id="return-date-input" autocomplete="off"
+                         class="input input-bordered w-full" placeholder="Pilih tarikh" />
+                </div>
+                <div>
+                  <label class="text-xs font-medium block mb-1">Masa Pulang</label>
+                  <input type="text" id="return-time-input" autocomplete="off"
+                         class="input input-bordered w-full" placeholder="Pilih masa" />
+                </div>
+              </div>
+              <input type="hidden" name="return_datetime" id="return-datetime-hidden" />
             </div>
 
-            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div>
-                <label class="text-xs font-medium block mb-1">Bilangan Penumpang</label>
-                <input type="number" name="passenger_total" min="1" class="input input-bordered w-full" placeholder="cth. 4" />
+            <div>
+              <div class="flex items-center justify-between mb-2 flex-wrap gap-2">
+                <label class="text-xs font-medium">Nama Penumpang</label>
+                <div class="flex items-center gap-2 flex-wrap">
+                  <button type="button" class="ta-tab" onclick="addPassengerRow()">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5 inline -mt-0.5 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" /></svg>
+                    Tambah Seorang
+                  </button>
+                  <button type="button" class="ta-tab" onclick="toggleBulkAddPanel()">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5 inline -mt-0.5 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M15 19.128a9.38 9.38 0 002.625.372 9.337 9.337 0 004.121-.952 4.125 4.125 0 00-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 018.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0111.964-3.07M12 6.375a3.375 3.375 0 11-6.75 0 3.375 3.375 0 016.75 0zm8.25 2.25a2.625 2.625 0 11-5.25 0 2.625 2.625 0 015.25 0z" /></svg>
+                    Tambah Ramai (Bas)
+                  </button>
+                </div>
               </div>
+
+              <div id="bulk-add-panel" class="hidden rounded-xl border p-3.5 mb-3 flex flex-col gap-3" style="border-color:var(--ta-border); background:var(--ta-canvas)">
+                <p class="text-xs" style="color:var(--ta-muted)">Untuk kumpulan besar seperti bas, tambah beberapa slot kosong sekali gus, atau tampal (<i>paste</i>) senarai nama terus (satu nama setiap baris).</p>
+
+                <div class="flex items-center gap-2 flex-wrap">
+                  <input type="number" id="bulk-passenger-count" min="1" max="60" placeholder="Bilangan, cth. 40" class="input input-bordered input-sm w-40" />
+                    <button type="button" class="ta-tab" onclick="addPassengerRow()">Tambah Slot Kosong</button>
+                </div>
+
+                <div>
+                  <textarea id="bulk-passenger-paste" rows="4" class="textarea textarea-bordered w-full text-sm" placeholder="Tampal senarai nama di sini, satu nama setiap baris..."></textarea>
+                  <button type="button" class="btn btn-sm btn-outline mt-2" onclick="addPassengersFromPaste()">Jana Daripada Senarai</button>
+                </div>
+                
+                <p class="text-xs" style="color:var(--ta-muted)">atau muat naik memo</p>
+                
+                <div>
+                  <input type="file" class="file-input file-input-sm" name="passenger_memo" accept=".pdf" />
+                </div>
+              </div>
+
+              <div id="passenger-names-list" class="flex flex-col gap-2"></div>
+              <div class="flex items-center justify-between mt-2">
+                <p class="text-xs text-slate-400" id="passenger-empty-hint">Belum ada penumpang ditambah.</p>
+                <button type="button" id="clear-passengers-btn" class="text-xs font-semibold text-error hover:underline hidden" onclick="clearAllPassengers()">Kosongkan Semua</button>
+              </div>
+              <input type="hidden" name="passenger_total" id="passenger-total-hidden" value="0" />
             </div>
 
             <div>
@@ -383,12 +477,58 @@ $pendingApprovals = $pdo->query("SELECT COUNT(*) FROM vehicle_bookings WHERE sta
               <span>Pemandu dan kenderaan akan ditugaskan secara automatik oleh pentadbir semasa proses kelulusan tempahan ini.</span>
             </div>
 
+            <div class="border-t pt-4" style="border-color:var(--ta-border)">
+              <label class="text-xs font-medium block mb-2">Tandatangan Pemohon <span class="text-error">*</span></label>
+              <?php if ($hasSavedSignature): ?>
+                <label class="flex items-center gap-2 mb-2 p-2 rounded-lg border cursor-pointer" style="border-color:var(--ta-border)">
+                  <input type="radio" name="signature_mode" value="saved" class="radio radio-sm" checked onchange="toggleBookingSignatureMode()" />
+                  <img src="<?= htmlspecialchars($currentUserSignature) ?>?v=<?= time() ?>" alt="Tandatangan tersimpan" class="h-8 object-contain" />
+                  <span class="text-xs">Guna tandatangan tersimpan</span>
+                </label>
+                <label class="flex items-center gap-2 mb-2 text-xs cursor-pointer">
+                  <input type="radio" name="signature_mode" value="new" class="radio radio-sm" onchange="toggleBookingSignatureMode()" />
+                  Cipta tandatangan baharu
+                </label>
+              <?php else: ?>
+                <input type="hidden" name="signature_mode" value="new" />
+                <p class="text-xs text-slate-400 mb-2">Tiada tandatangan tersimpan. Sila cipta atau muat naik tandatangan.</p>
+              <?php endif; ?>
+              <div id="booking-signature-new-fields" class="<?= $hasSavedSignature ? 'hidden' : '' ?> flex flex-col gap-2">
+                <div class="flex gap-2">
+                  <label for="booking-signature-file" class="btn btn-sm btn-outline gap-1.5 flex-1 cursor-pointer">Muat Naik</label>
+                  <button type="button" class="btn btn-sm btn-outline gap-1.5 flex-1" onclick="openBookingSignaturePad()">Lukis</button>
+                </div>
+                <input type="file" name="signature_file" id="booking-signature-file" accept=".jpg,.jpeg,.png" class="hidden" onchange="previewBookingSignatureFile(this)" />
+                <input type="hidden" name="signature_data" id="booking-signature-data" />
+                <div id="booking-signature-preview" class="text-xs text-slate-400">Tiada tandatangan dipilih.</div>
+              </div>
+            </div>
+
             <div class="flex items-center justify-end gap-2 pt-2">
               <a href="bookings.php" class="btn btn-ghost">Batal</a>
               <button type="submit" class="btn text-white border-0" style="background:var(--ta-brand)">Hantar Tempahan</button>
             </div>
           </form>
         </div>
+
+        <dialog id="booking-signature-pad" class="modal">
+          <div class="modal-box card max-w-lg">
+            <form method="dialog"><button class="btn btn-sm btn-circle btn-ghost absolute right-3 top-3">✕</button></form>
+            <h3 class="font-bold text-lg mb-1">Cipta Tandatangan</h3>
+            <p class="text-sm text-slate-400 mb-3">Gunakan tetikus atau jari untuk menandatangani.</p>
+            <div class="rounded-xl border" style="border-color:var(--ta-border); background:#fff;">
+              <canvas id="booking-signature-canvas" style="width:100%; height:220px; display:block; touch-action:none; cursor:crosshair;"></canvas>
+            </div>
+            <div class="modal-action mt-3 justify-between">
+              <button type="button" class="btn btn-ghost btn-sm" onclick="clearBookingSignaturePad()">Padam</button>
+              <div class="flex gap-2">
+                <button type="button" class="btn btn-ghost" onclick="document.getElementById('booking-signature-pad').close()">Batal</button>
+                <button type="button" class="btn text-white border-0" style="background:var(--ta-brand)" onclick="saveBookingSignaturePad()">Guna Tandatangan Ini</button>
+              </div>
+            </div>
+          </div>
+          <form method="dialog" class="modal-backdrop"><button>close</button></form>
+        </dialog>
 
         <footer class="pt-6 pb-2">
           <div class="text-sm leading-normal text-center text-slate-400">
@@ -399,13 +539,29 @@ $pendingApprovals = $pdo->query("SELECT COUNT(*) FROM vehicle_bookings WHERE sta
     </main>
 
     <script>
+        // ===================== Peta & Lokasi (gaya Grab) =====================
         let map, originMarker, destMarker, routeLine;
-        let pinMode = 'origin';
+        let activeMode = 'origin'; // medan yang sedang aktif: 'origin' atau 'destination'
 
-        function setPinMode(mode) {
-            pinMode = mode;
-            document.getElementById('mode-origin-btn').classList.toggle('active', mode === 'origin');
-            document.getElementById('mode-dest-btn').classList.toggle('active', mode === 'destination');
+        const fieldEls = {
+            origin: {
+                field: document.getElementById('origin-field'),
+                input: document.getElementById('origin-input'),
+                suggestions: document.getElementById('origin-suggestions'),
+                color: '#16a34a',
+            },
+            destination: {
+                field: document.getElementById('destination-field'),
+                input: document.getElementById('destination-input'),
+                suggestions: document.getElementById('destination-suggestions'),
+                color: '#dc2626',
+            },
+        };
+
+        function setActiveMode(mode) {
+            activeMode = mode;
+            fieldEls.origin.field.classList.toggle('active', mode === 'origin');
+            fieldEls.destination.field.classList.toggle('active', mode === 'destination');
             document.getElementById('pin-mode-label').textContent = mode === 'origin' ? 'Asal' : 'Destinasi';
         }
 
@@ -418,34 +574,81 @@ $pendingApprovals = $pdo->query("SELECT COUNT(*) FROM vehicle_bookings WHERE sta
             });
         }
 
-        function placePin(lat, lng, mode) {
+        // Letak pin di peta (dari klik peta ATAU dari pilihan cadangan carian)
+        function placePin(lat, lng, mode, label) {
             if (mode === 'origin') {
                 if (originMarker) map.removeLayer(originMarker);
-                originMarker = L.marker([lat, lng], { icon: makeDot('#16a34a') }).addTo(map);
-                reverseGeocode(lat, lng, 'origin-input');
+                originMarker = L.marker([lat, lng], { icon: makeDot(fieldEls.origin.color) }).addTo(map);
             } else {
                 if (destMarker) map.removeLayer(destMarker);
-                destMarker = L.marker([lat, lng], { icon: makeDot('#dc2626') }).addTo(map);
-                reverseGeocode(lat, lng, 'destination-input');
+                destMarker = L.marker([lat, lng], { icon: makeDot(fieldEls.destination.color) }).addTo(map);
             }
+
+            if (label) {
+                fieldEls[mode].input.value = label;
+            } else {
+                reverseGeocode(lat, lng, mode);
+            }
+
+            map.setView([lat, lng], Math.max(map.getZoom(), 15));
             updateRouteLine();
         }
 
-        function updateRouteLine() {
+        // Lukis laluan sebenar (ikut jalan) antara Asal & Destinasi, dan papar jarak (KM)
+        async function updateRouteLine() {
             if (routeLine) {
                 map.removeLayer(routeLine);
                 routeLine = null;
             }
-            if (originMarker && destMarker) {
-                routeLine = L.polyline([originMarker.getLatLng(), destMarker.getLatLng()], {
-                    color: '#6366f1', weight: 3, dashArray: '6,6',
-                }).addTo(map);
-                map.fitBounds(routeLine.getBounds(), { padding: [50, 50] });
+            if (!(originMarker && destMarker)) {
+                hideRouteInfo();
+                return;
             }
+
+            const o = originMarker.getLatLng();
+            const d = destMarker.getLatLng();
+
+            try {
+                const url = `https://router.project-osrm.org/route/v1/driving/${o.lng},${o.lat};${d.lng},${d.lat}?overview=full&geometries=geojson`;
+                const res = await fetch(url);
+                const data = await res.json();
+
+                if (data.code === 'Ok' && data.routes && data.routes[0]) {
+                    const route = data.routes[0];
+                    const coords = route.geometry.coordinates.map(c => [c[1], c[0]]);
+                    routeLine = L.polyline(coords, { color: '#6366f1', weight: 4 }).addTo(map);
+                    map.fitBounds(routeLine.getBounds(), { padding: [50, 50] });
+                    showRouteInfo(route.distance, route.duration);
+                    return;
+                }
+            } catch (e) {
+                // jatuh balik ke garis lurus jika perkhidmatan laluan gagal
+            }
+
+            routeLine = L.polyline([o, d], { color: '#6366f1', weight: 3, dashArray: '6,6' }).addTo(map);
+            map.fitBounds(routeLine.getBounds(), { padding: [50, 50] });
+            hideRouteInfo();
         }
 
-        async function reverseGeocode(lat, lng, inputId) {
-            const input = document.getElementById(inputId);
+        function showRouteInfo(distanceMeters, durationSeconds) {
+            const km = (distanceMeters / 1000).toFixed(1);
+            const mins = Math.round(durationSeconds / 60);
+            const info = document.getElementById('route-info');
+            info.innerHTML = `<span>Jarak Anggaran: <strong>${km} km</strong></span><span>Masa Perjalanan: <strong>${mins} min</strong></span>`;
+            info.classList.remove('hidden');
+
+            const distInput = document.getElementById('distance-km-hidden');
+            if (distInput) distInput.value = km;
+        }
+
+        function hideRouteInfo() {
+            document.getElementById('route-info').classList.add('hidden');
+            const distInput = document.getElementById('distance-km-hidden');
+            if (distInput) distInput.value = '';
+        }
+
+        async function reverseGeocode(lat, lng, mode) {
+            const input = fieldEls[mode].input;
             const originalPlaceholder = input.placeholder;
             input.placeholder = 'Mencari alamat...';
             try {
@@ -461,6 +664,60 @@ $pendingApprovals = $pdo->query("SELECT COUNT(*) FROM vehicle_bookings WHERE sta
             }
         }
 
+        // ----- Carian lokasi (autocomplete) untuk medan Asal / Destinasi -----
+        const searchDebounceTimers = {};
+
+        async function searchLocation(mode, query) {
+            const { suggestions } = fieldEls[mode];
+            if (!query || query.trim().length < 3) {
+                suggestions.classList.remove('open');
+                suggestions.innerHTML = '';
+                return;
+            }
+            try {
+                const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&countrycodes=my&addressdetails=1&limit=6`);
+                const results = await res.json();
+                renderSuggestions(mode, results);
+            } catch (e) {
+                suggestions.innerHTML = '<div class="loc-suggestion-empty">Ralat mencari lokasi.</div>';
+                suggestions.classList.add('open');
+            }
+        }
+
+        function renderSuggestions(mode, results) {
+            const { suggestions } = fieldEls[mode];
+            if (!results || results.length === 0) {
+                suggestions.innerHTML = '<div class="loc-suggestion-empty">Tiada lokasi dijumpai.</div>';
+                suggestions.classList.add('open');
+                return;
+            }
+            suggestions.innerHTML = results.map((r, i) => {
+                const parts = r.display_name.split(',').map(s => s.trim());
+                const primary = parts[0];
+                const secondary = parts.slice(1, 4).join(', ');
+                return `<div class="loc-suggestion-item" data-idx="${i}">
+                    <span class="loc-suggestion-pin">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M15 10.5a3 3 0 11-6 0 3 3 0 016 0z" /><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1115 0z" /></svg>
+                    </span>
+                    <span class="loc-suggestion-text">
+                        <span class="block font-medium">${primary}</span>
+                        <span class="block text-[0.7rem]" style="color:var(--ta-muted)">${secondary}</span>
+                    </span>
+                </div>`;
+            }).join('');
+            suggestions.classList.add('open');
+
+            [...suggestions.querySelectorAll('.loc-suggestion-item')].forEach((el) => {
+                el.addEventListener('mousedown', (e) => {
+                    e.preventDefault(); // elak input hilang fokus sebelum klik didaftar
+                    const r = results[Number(el.dataset.idx)];
+                    const label = r.display_name.split(',').slice(0, 4).join(',').trim();
+                    placePin(parseFloat(r.lat), parseFloat(r.lon), mode, label);
+                    suggestions.classList.remove('open');
+                });
+            });
+        }
+
         function useCurrentLocation() {
             if (!navigator.geolocation) {
                 alert('Pelayar anda tidak menyokong pengesanan lokasi.');
@@ -468,8 +725,7 @@ $pendingApprovals = $pdo->query("SELECT COUNT(*) FROM vehicle_bookings WHERE sta
             }
             navigator.geolocation.getCurrentPosition(function (pos) {
                 const { latitude, longitude } = pos.coords;
-                map.setView([latitude, longitude], 15);
-                setPinMode('origin');
+                setActiveMode('origin');
                 placePin(latitude, longitude, 'origin');
             }, function () {
                 alert('Tidak dapat mengesan lokasi semasa anda. Sila benarkan akses lokasi atau tandakan secara manual pada peta.');
@@ -481,6 +737,109 @@ $pendingApprovals = $pdo->query("SELECT COUNT(*) FROM vehicle_bookings WHERE sta
             document.getElementById('return-field-wrap').classList.toggle('hidden', tripType === 'One Way');
         }
 
+        // ----- Nama Penumpang (butang Tambah / Buang, + tambahan pukal untuk bas) -----
+        const MAX_PASSENGERS = 60;
+
+        function updatePassengerMeta() {
+            const list = document.getElementById('passenger-names-list');
+            const count = list.children.length;
+            document.getElementById('passenger-total-hidden').value = count;
+            document.getElementById('passenger-empty-hint').classList.toggle('hidden', count > 0);
+            document.getElementById('clear-passengers-btn').classList.toggle('hidden', count === 0);
+        }
+
+        function addPassengerRow(focusInput = true) {
+            const list = document.getElementById('passenger-names-list');
+            if (list.children.length >= MAX_PASSENGERS) return null;
+
+            const row = document.createElement('div');
+            row.className = 'flex items-center gap-2';
+
+            const input = document.createElement('input');
+            input.type = 'text';
+            input.name = 'passenger_names[]';
+            input.required = true;
+            input.autocomplete = 'off';
+            input.className = 'input input-bordered w-full';
+            input.placeholder = `Nama Penumpang ${list.children.length + 1}`;
+
+            const removeBtn = document.createElement('button');
+            removeBtn.type = 'button';
+            removeBtn.className = 'btn btn-ghost btn-square btn-sm text-error shrink-0';
+            removeBtn.setAttribute('aria-label', 'Buang Penumpang');
+            removeBtn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>';
+            removeBtn.onclick = function () {
+                row.remove();
+                renumberPassengerPlaceholders();
+                updatePassengerMeta();
+            };
+
+            row.appendChild(input);
+            row.appendChild(removeBtn);
+            list.appendChild(row);
+            updatePassengerMeta();
+            if (focusInput) input.focus();
+            return input;
+        }
+
+        function renumberPassengerPlaceholders() {
+            const inputs = document.querySelectorAll('#passenger-names-list input');
+            inputs.forEach((input, i) => {
+                if (!input.value) input.placeholder = `Nama Penumpang ${i + 1}`;
+            });
+        }
+
+        function toggleBulkAddPanel() {
+            document.getElementById('bulk-add-panel').classList.toggle('hidden');
+        }
+
+        // Tambah beberapa slot kosong sekali gus (cth. untuk bas 40 tempat duduk)
+        function addPassengerRows() {
+            const countInput = document.getElementById('bulk-passenger-count');
+            const requested = parseInt(countInput.value, 10);
+            if (!requested || requested < 1) return;
+
+            const list = document.getElementById('passenger-names-list');
+            const room = MAX_PASSENGERS - list.children.length;
+            const toAdd = Math.min(requested, room);
+
+            for (let i = 0; i < toAdd; i++) addPassengerRow(false);
+            countInput.value = '';
+
+            if (requested > room) {
+                alert(`Hanya ${room} slot tambahan dibenarkan (had maksimum ${MAX_PASSENGERS} penumpang).`);
+            }
+        }
+
+        // Tampal senarai nama (satu setiap baris) dan jana medan terus
+        function addPassengersFromPaste() {
+            const textarea = document.getElementById('bulk-passenger-paste');
+            const names = textarea.value.split('\n').map(n => n.trim()).filter(n => n !== '');
+            if (names.length === 0) return;
+
+            const list = document.getElementById('passenger-names-list');
+            const room = MAX_PASSENGERS - list.children.length;
+            const toAdd = names.slice(0, room);
+
+            toAdd.forEach((name) => {
+                const input = addPassengerRow(false);
+                if (input) input.value = name;
+            });
+            textarea.value = '';
+
+            if (names.length > room) {
+                alert(`Hanya ${room} nama pertama ditambah (had maksimum ${MAX_PASSENGERS} penumpang).`);
+            }
+        }
+
+        function clearAllPassengers() {
+            if (!confirm('Kosongkan semua penumpang yang telah ditambah?')) return;
+            document.getElementById('passenger-names-list').innerHTML = '';
+            updatePassengerMeta();
+        }
+
+        updatePassengerMeta();
+
         function initMap() {
             // Pusat lalai: Selangor, Malaysia
             map = L.map('map').setView([3.0738, 101.5183], 11);
@@ -489,12 +848,255 @@ $pendingApprovals = $pdo->query("SELECT COUNT(*) FROM vehicle_bookings WHERE sta
                 maxZoom: 19,
             }).addTo(map);
 
+            // Klik pada peta -> letak pin pada medan yang sedang aktif
             map.on('click', function (e) {
-                placePin(e.latlng.lat, e.latlng.lng, pinMode);
+                placePin(e.latlng.lat, e.latlng.lng, activeMode);
             });
+
+            // Setiap medan (Asal / Destinasi) jadi punca aktif + carian
+            Object.keys(fieldEls).forEach((mode) => {
+                const { input, suggestions } = fieldEls[mode];
+
+                input.addEventListener('focus', () => setActiveMode(mode));
+
+                input.addEventListener('input', () => {
+                    setActiveMode(mode);
+                    clearTimeout(searchDebounceTimers[mode]);
+                    searchDebounceTimers[mode] = setTimeout(() => {
+                        searchLocation(mode, input.value);
+                    }, 400);
+                });
+
+                input.addEventListener('blur', () => {
+                    // beri masa untuk mousedown pada cadangan berjalan dahulu
+                    setTimeout(() => suggestions.classList.remove('open'), 150);
+                });
+            });
+
+            setActiveMode('origin');
         }
 
         document.addEventListener('DOMContentLoaded', initMap);
+
+        // ===================== Kalendar: sekat tarikh lalu & penuh =====================
+        const fullyBookedDates = <?= $fullyBookedDatesJson ?>; // ["2026-08-20", ...] dari pelayan
+
+        function isDateFullyBooked(dateObj, disabledDates) {
+            const y = dateObj.getFullYear();
+            const m = String(dateObj.getMonth() + 1).padStart(2, '0');
+            const d = String(dateObj.getDate()).padStart(2, '0');
+            return disabledDates.includes(`${y}-${m}-${d}`);
+        }
+
+        document.addEventListener('DOMContentLoaded', function () {
+            // Gabungkan tarikh (Y-m-d) + masa (H:i) terpisah menjadi satu nilai
+            // "Y-m-dTH:i" dalam medan hidden, sepadan dengan lajur datetime di pangkalan data.
+            function combine(dateId, timeId, hiddenId) {
+                const dateVal = document.getElementById(dateId).value;
+                const timeVal = document.getElementById(timeId).value;
+                document.getElementById(hiddenId).value = (dateVal && timeVal) ? `${dateVal}T${timeVal}` : '';
+            }
+
+            const dateOptions = {
+                dateFormat: 'Y-m-d',
+                minDate: 'today',
+                disable: [
+                    function (date) { return isDateFullyBooked(date, fullyBookedDates); }
+                ],
+            };
+            const timeOptions = {
+                enableTime: true,
+                noCalendar: true,
+                time_24hr: true,
+                dateFormat: 'H:i',
+            };
+
+            const departDatePicker = flatpickr('#depart-date-input', Object.assign({}, dateOptions, {
+                onChange: function () {
+                    combine('depart-date-input', 'depart-time-input', 'depart-datetime-hidden');
+                    if (returnDatePicker && departDatePicker.selectedDates[0]) {
+                        returnDatePicker.set('minDate', departDatePicker.selectedDates[0]);
+                    }
+                },
+            }));
+            const departTimePicker = flatpickr('#depart-time-input', Object.assign({}, timeOptions, {
+                onChange: function () { combine('depart-date-input', 'depart-time-input', 'depart-datetime-hidden'); },
+            }));
+
+            // Tarikh pulang tidak boleh sebelum tarikh berangkat
+            const returnDatePicker = flatpickr('#return-date-input', Object.assign({}, dateOptions, {
+                onChange: function () { combine('return-date-input', 'return-time-input', 'return-datetime-hidden'); },
+            }));
+            const returnTimePicker = flatpickr('#return-time-input', Object.assign({}, timeOptions, {
+                onChange: function () { combine('return-date-input', 'return-time-input', 'return-datetime-hidden'); },
+            }));
+
+            // Jaring keselamatan: pastikan medan hidden dikemaskini sebelum borang dihantar
+            document.getElementById('booking-form').addEventListener('submit', function () {
+                combine('depart-date-input', 'depart-time-input', 'depart-datetime-hidden');
+                if (document.getElementById('trip-type').value === 'Return') {
+                    combine('return-date-input', 'return-time-input', 'return-datetime-hidden');
+                }
+            });
+        });
+
+        document.addEventListener('DOMContentLoaded', () => {
+            const currentPath = window.location.pathname.split('/').pop() || 'dashboard.php';
+            let activeItem = null;
+
+            if (currentPath.includes('dashboard')) activeItem = document.getElementById('nav-dashboard');
+            else if (currentPath.includes('bookings') || currentPath.includes('book-vehicle')) activeItem = document.getElementById('nav-bookings');
+            else if (currentPath.includes('vehicles')) activeItem = document.getElementById('nav-vehicles');
+            else if (currentPath.includes('drivers')) activeItem = document.getElementById('nav-drivers');
+            else if (currentPath.includes('users') || currentPath.includes('activity_log')) activeItem = document.getElementById('nav-more');
+
+            function setFloatingActive(element) {
+                if (!element) return;
+
+                document.querySelectorAll('.nav-item').forEach(el => {
+                    el.style.color = 'var(--ta-muted)';
+                    const svg = el.querySelector('svg');
+                    if (svg) svg.style.transform = 'translateY(0px)';
+                });
+
+                if (element.id === 'nav-dashboard') {
+                    const label = element.querySelector('span:last-child');
+                    if (label) label.style.color = 'var(--ta-brand, #007AFF)';
+                    return;
+                }
+
+                element.style.color = 'var(--ta-brand, #007AFF)';
+                const svg = element.querySelector('svg');
+                if (svg) svg.style.transform = 'translateY(-2px)';
+            }
+
+            if (activeItem) setFloatingActive(activeItem);
+            window.addEventListener('resize', () => { if (activeItem) setFloatingActive(activeItem); });
+
+            const moreBtn = document.getElementById('nav-more');
+            const moreMenu = document.getElementById('more-menu');
+            if (moreBtn && moreMenu) {
+                const toggleMenu = (open) => {
+                    const isOpen = open !== undefined ? open : !moreMenu.classList.contains('open');
+                    moreMenu.classList.toggle('open', isOpen);
+                    moreBtn.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+                };
+                moreBtn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    toggleMenu();
+                });
+                moreBtn.addEventListener('keydown', (e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        toggleMenu();
+                    } else if (e.key === 'Escape') {
+                        toggleMenu(false);
+                    }
+                });
+                document.addEventListener('click', (e) => {
+                    if (!moreBtn.contains(e.target)) toggleMenu(false);
+                });
+            }
+        });
+
+          function toggleBookingSignatureMode() {
+            const selected = document.querySelector('input[name="signature_mode"]:checked');
+            const fields = document.getElementById('booking-signature-new-fields');
+            if (fields) fields.classList.toggle('hidden', selected && selected.value === 'saved');
+          }
+
+          function previewBookingSignatureFile(input) {
+            const dataInput = document.getElementById('booking-signature-data');
+            const preview = document.getElementById('booking-signature-preview');
+            if (dataInput) dataInput.value = '';
+            if (preview) preview.textContent = input.files && input.files[0] ? input.files[0].name : 'Tiada tandatangan dipilih.';
+          }
+
+          let bookingSignatureContext;
+          let bookingSignatureHasStroke = false;
+
+          function openBookingSignaturePad() {
+            document.getElementById('booking-signature-pad').showModal();
+            requestAnimationFrame(initBookingSignaturePad);
+          }
+
+          function initBookingSignaturePad() {
+            const canvas = document.getElementById('booking-signature-canvas');
+            if (!canvas) return;
+            const rect = canvas.getBoundingClientRect();
+            const ratio = window.devicePixelRatio || 1;
+            canvas.width = rect.width * ratio;
+            canvas.height = 220 * ratio;
+            bookingSignatureContext = canvas.getContext('2d');
+            bookingSignatureContext.scale(ratio, ratio);
+            bookingSignatureContext.lineWidth = 2.2;
+            bookingSignatureContext.lineCap = 'round';
+            bookingSignatureContext.strokeStyle = '#1e293b';
+            bookingSignatureContext.fillStyle = '#ffffff';
+            bookingSignatureContext.fillRect(0, 0, rect.width, 220);
+            bookingSignatureHasStroke = false;
+
+            const position = (event) => {
+              const bounds = canvas.getBoundingClientRect();
+              const touch = event.touches ? event.touches[0] : event;
+              return { x: touch.clientX - bounds.left, y: touch.clientY - bounds.top };
+            };
+            const start = (event) => {
+              event.preventDefault();
+              const point = position(event);
+              bookingSignatureContext.beginPath();
+              bookingSignatureContext.moveTo(point.x, point.y);
+              canvas.dataset.drawing = 'true';
+            };
+            const move = (event) => {
+              if (canvas.dataset.drawing !== 'true') return;
+              event.preventDefault();
+              const point = position(event);
+              bookingSignatureContext.lineTo(point.x, point.y);
+              bookingSignatureContext.stroke();
+              bookingSignatureHasStroke = true;
+            };
+            const end = () => { canvas.dataset.drawing = 'false'; };
+            canvas.onmousedown = start;
+            canvas.onmousemove = move;
+            canvas.onmouseup = end;
+            canvas.onmouseleave = end;
+            canvas.ontouchstart = start;
+            canvas.ontouchmove = move;
+            canvas.ontouchend = end;
+          }
+
+          function clearBookingSignaturePad() {
+            const canvas = document.getElementById('booking-signature-canvas');
+            if (!canvas || !bookingSignatureContext) return;
+            const rect = canvas.getBoundingClientRect();
+            bookingSignatureContext.fillStyle = '#ffffff';
+            bookingSignatureContext.fillRect(0, 0, rect.width, 220);
+            bookingSignatureHasStroke = false;
+          }
+
+          function saveBookingSignaturePad() {
+            if (!bookingSignatureHasStroke) {
+              alert('Sila tandatangan dahulu.');
+              return;
+            }
+            const canvas = document.getElementById('booking-signature-canvas');
+            document.getElementById('booking-signature-data').value = canvas.toDataURL('image/png');
+            document.getElementById('booking-signature-file').value = '';
+            document.getElementById('booking-signature-preview').textContent = 'Tandatangan dilukis sedia untuk dihantar.';
+            document.getElementById('booking-signature-pad').close();
+          }
+
+          document.getElementById('booking-form').addEventListener('submit', function (event) {
+            const selected = document.querySelector('input[name="signature_mode"]:checked');
+            const hasSaved = selected && selected.value === 'saved';
+            const fileInput = document.getElementById('booking-signature-file');
+            const dataInput = document.getElementById('booking-signature-data');
+            if (!hasSaved && !(fileInput.files && fileInput.files.length) && !dataInput.value) {
+              event.preventDefault();
+              alert('Sila sediakan tandatangan sebelum menghantar tempahan.');
+            }
+          });
     </script>
 
     <!-- Skrip Tukar Mod Tema Terang/Gelap -->
@@ -502,7 +1104,7 @@ $pendingApprovals = $pdo->query("SELECT COUNT(*) FROM vehicle_bookings WHERE sta
         const themeToggleBtn = document.getElementById('theme-toggle');
         const themeToggleIcon = document.getElementById('theme-toggle-icon');
 
-        const LIGHT_THEME = 'light';
+        const LIGHT_THEME = 'garden';
         const DARK_THEME  = 'dracula';
 
         const moonIcon = `<svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M21.752 15.002A9.72 9.72 0 0118 15.75c-5.385 0-9.75-4.365-9.75-9.75 0-1.33.266-2.597.748-3.752A9.753 9.753 0 003 11.25C3 16.635 7.365 21 12.75 21a9.753 9.753 0 009.002-5.998z" /></svg>`;

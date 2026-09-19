@@ -1,12 +1,10 @@
 <?php
 // bookings.php — Pengurusan Tempahan Kenderaan
-session_start();
+require_once __DIR__ . '/includes/auth.php';
 require_once __DIR__ . '/config/database.php';
+require_once __DIR__ . '/includes/signature.php';
 
-if (!isset($_SESSION['user_id'])) {
-    header("Location: login.php");
-    exit();
-}
+require_login();
 
 $fullname      = $_SESSION['fullname'];
 $role          = $_SESSION['role']; // 'SuperAdmin', 'Admin', atau 'User'
@@ -20,19 +18,29 @@ if (!$email) {
     $email = $stmt->fetchColumn() ?: 'tiada-emel@selangor.gov.my';
 }
 
+$avatarStmt = $pdo->prepare("SELECT profile_picture FROM users WHERE user_id = ?");
+$avatarStmt->execute([$currentUserId]);
+$profilePicture = $avatarStmt->fetchColumn();
+$hasPhoto = $profilePicture && is_file(__DIR__ . '/' . $profilePicture);
+
+$sigStmt = $pdo->prepare("SELECT signature_path FROM users WHERE user_id = ?");
+$sigStmt->execute([$currentUserId]);
+$currentUserSignature = $sigStmt->fetchColumn() ?: null;
+$hasSavedSignature = $currentUserSignature && is_file(__DIR__ . '/' . $currentUserSignature);
+
 $badgeColor = match($role) {
-    'SuperAdmin' => 'badge-soft-error',
-    'Admin'      => 'badge-soft-warning',
-    default      => 'badge-soft-info',
+  'SuperAdmin' => 'badge badge-error',
+  'Admin'      => 'badge badge-warning',
+  default      => 'badge badge-info',
 };
 
 $statusBadge = fn(string $s) => match ($s) {
-    'Pending'   => 'badge-soft-warning',
-    'Approved'  => 'badge-soft-info',
-    'Rejected'  => 'badge-soft-error',
-    'Cancelled' => 'badge-soft-neutral',
-    'Completed' => 'badge-soft-success',
-    default     => 'badge-soft-neutral',
+  'Pending'   => 'badge badge-warning',
+  'Approved'  => 'badge badge-info',
+  'Rejected'  => 'badge badge-error',
+  'Cancelled' => 'badge badge-ghost',
+  'Completed' => 'badge badge-success',
+  default     => 'badge badge-ghost',
 };
 $statusLabel = fn(string $s) => match ($s) {
     'Pending'   => 'Menunggu',
@@ -45,9 +53,28 @@ $statusLabel = fn(string $s) => match ($s) {
 $tripTypeLabel = fn(string $t) => match ($t) {
     'One Way' => 'Sehala',
     'Return'  => 'Pergi Balik',
-    'Both'    => 'Kedua-dua',
     default   => $t,
 };
+  $bookingStatusBadge = static function (array $booking) use ($statusBadge): string {
+    return match ($booking['workflow_stage'] ?? null) {
+      'DriverAssigned' => 'badge badge-warning',
+      'ReassignmentRequired' => 'badge badge-error',
+      'DriverAccepted' => 'badge badge-info',
+      default => $statusBadge($booking['status']),
+    };
+  };
+  $bookingStatusLabel = static function (array $booking) use ($statusLabel, $currentUserId): string {
+    if (($booking['workflow_stage'] ?? null) === 'DriverAssigned'
+      && (int)($booking['driver_user_id'] ?? 0) === $currentUserId) {
+      return 'Menunggu Respons Anda';
+    }
+    return match ($booking['workflow_stage'] ?? null) {
+      'DriverAssigned' => 'Menunggu Pemandu Terima',
+      'ReassignmentRequired' => 'Perlu Tugasan Semula',
+      'DriverAccepted' => 'Menunggu Kelulusan',
+      default => $statusLabel($booking['status']),
+    };
+  };
 
 function generateBookingNo(PDO $pdo): string {
     do {
@@ -62,22 +89,81 @@ function generateBookingNo(PDO $pdo): string {
    Tindakan Borang
    ========================================================== */
 $flash = null;
+$redirectAfterPost = null;
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    if (!verify_csrf_token($_POST['csrf_token'] ?? '')) {
+        http_response_code(403);
+        exit('Ralat Keselamatan: Token CSRF tidak sah atau telah tamat tempoh.');
+    }
     $action = $_POST['action'] ?? '';
 
     try {
         if ($action === 'add_booking') {
             $departRaw = trim($_POST['depart_datetime'] ?? '');
+            if ($departRaw === '' || !DateTime::createFromFormat('Y-m-d\TH:i', $departRaw)) {
+                throw new RuntimeException('Sila masukkan tarikh & masa berangkat yang sah.');
+            }
             $returnRaw = trim($_POST['return_datetime'] ?? '');
+            if ($returnRaw !== '' && !DateTime::createFromFormat('Y-m-d\TH:i', $returnRaw)) {
+                throw new RuntimeException('Sila masukkan tarikh & masa pulang yang sah.');
+            }
             $tripType  = $_POST['trip_type'] ?? 'One Way';
             $origin    = trim($_POST['origin'] ?? '');
+            if ($origin === '' || strlen($origin) > 100) {
+                throw new RuntimeException('Sila nyatakan lokasi asal yang sah (maksimum 100 aksara).');
+            }
             $dest      = trim($_POST['destination'] ?? '');
+            if ($dest === '' || strlen($dest) > 100) {
+                throw new RuntimeException('Sila nyatakan destinasi yang sah (maksimum 100 aksara).');
+            }
             $pax       = (int)($_POST['passenger_total'] ?? 0);
             $purpose   = trim($_POST['purpose'] ?? '');
+            if ($purpose === '' || strlen($purpose) > 500) {
+                throw new RuntimeException('Sila nyatakan tujuan tempahan yang sah (maksimum 500 aksara).');
+            }
 
-            if ($departRaw === '' || $origin === '' || $dest === '' || $purpose === '') {
-                throw new RuntimeException('Sila lengkapkan semua maklumat wajib tempahan.');
+            // --- NEW: Process PDF Upload ---
+            $passenger_memo_path = null;
+            if (isset($_FILES['passenger_memo']) && $_FILES['passenger_memo']['error'] === UPLOAD_ERR_OK) {
+                $fileTmpPath = $_FILES['passenger_memo']['tmp_name'];
+                $fileSize = $_FILES['passenger_memo']['size'];
+                $fileType = mime_content_type($fileTmpPath);
+
+                if ($fileType === 'application/pdf' && $fileSize <= 2000000) {
+                    $uploadDir = 'assets/uploads/memos/';
+                    if (!is_dir($uploadDir)) {
+                        mkdir($uploadDir, 0755, true);
+                    }
+                    $newFileName = uniqid('memo_') . '.pdf';
+                    $destPath = $uploadDir . $newFileName;
+
+                    if (move_uploaded_file($fileTmpPath, $destPath)) {
+                        $passenger_memo_path = $destPath;
+                    } else {
+                        throw new RuntimeException('Ralat semasa menyimpan fail memo.');
+                    }
+                } else {
+                    throw new RuntimeException('Sila muat naik format fail PDF sahaja (Maksimum 2MB).');
+                }
+            }
+
+            // Nama penumpang dihantar sebagai array (passenger_names[]) daripada
+            // senarai butang Tambah/Buang Penumpang pada borang tempahan
+            $passengerNamesArr = array_values(array_filter(array_map(
+                'trim',
+                $_POST['passenger_names'] ?? []
+            ), fn($n) => $n !== ''));
+            $passengerNamesJson = !empty($passengerNamesArr)
+                ? json_encode($passengerNamesArr, JSON_UNESCAPED_UNICODE)
+                : null;
+            // Bilangan penumpang diselaraskan dengan jumlah nama yang benar-benar diisi
+            if (!empty($passengerNamesArr)) {
+                $pax = count($passengerNamesArr);
+            }
+
+            if (empty($passengerNamesArr) && !$passenger_memo_path) {
+                throw new RuntimeException('Sila masukkan sekurang-kurangnya nama seorang penumpang ATAU muat naik memo senarai (PDF).');
             }
             if (!in_array($tripType, ['One Way', 'Return', 'Both'], true)) {
                 throw new RuntimeException('Jenis perjalanan tidak sah.');
@@ -91,18 +177,37 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 }
             }
 
+              $requesterSignaturePath = null;
+              $signatureMode = $_POST['signature_mode'] ?? 'new';
+              if ($signatureMode === 'saved') {
+                if (!$hasSavedSignature) {
+                  throw new RuntimeException('Tiada tandatangan tersimpan. Sila sediakan tandatangan baharu.');
+                }
+                $requesterSignaturePath = $currentUserSignature;
+              } else {
+                if (!empty($_FILES['signature_file']['name']) && $_FILES['signature_file']['error'] === UPLOAD_ERR_OK) {
+                  $requesterSignaturePath = save_signature_upload($_FILES['signature_file'], $currentUserId);
+                  $pdo->prepare("UPDATE users SET signature_path = ? WHERE user_id = ?")->execute([$requesterSignaturePath, $currentUserId]);
+                } elseif (!empty($_POST['signature_data'])) {
+                  $requesterSignaturePath = save_signature_dataurl($_POST['signature_data'], $currentUserId);
+                  $pdo->prepare("UPDATE users SET signature_path = ? WHERE user_id = ?")->execute([$requesterSignaturePath, $currentUserId]);
+                } else {
+                  throw new RuntimeException('Sila sediakan tandatangan sebelum menghantar tempahan.');
+                }
+              }
+
             $bookingNo = generateBookingNo($pdo);
 
             // Pemandu & kenderaan belum ditetapkan — ditugaskan oleh Admin/SuperAdmin semasa kelulusan
             $stmt = $pdo->prepare(
                 "INSERT INTO vehicle_bookings
                  (booking_no, user_id, depart_datetime, return_datetime, trip_type, origin, destination,
-                  passenger_total, purpose, status)
-                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'Pending')"
+                  passenger_total, passenger_names, passenger_memo_path, purpose, requester_signature_path, status)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Pending')"
             );
             $stmt->execute([
                 $bookingNo, $currentUserId, $departRaw, $returnRaw !== '' ? $returnRaw : null,
-                $tripType, $origin, $dest, $pax > 0 ? $pax : null, $purpose,
+                $tripType, $origin, $dest, $pax > 0 ? $pax : null, $passengerNamesJson, $passenger_memo_path, $purpose, $requesterSignaturePath,
             ]);
             $newId = (int)$pdo->lastInsertId();
 
@@ -110,23 +215,33 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $hist->execute([$newId, "Tempahan {$bookingNo} dicipta.", $currentUserId]);
 
             $flash = ['type' => 'success', 'msg' => "Tempahan {$bookingNo} berjaya dihantar dan menunggu kelulusan."];
+            $redirectAfterPost = 'view.php?id=' . $newId;
 
-        } elseif (in_array($action, ['approve_booking', 'reject_booking', 'cancel_booking', 'complete_booking'], true)) {
+        } elseif (in_array($action, ['assign_driver', 'approve_booking', 'driver_accept', 'driver_reject', 'reject_booking', 'cancel_booking', 'complete_booking'], true)) {
             $bid = (int)($_POST['booking_id'] ?? 0);
             if ($bid <= 0) {
                 throw new RuntimeException('Tempahan tidak sah.');
             }
 
-            $bstmt = $pdo->prepare("SELECT * FROM vehicle_bookings WHERE booking_id = ?");
+            $pdo->beginTransaction();
+
+            $bstmt = $pdo->prepare(
+              "SELECT vb.*, dr.user_id AS assigned_driver_user_id
+               FROM vehicle_bookings vb
+               LEFT JOIN drivers dr ON dr.driver_id = vb.driver_id
+               WHERE vb.booking_id = ? FOR UPDATE"
+            );
             $bstmt->execute([$bid]);
             $booking = $bstmt->fetch(PDO::FETCH_ASSOC);
             if (!$booking) {
                 throw new RuntimeException('Tempahan tidak dijumpai.');
             }
 
-            if ($action === 'approve_booking') {
-                if (!$canManage) throw new RuntimeException('Anda tidak mempunyai kebenaran untuk meluluskan tempahan.');
-                if ($booking['status'] !== 'Pending') throw new RuntimeException('Hanya tempahan berstatus Menunggu boleh diluluskan.');
+            if ($action === 'assign_driver') {
+              if (!$canManage) throw new RuntimeException('Anda tidak mempunyai kebenaran untuk menetapkan pemandu.');
+              if ($booking['status'] !== 'Pending' || !in_array($booking['workflow_stage'], ['Submitted', 'ReassignmentRequired'], true)) {
+                throw new RuntimeException('Hanya tempahan yang menunggu penetapan pemandu boleh diproses.');
+              }
 
                 $driverId = (int)($_POST['driver_id'] ?? 0);
                 if ($driverId <= 0) {
@@ -137,7 +252,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $dstmt = $pdo->prepare(
                     "SELECT dr.driver_id, dr.status AS driver_status, v.vehicle_id
                      FROM drivers dr LEFT JOIN vehicles v ON v.driver_id = dr.driver_id
-                     WHERE dr.driver_id = ?"
+                     WHERE dr.driver_id = ? FOR UPDATE"
                 );
                 $dstmt->execute([$driverId]);
                 $drv = $dstmt->fetch(PDO::FETCH_ASSOC);
@@ -149,21 +264,97 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     throw new RuntimeException('Pemandu ini tiada kenderaan ditugaskan kepadanya.');
                 }
 
+                $signatureMode = $_POST['signature_mode'] ?? 'new';
+                if ($signatureMode === 'saved') {
+                  if (!$hasSavedSignature) {
+                    throw new RuntimeException('Tiada tandatangan tersimpan. Sila sediakan tandatangan baharu.');
+                  }
+                  $approverSignaturePath = $currentUserSignature;
+                } elseif (!empty($_FILES['signature_file']['name']) && $_FILES['signature_file']['error'] === UPLOAD_ERR_OK) {
+                  $approverSignaturePath = save_signature_upload($_FILES['signature_file'], $currentUserId, $currentUserSignature);
+                  $pdo->prepare("UPDATE users SET signature_path = ? WHERE user_id = ?")->execute([$approverSignaturePath, $currentUserId]);
+                } elseif (!empty($_POST['signature_data'])) {
+                  $approverSignaturePath = save_signature_dataurl($_POST['signature_data'], $currentUserId, $currentUserSignature);
+                  $pdo->prepare("UPDATE users SET signature_path = ? WHERE user_id = ?")->execute([$approverSignaturePath, $currentUserId]);
+                } else {
+                  throw new RuntimeException('Sila sediakan tandatangan sebelum menetapkan pemandu.');
+                }
+
                 $upd = $pdo->prepare(
-                    "UPDATE vehicle_bookings SET status='Approved', driver_id=?, vehicle_id=?, approved_by=?, approved_at=NOW()
+                  "UPDATE vehicle_bookings SET status='Pending', workflow_stage='DriverAssigned', driver_id=?, vehicle_id=?, approved_by=?, approved_at=NULL, approver_signature_path=?
                      WHERE booking_id=?"
                 );
-                $upd->execute([$driverId, $drv['vehicle_id'], $currentUserId, $bid]);
+                $upd->execute([$driverId, $drv['vehicle_id'], $currentUserId, $approverSignaturePath, $bid]);
                 $pdo->prepare("UPDATE vehicles SET status='Booked' WHERE vehicle_id=?")->execute([$drv['vehicle_id']]);
-                $pdo->prepare("INSERT INTO booking_history (booking_id, action, remarks, action_by) VALUES (?, 'Diluluskan', 'Tempahan diluluskan, pemandu & kenderaan ditugaskan.', ?)")->execute([$bid, $currentUserId]);
+                $pdo->prepare("INSERT INTO booking_history (booking_id, action, remarks, action_by) VALUES (?, 'Driver Assigned', 'Pemandu telah ditugaskan dan menunggu pengesahan.', ?)")->execute([$bid, $currentUserId]);
 
+                $flash = ['type' => 'success', 'msg' => "Pemandu telah ditugaskan untuk tempahan {$booking['booking_no']}."];
+
+              } elseif ($action === 'approve_booking') {
+                if (!$canManage) throw new RuntimeException('Anda tidak mempunyai kebenaran untuk meluluskan tempahan.');
+                if ($booking['status'] !== 'Pending' || $booking['workflow_stage'] !== 'DriverAccepted') {
+                  throw new RuntimeException('Tempahan hanya boleh diluluskan selepas pemandu menerima tugasan.');
+                }
+
+                $signatureMode = $_POST['signature_mode'] ?? 'new';
+                if ($signatureMode === 'saved') {
+                  if (!$hasSavedSignature) {
+                    throw new RuntimeException('Tiada tandatangan tersimpan. Sila sediakan tandatangan baharu.');
+                  }
+                  $approverSignaturePath = $currentUserSignature;
+                } else {
+                  if (!empty($_FILES['signature_file']['name']) && $_FILES['signature_file']['error'] === UPLOAD_ERR_OK) {
+                    $approverSignaturePath = save_signature_upload($_FILES['signature_file'], $currentUserId, $currentUserSignature);
+                  } elseif (!empty($_POST['signature_data'])) {
+                    $approverSignaturePath = save_signature_dataurl($_POST['signature_data'], $currentUserId, $currentUserSignature);
+                  } else {
+                    throw new RuntimeException('Sila sediakan tandatangan sebelum meluluskan.');
+                  }
+                  $pdo->prepare("UPDATE users SET signature_path = ? WHERE user_id = ?")->execute([$approverSignaturePath, $currentUserId]);
+                }
+
+                $pdo->prepare(
+                  "UPDATE vehicle_bookings
+                   SET status='Approved', approved_by=?, approved_at=NOW(), approver_signature_path=?
+                   WHERE booking_id=?"
+                )->execute([$currentUserId, $approverSignaturePath, $bid]);
+                $pdo->prepare("UPDATE vehicles SET status='Booked' WHERE vehicle_id=?")->execute([$booking['vehicle_id']]);
+                $pdo->prepare("INSERT INTO booking_history (booking_id, action, remarks, action_by) VALUES (?, 'Diluluskan', 'Admin meluluskan tempahan selepas pemandu menerima tugasan.', ?)")->execute([$bid, $currentUserId]);
                 $flash = ['type' => 'success', 'msg' => "Tempahan {$booking['booking_no']} telah diluluskan."];
+
+              } elseif ($action === 'driver_accept' || $action === 'driver_reject') {
+                if ((int)($booking['assigned_driver_user_id'] ?? 0) !== $currentUserId) {
+                  throw new RuntimeException('Hanya pemandu yang ditugaskan boleh memberi respons kepada tugasan ini.');
+                }
+                if ($booking['status'] !== 'Pending' || $booking['workflow_stage'] !== 'DriverAssigned') {
+                  throw new RuntimeException('Tugasan ini tidak lagi menunggu respons pemandu.');
+                }
+
+                if ($action === 'driver_accept') {
+                  $pdo->prepare(
+                    "UPDATE vehicle_bookings
+                    SET status='Approved', workflow_stage='AdminApproved', approved_at=NOW()
+                    WHERE booking_id=?"
+                  )->execute([$bid]);
+                  $pdo->prepare("UPDATE vehicles SET status='Booked' WHERE vehicle_id=?")->execute([$booking['vehicle_id']]);
+                  $pdo->prepare("INSERT INTO booking_history (booking_id, action, remarks, action_by) VALUES (?, 'Driver Accepted', 'Pemandu menerima tugasan. Tempahan diluluskan.', ?)")->execute([$bid, $currentUserId]);
+                  $flash = ['type' => 'success', 'msg' => "Tugasan diterima. Tempahan {$booking['booking_no']} telah diluluskan."];
+                } else {
+                  $pdo->prepare(
+                    "UPDATE vehicle_bookings
+                     SET status='Pending', workflow_stage='ReassignmentRequired', driver_id=NULL, vehicle_id=NULL, approved_by=NULL, approved_at=NULL, approver_signature_path=NULL
+                     WHERE booking_id=?"
+                  )->execute([$bid]);
+                  $pdo->prepare("UPDATE vehicles SET status='Available' WHERE vehicle_id=?")->execute([$booking['vehicle_id']]);
+                  $pdo->prepare("INSERT INTO booking_history (booking_id, action, remarks, action_by) VALUES (?, 'Driver Rejected', 'Pemandu menolak tugasan. Menunggu penetapan pemandu baharu.', ?)")->execute([$bid, $currentUserId]);
+                  $flash = ['type' => 'success', 'msg' => "Tugasan ditolak. Admin perlu menetapkan pemandu baharu untuk {$booking['booking_no']}."];
+                }
 
             } elseif ($action === 'reject_booking') {
                 if (!$canManage) throw new RuntimeException('Anda tidak mempunyai kebenaran untuk menolak tempahan.');
-                if ($booking['status'] !== 'Pending') throw new RuntimeException('Hanya tempahan berstatus Menunggu boleh ditolak.');
+                if ($booking['status'] !== 'Pending' || $booking['workflow_stage'] === 'DriverAssigned') throw new RuntimeException('Tempahan ini sedang menunggu respons pemandu dan tidak boleh ditolak oleh admin pada masa ini.');
 
-                $pdo->prepare("UPDATE vehicle_bookings SET status='Rejected', approved_by=?, approved_at=NOW() WHERE booking_id=?")->execute([$currentUserId, $bid]);
+                $pdo->prepare("UPDATE vehicle_bookings SET status='Rejected', workflow_stage='AdminRejected', approved_by=?, approved_at=NOW() WHERE booking_id=?")->execute([$currentUserId, $bid]);
                 $pdo->prepare("INSERT INTO booking_history (booking_id, action, remarks, action_by) VALUES (?, 'Ditolak', 'Tempahan ditolak.', ?)")->execute([$bid, $currentUserId]);
 
                 $flash = ['type' => 'success', 'msg' => "Tempahan {$booking['booking_no']} telah ditolak."];
@@ -173,8 +364,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 if (!$isOwner && !$canManage) throw new RuntimeException('Anda tidak mempunyai kebenaran untuk membatalkan tempahan ini.');
                 if (!in_array($booking['status'], ['Pending', 'Approved'], true)) throw new RuntimeException('Tempahan ini tidak boleh dibatalkan.');
 
-                $pdo->prepare("UPDATE vehicle_bookings SET status='Cancelled' WHERE booking_id=?")->execute([$bid]);
-                if ($booking['status'] === 'Approved') {
+                $pdo->prepare("UPDATE vehicle_bookings SET status='Cancelled', workflow_stage='Cancelled' WHERE booking_id=?")->execute([$bid]);
+                if (!empty($booking['vehicle_id'])) {
                     $pdo->prepare("UPDATE vehicles SET status='Available' WHERE vehicle_id=?")->execute([$booking['vehicle_id']]);
                 }
                 $pdo->prepare("INSERT INTO booking_history (booking_id, action, remarks, action_by) VALUES (?, 'Dibatalkan', 'Tempahan dibatalkan.', ?)")->execute([$bid, $currentUserId]);
@@ -185,20 +376,27 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 if (!$canManage) throw new RuntimeException('Anda tidak mempunyai kebenaran untuk menamatkan tempahan.');
                 if ($booking['status'] !== 'Approved') throw new RuntimeException('Hanya tempahan berstatus Diluluskan boleh ditamatkan.');
 
-                $pdo->prepare("UPDATE vehicle_bookings SET status='Completed' WHERE booking_id=?")->execute([$bid]);
+                $pdo->prepare("UPDATE vehicle_bookings SET status='Completed', workflow_stage='Completed' WHERE booking_id=?")->execute([$bid]);
                 $pdo->prepare("UPDATE vehicles SET status='Available' WHERE vehicle_id=?")->execute([$booking['vehicle_id']]);
                 $pdo->prepare("INSERT INTO booking_history (booking_id, action, remarks, action_by) VALUES (?, 'Selesai', 'Perjalanan selesai.', ?)")->execute([$bid, $currentUserId]);
 
                 $flash = ['type' => 'success', 'msg' => "Tempahan {$booking['booking_no']} ditandakan selesai."];
             }
+            $pdo->commit();
         }
     } catch (RuntimeException $e) {
+        if ($pdo->inTransaction()) { $pdo->rollBack(); }
         $flash = ['type' => 'error', 'msg' => $e->getMessage()];
     } catch (PDOException $e) {
+        if ($pdo->inTransaction()) { $pdo->rollBack(); }
         $flash = ['type' => 'error', 'msg' => 'Ralat pangkalan data berlaku. Sila cuba lagi.'];
     }
 
     $_SESSION['flash'] = $flash;
+    if ($redirectAfterPost !== null) {
+      header("Location: {$redirectAfterPost}");
+      exit();
+    }
     $qs = [];
     if (isset($_GET['q']) && $_GET['q'] !== '') $qs['q'] = $_GET['q'];
     if (isset($_GET['status']) && $_GET['status'] !== '') $qs['status'] = $_GET['status'];
@@ -242,8 +440,14 @@ $where  = [];
 $params = [];
 
 if ($role === 'User') {
-    $where[] = 'vb.user_id = :uid';
+  $where[] = '(vb.user_id = :uid OR EXISTS (
+    SELECT 1
+    FROM drivers assigned_driver
+    WHERE assigned_driver.driver_id = vb.driver_id
+      AND assigned_driver.user_id = :driver_uid
+  ))';
     $params[':uid'] = $currentUserId;
+  $params[':driver_uid'] = $currentUserId;
 }
 if ($statusFilter !== 'All') {
     $where[] = 'vb.status = :status';
@@ -264,11 +468,12 @@ $countStmt->execute($params);
 $totalRows = (int)$countStmt->fetchColumn();
 
 $stmt = $pdo->prepare(
-    "SELECT vb.*, u.fullname AS requester_name, v.plate_no, v.vehicle_name,
+        "SELECT vb.*, u.fullname AS requester_name, v.plate_no, v.vehicle_name,
+          dr.user_id AS driver_user_id,
             du.fullname AS driver_name, ap.fullname AS approved_by_name
      FROM vehicle_bookings vb
-     JOIN users u ON u.user_id = vb.user_id
-     JOIN vehicles v ON v.vehicle_id = vb.vehicle_id
+    JOIN users u ON u.user_id = vb.user_id
+    LEFT JOIN vehicles v ON v.vehicle_id = vb.vehicle_id
      LEFT JOIN drivers dr ON dr.driver_id = vb.driver_id
      LEFT JOIN users du ON du.user_id = dr.user_id
      LEFT JOIN users ap ON ap.user_id = vb.approved_by
@@ -322,7 +527,7 @@ $tabs = ['All' => 'Semua', 'Pending' => 'Menunggu', 'Approved' => 'Diluluskan', 
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, shrink-to-fit=no" />
-    <title>Kembara - Tempahan</title>
+    <title>e-Kenderaan - Tempahan</title>
 
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700&display=swap" rel="stylesheet" />
@@ -363,123 +568,89 @@ $tabs = ['All' => 'Semua', 'Pending' => 'Menunggu', 'Approved' => 'Diluluskan', 
             color: var(--ta-ink) !important;
         }
 
-        table th { color: var(--ta-muted) !important; }
-        table td { border-color: var(--ta-border) !important; }
-        table tr:hover { background-color: color-mix(in oklch, var(--color-base-content) 5%, transparent) !important; }
+          function openFinalApproveModal(id, bookingNo) {
+            document.getElementById("approve-booking-action").value = "approve_booking";
+            document.getElementById("approve-modal-title").textContent = "Luluskan Tempahan";
+            document.getElementById("approve-modal-submit").textContent = "Luluskan Tempahan";
+            document.getElementById("approve-driver-fields").classList.add("hidden");
+            document.getElementById("approve-signature-fields").classList.remove("hidden");
+            document.getElementById("approve-booking-id").value = id;
+            document.getElementById("approve-booking-no").textContent = bookingNo;
 
-        .ta-icon-box {
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            width: 3rem;
-            height: 3rem;
-            border-radius: 0.75rem;
-            background: var(--ta-canvas);
-            color: var(--ta-ink);
-        }
+            const savedRadio = document.querySelector(\'input[name="signature_mode"][value="saved"]\');
+            if (savedRadio) savedRadio.checked = true;
+            toggleApproveSignatureMode();
+            const fileInput = document.getElementById("approve-signature-file");
+            if (fileInput) fileInput.value = "";
+            const dataInput = document.getElementById("approve-signature-data");
+            if (dataInput) dataInput.value = "";
+            const sigPreview = document.getElementById("approve-signature-preview");
+            if (sigPreview) sigPreview.textContent = "Tiada tandatangan dipilih.";
+            document.getElementById("modal-approve").showModal();
+          }
 
-        .ta-nav-link {
-            display: flex;
-            align-items: center;
-            gap: 0.7rem;
-            border-radius: 0.5rem;
-            padding: 0.55rem 0.75rem;
-            font-size: 0.875rem;
-            font-weight: 500;
-            color: var(--ta-muted);
-            transition: all .15s ease;
-        }
-        .ta-nav-link:hover { background: var(--ta-canvas); color: var(--ta-ink); }
-        .ta-nav-link.active { background: var(--ta-brand-50); color: var(--ta-brand); font-weight: 600; }
-        .ta-nav-icon { display: inline-flex; width: 1.25rem; height: 1.25rem; flex-shrink: 0; }
-
-        .ta-badge {
-            display: inline-flex;
-            align-items: center;
-            gap: 0.25rem;
-            border-radius: 9999px;
-            padding: 0.15rem 0.65rem;
-            font-size: 0.7rem;
-            font-weight: 600;
-        }
-        .badge-soft-success { background: color-mix(in oklch, var(--color-success) 18%, var(--color-base-100)); color: var(--color-success); }
-        .badge-soft-warning { background: color-mix(in oklch, var(--color-warning) 18%, var(--color-base-100)); color: var(--color-warning); }
-        .badge-soft-error   { background: color-mix(in oklch, var(--color-error) 18%, var(--color-base-100));   color: var(--color-error); }
-        .badge-soft-info    { background: color-mix(in oklch, var(--color-info) 18%, var(--color-base-100));    color: var(--color-info); }
-        .badge-soft-neutral { background: color-mix(in oklch, var(--color-neutral) 18%, var(--color-base-100)); color: var(--ta-ink); }
-
-        .ta-divide > * + * { border-top: 1px solid var(--ta-border); }
-
-        .ta-tab {
-            display: inline-flex;
-            align-items: center;
-            white-space: nowrap;
-            padding: 0.4rem 0.9rem;
-            border-radius: 9999px;
-            font-size: 0.8rem;
-            font-weight: 600;
-            color: var(--ta-muted);
-            border: 1px solid var(--ta-border);
-            transition: all .15s ease;
-        }
-        .ta-tab:hover { color: var(--ta-ink); background: var(--ta-canvas); }
-        .ta-tab.active { background: var(--ta-brand); color: #fff; border-color: var(--ta-brand); }
-
-        ::-webkit-scrollbar { width: 8px; height: 8px; }
-        ::-webkit-scrollbar-thumb { background: var(--ta-border); border-radius: 999px; }
-
-        #toast-alert {
-            position: fixed;
-            top: 1.25rem;
-            left: 50%;
-            z-index: 300;
-            animation: ta-toast-in 0.55s cubic-bezier(0.34, 1.56, 0.64, 1) both;
-        }
-        #toast-alert.ta-toast-hide {
-            animation: ta-toast-out 0.35s cubic-bezier(0.4, 0, 1, 1) forwards;
-        }
-        @keyframes ta-toast-in {
-            0%   { opacity: 0; transform: translate(-50%, -28px) scale(0.85); }
-            60%  { opacity: 1; transform: translate(-50%, 6px) scale(1.02); }
-            100% { opacity: 1; transform: translate(-50%, 0) scale(1); }
-        }
-        @keyframes ta-toast-out {
-            0%   { opacity: 1; transform: translate(-50%, 0) scale(1); }
-            100% { opacity: 0; transform: translate(-50%, -18px) scale(0.92); }
+        function updateApproveVehiclePreview() {
+            const select = document.getElementById("approve-driver-select");
+            const opt = select.options[select.selectedIndex];
+            document.getElementById("approve-vehicle-preview").textContent = (opt && opt.dataset.vehicle) ? opt.dataset.vehicle : "—";
         }
 
-        dialog.modal {
-            opacity: 0;
-            transform: scale(0.92) translateY(12px);
-            transition: opacity 0.28s cubic-bezier(0.34, 1.56, 0.64, 1),
-                        transform 0.32s cubic-bezier(0.34, 1.56, 0.64, 1),
-                        overlay 0.32s allow-discrete,
-                        display 0.32s allow-discrete;
+        function toggleApproveSignatureMode() {
+            const selected = document.querySelector(\'input[name="signature_mode"]:checked\');
+            const fields = document.getElementById("approve-signature-new-fields");
+            if (!fields) return;
+            fields.classList.toggle("hidden", selected && selected.value === "saved");
         }
-        dialog.modal[open] {
-            opacity: 1;
-            transform: scale(1) translateY(0);
+
+        function previewApproveSignatureFile(input) {
+            const preview = document.getElementById("approve-signature-preview");
+            const dataInput = document.getElementById("approve-signature-data");
+            if (dataInput) dataInput.value = "";
+            if (preview) preview.textContent = (input.files && input.files[0]) ? input.files[0].name : "Tiada tandatangan dipilih.";
         }
-        @starting-style {
-            dialog.modal[open] {
-                opacity: 0;
-                transform: scale(0.92) translateY(12px);
+
+        let apprSigCtx, apprSigDrawing = false, apprSigHasStroke = false;
+
+        function openApproveSignaturePad() {
+            document.getElementById("modal-approve-signature-pad").showModal();
+            requestAnimationFrame(initApproveSignaturePad);
+        }
+
+        function initApproveSignaturePad() {
+            const canvas = document.getElementById("approve-signature-pad-canvas");
+            if (!canvas) return;
+            const rect = canvas.getBoundingClientRect();
+            const ratio = window.devicePixelRatio || 1;
+            canvas.width = rect.width * ratio;
+            canvas.height = 220 * ratio;
+            apprSigCtx = canvas.getContext("2d");
+            apprSigCtx.scale(ratio, ratio);
+            apprSigCtx.lineWidth = 2.2;
+            apprSigCtx.lineCap = "round";
+            apprSigCtx.strokeStyle = "#1e293b";
+            apprSigCtx.fillStyle = "#ffffff";
+            apprSigCtx.fillRect(0, 0, rect.width, 220);
+            apprSigHasStroke = false;
+
+            function pos(e) {
+                const r = canvas.getBoundingClientRect();
+                const t = e.touches ? e.touches[0] : e;
+                return { x: t.clientX - r.left, y: t.clientY - r.top };
             }
-        }
-        dialog.modal::backdrop {
-            background: rgba(15, 23, 42, 0);
-            backdrop-filter: blur(0px);
-            transition: background 0.32s ease, backdrop-filter 0.32s ease,
-                        overlay 0.32s allow-discrete, display 0.32s allow-discrete;
-        }
-        dialog.modal[open]::backdrop {
-            background: rgba(15, 23, 42, 0.45);
-            backdrop-filter: blur(3px);
-        }
-        @starting-style {
-            dialog.modal[open]::backdrop {
-                background: rgba(15, 23, 42, 0);
-                backdrop-filter: blur(0px);
+            function start(e) {
+                e.preventDefault();
+                apprSigDrawing = true;
+                const p = pos(e);
+                apprSigCtx.beginPath();
+                apprSigCtx.moveTo(p.x, p.y);
+            }
+            function move(e) {
+                if (!apprSigDrawing) return;
+                e.preventDefault();
+                const p = pos(e);
+                apprSigCtx.lineTo(p.x, p.y);
+                apprSigCtx.stroke();
+                apprSigHasStroke = true;
             }
         }
     </style>
@@ -490,8 +661,8 @@ $tabs = ['All' => 'Semua', 'Pending' => 'Menunggu', 'Approved' => 'Diluluskan', 
     <aside id="sidenav-main" class="fixed inset-y-0 left-0 z-[70] w-64 hidden xl:flex xl:flex-col overflow-y-auto ta-sidebar">
         <div class="h-16 flex items-center px-6 border-b" style="border-color:var(--ta-border)">
             <a class="flex items-center gap-2.5" href="dashboard.php">
-            <img src="assets/img/logo.png" alt="Logo Kembara" class="h-8 w-auto object-contain shrink-0" />
-            <span class="font-bold tracking-tight text-[1.05rem]">Kembara</span>
+            <img src="assets/img/logo.png" alt="Logo e-Kenderaan" class="h-8 w-auto object-contain shrink-0" />
+            <span class="font-bold tracking-tight text-[1.05rem]">e-Kenderaan</span>
             </a>
         </div>
 
@@ -663,7 +834,7 @@ $tabs = ['All' => 'Semua', 'Pending' => 'Menunggu', 'Approved' => 'Diluluskan', 
       <div class="w-full px-4 sm:px-6 py-6 mx-auto">
 
         <?php if ($flash): ?>
-          <div id="toast-alert" class="ta-card shadow-2xl px-4 py-3.5 rounded-2xl flex items-center gap-3 border" style="border-color: var(--color-<?= $flash['type'] === 'success' ? 'success' : 'error' ?>); max-width: 26rem; backdrop-filter: blur(16px);">
+          <div id="toast-alert" class="card shadow-2xl px-4 py-3.5 rounded-2xl flex items-center gap-3 border" style="border-color: var(--color-<?= $flash['type'] === 'success' ? 'success' : 'error' ?>); max-width: 26rem; backdrop-filter: blur(16px);">
             <div class="p-1.5 rounded-full shrink-0 <?= $flash['type'] === 'success' ? 'bg-success/15 text-success' : 'bg-error/15 text-error' ?>">
               <?php if ($flash['type'] === 'success'): ?>
                 <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5" /></svg>
@@ -679,8 +850,8 @@ $tabs = ['All' => 'Semua', 'Pending' => 'Menunggu', 'Approved' => 'Diluluskan', 
         <?php endif; ?>
 
         <!-- Baris 1: Kad Statistik -->
-        <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-5">
-          <div class="ta-card p-5">
+        <div class="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-5">
+          <div class="card p-5" data-href="bookings.php">
             <div class="ta-icon-box mb-4">
               <svg xmlns="http://www.w3.org/2000/svg" class="h-5.5 w-5.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.6"><path stroke-linecap="round" stroke-linejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 012.25-2.25h13.5A2.25 2.25 0 0121 7.5v11.25m-18 0A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75m-18 0v-7.5A2.25 2.25 0 015.25 9h13.5A2.25 2.25 0 0121 11.25v7.5" /></svg>
             </div>
@@ -688,15 +859,21 @@ $tabs = ['All' => 'Semua', 'Pending' => 'Menunggu', 'Approved' => 'Diluluskan', 
             <h5 class="text-2xl font-bold"><?= $totalBookings ?></h5>
           </div>
 
-          <div class="ta-card p-5">
-            <div class="ta-icon-box mb-4">
+          <?php if ($pendingApprovals > 0): ?>
+          <div class="aura aura-dual text-yellow-600 bg-orange-200 duration-3000">
+          <?php endif; ?>
+            <div class="card p-5" data-href="bookings.php?status=Pending" data-priority="warning">
+              <div class="ta-icon-box mb-4">
               <svg xmlns="http://www.w3.org/2000/svg" class="h-5.5 w-5.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.6"><path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
             </div>
             <p class="text-sm mb-1" style="color:var(--ta-muted)">Menunggu Kelulusan</p>
             <h5 class="text-2xl font-bold"><?= $pendingCount ?></h5>
           </div>
+          <?php if ($pendingApprovals > 0): ?>
+          </div>
+          <?php endif; ?>
 
-          <div class="ta-card p-5">
+          <div class="card p-5" data-href="bookings.php?status=Approved">
             <div class="ta-icon-box mb-4">
               <svg xmlns="http://www.w3.org/2000/svg" class="h-5.5 w-5.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.6"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
             </div>
@@ -704,7 +881,7 @@ $tabs = ['All' => 'Semua', 'Pending' => 'Menunggu', 'Approved' => 'Diluluskan', 
             <h5 class="text-2xl font-bold"><?= $approvedCount ?></h5>
           </div>
 
-          <div class="ta-card p-5">
+          <div class="card p-5" data-href="bookings.php?status=Completed">
             <div class="ta-icon-box mb-4">
               <svg xmlns="http://www.w3.org/2000/svg" class="h-5.5 w-5.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.6"><path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5" /></svg>
             </div>
@@ -714,7 +891,7 @@ $tabs = ['All' => 'Semua', 'Pending' => 'Menunggu', 'Approved' => 'Diluluskan', 
         </div>
 
         <!-- Baris 2: Jadual Tempahan -->
-        <div class="ta-card p-5 mt-5">
+        <div class="card p-5 mt-5">
           <div class="flex items-center justify-between gap-3 mb-4 flex-wrap">
             <div>
               <h6 class="font-semibold">Senarai Tempahan</h6>
@@ -769,30 +946,25 @@ $tabs = ['All' => 'Semua', 'Pending' => 'Menunggu', 'Approved' => 'Diluluskan', 
                       <?php endif; ?>
                     </td>
                     <td class="px-3 py-3 text-sm border-b text-center whitespace-nowrap" style="border-color:var(--ta-border)">
-                      <span class="ta-badge <?= $statusBadge($b['status']) ?>"><?= htmlspecialchars($statusLabel($b['status'])) ?></span>
+                      <span class="ta-badge <?= $bookingStatusBadge($b) ?>"><?= htmlspecialchars($bookingStatusLabel($b)) ?></span>
                     </td>
                     <td class="px-3 py-3 text-sm border-b text-center whitespace-nowrap" style="border-color:var(--ta-border)">
-                      <button type="button" class="btn btn-ghost btn-xs" title="Lihat Butiran"
-                        onclick='openViewModal(<?= json_encode([
-                            "booking_no"       => $b["booking_no"],
-                            "requester_name"   => $b["requester_name"],
-                            "trip_type"        => $tripTypeLabel($b["trip_type"]),
-                            "origin"           => $b["origin"],
-                            "destination"      => $b["destination"],
-                            "depart_datetime"  => date('d M Y, h:i A', strtotime($b["depart_datetime"])),
-                            "return_datetime"  => $b["return_datetime"] ? date('d M Y, h:i A', strtotime($b["return_datetime"])) : '—',
-                            "passenger_total"  => $b["passenger_total"] ?: '—',
-                            "purpose"          => $b["purpose"],
-                            "vehicle"          => $b["plate_no"] ? trim(($b["vehicle_name"] ?: '') . ' (' . $b["plate_no"] . ')') : 'Belum ditugaskan',
-                            "driver"           => $b["driver_name"] ?: 'Tiada',
-                            "status"           => $statusLabel($b["status"]),
-                            "approved_by"      => $b["approved_by_name"] ?: '—',
-                        ], JSON_UNESCAPED_UNICODE | JSON_HEX_APOS | JSON_HEX_QUOT) ?>)'>
+                      <a href="view.php?id=<?= (int)$b['booking_id'] ?><?= ($qs = $_SERVER['QUERY_STRING'] ?? '') !== '' ? '&from=' . urlencode($qs) : '' ?>" class="btn btn-ghost btn-xs" title="Lihat Butiran">
                         <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178z" /><path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
-                      </button>
+                      </a>
 
-                      <?php if ($canManage && $b['status'] === 'Pending'): ?>
-                        <button type="button" class="btn btn-ghost btn-xs text-success" title="Luluskan"
+                      <?php if ($role === 'User' && (int)($b['driver_user_id'] ?? 0) === $currentUserId && $b['status'] === 'Pending' && $b['workflow_stage'] === 'DriverAssigned'): ?>
+                        <button type="button" class="btn btn-ghost btn-xs text-success" title="Terima Tugasan"
+                          onclick="openActionModal(<?= (int)$b['booking_id'] ?>, 'driver_accept', 'Terima tugasan untuk tempahan <?= htmlspecialchars(addslashes($b['booking_no'])) ?>?', 'Terima', false)">
+                          <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75L9 17.25 19.5 6.75" /></svg>
+                        </button>
+                        <button type="button" class="btn btn-ghost btn-xs text-error" title="Tolak Tugasan"
+                          onclick="openActionModal(<?= (int)$b['booking_id'] ?>, 'driver_reject', 'Tolak tugasan untuk tempahan <?= htmlspecialchars(addslashes($b['booking_no'])) ?>?', 'Tolak', true)">
+                          <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+                        </button>
+                      <?php endif; ?>
+                      <?php if ($canManage && $b['status'] === 'Pending' && in_array($b['workflow_stage'], ['Submitted', 'ReassignmentRequired'], true)): ?>
+                        <button type="button" class="btn btn-ghost btn-xs text-success" title="Tugaskan Pemandu"
                           onclick="openApproveModal(<?= (int)$b['booking_id'] ?>, '<?= htmlspecialchars(addslashes($b['booking_no'])) ?>')">
                           <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5" /></svg>
                         </button>
@@ -831,14 +1003,12 @@ $tabs = ['All' => 'Semua', 'Pending' => 'Menunggu', 'Approved' => 'Diluluskan', 
               <a href="<?= $page > 1 ? htmlspecialchars(buildBookingsPageUrl($page - 1, $search, $statusFilter)) : '#' ?>"
                  class="join-item btn btn-sm <?= $page <= 1 ? 'btn-disabled opacity-40' : '' ?>">
                 <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.2"><path stroke-linecap="round" stroke-linejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" /></svg>
-                Sebelum
               </a>
               <span class="join-item btn btn-sm btn-disabled !bg-transparent !border-none font-semibold" style="color:var(--ta-ink)">
                 <?= $page ?> / <?= $totalPages ?>
               </span>
               <a href="<?= $page < $totalPages ? htmlspecialchars(buildBookingsPageUrl($page + 1, $search, $statusFilter)) : '#' ?>"
                  class="join-item btn btn-sm <?= $page >= $totalPages ? 'btn-disabled opacity-40' : '' ?>">
-                Seterus
                 <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.2"><path stroke-linecap="round" stroke-linejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" /></svg>
               </a>
             </div>
@@ -848,7 +1018,7 @@ $tabs = ['All' => 'Semua', 'Pending' => 'Menunggu', 'Approved' => 'Diluluskan', 
 
         <footer class="pt-6 pb-2">
           <div class="text-sm leading-normal text-center text-slate-400">
-            © <?= date('Y') ?> Kembara &middot; Perbendaharaan Negeri Selangor
+            © <?= date('Y') ?> e-Kenderaan &middot; Perbendaharaan Negeri Selangor
           </div>
         </footer>
       </div>
@@ -899,136 +1069,43 @@ $tabs = ['All' => 'Semua', 'Pending' => 'Menunggu', 'Approved' => 'Diluluskan', 
       <form method="dialog" class="modal-backdrop"><button>close</button></form>
     </dialog>
 
-    <!-- Modal: Lihat Butiran Tempahan -->
-    <dialog id="modal-view" class="modal">
-      <div class="modal-box ta-card max-w-lg">
-        <form method="dialog"><button class="btn btn-sm btn-circle btn-ghost absolute right-3 top-3">✕</button></form>
-        <h3 class="font-bold text-lg mb-1">Butiran Tempahan</h3>
-        <p class="text-sm text-slate-400 mb-4" id="view-booking-no"></p>
-        <div class="grid grid-cols-2 gap-x-4 gap-y-3 text-sm">
-          <div><p class="text-xs text-slate-400 mb-0.5">Pemohon</p><p class="font-medium" id="view-requester"></p></div>
-          <div><p class="text-xs text-slate-400 mb-0.5">Status</p><p class="font-medium" id="view-status"></p></div>
-          <div><p class="text-xs text-slate-400 mb-0.5">Jenis Perjalanan</p><p class="font-medium" id="view-trip-type"></p></div>
-          <div><p class="text-xs text-slate-400 mb-0.5">Bilangan Penumpang</p><p class="font-medium" id="view-pax"></p></div>
-          <div><p class="text-xs text-slate-400 mb-0.5">Asal</p><p class="font-medium" id="view-origin"></p></div>
-          <div><p class="text-xs text-slate-400 mb-0.5">Destinasi</p><p class="font-medium" id="view-destination"></p></div>
-          <div><p class="text-xs text-slate-400 mb-0.5">Berangkat</p><p class="font-medium" id="view-depart"></p></div>
-          <div><p class="text-xs text-slate-400 mb-0.5">Pulang</p><p class="font-medium" id="view-return"></p></div>
-          <div><p class="text-xs text-slate-400 mb-0.5">Kenderaan</p><p class="font-medium" id="view-vehicle"></p></div>
-          <div><p class="text-xs text-slate-400 mb-0.5">Pemandu</p><p class="font-medium" id="view-driver"></p></div>
-          <div class="col-span-2"><p class="text-xs text-slate-400 mb-0.5">Tujuan</p><p class="font-medium" id="view-purpose"></p></div>
-          <div class="col-span-2"><p class="text-xs text-slate-400 mb-0.5">Diluluskan Oleh</p><p class="font-medium" id="view-approved-by"></p></div>
-        </div>
-        <div class="modal-action mt-4">
-          <button type="button" class="btn btn-ghost" onclick="document.getElementById('modal-view').close()">Tutup</button>
-        </div>
-      </div>
-      <form method="dialog" class="modal-backdrop"><button>close</button></form>
-    </dialog>
+        <!-- Modal: Lukis Tandatangan Pelulus -->
+        <dialog id="modal-approve-signature-pad" class="modal">
+          <div class="modal-box card max-w-lg">
+            <form method="dialog"><button class="btn btn-sm btn-circle btn-ghost absolute right-3 top-3">✕</button></form>
+            <h3 class="font-bold text-lg mb-1">Lukis Tandatangan</h3>
+            <p class="text-sm text-slate-400 mb-3">Gunakan tetikus atau jari untuk menandatangani di ruang bawah.</p>
+            <div class="rounded-xl border" style="border-color:var(--ta-border); background:#fff;">
+              <canvas id="approve-signature-pad-canvas" style="width:100%; height:220px; display:block; touch-action:none; cursor:crosshair;"></canvas>
+            </div>
+            <div class="modal-action mt-3 justify-between">
+              <button type="button" class="btn btn-ghost btn-sm" onclick="clearApproveSignaturePad()">Padam</button>
+              <div class="flex gap-2">
+                <button type="button" class="btn btn-ghost" onclick="document.getElementById('modal-approve-signature-pad').close()">Batal</button>
+                <button type="button" class="btn text-white border-0" style="background:var(--ta-brand)" onclick="saveApproveSignaturePad()">Guna Tandatangan Ini</button>
+              </div>
+            </div>
+          </div>
+          <form method="dialog" class="modal-backdrop"><button>close</button></form>
+        </dialog>
 
-    <!-- Modal: Sahkan Tindakan Status -->
-    <dialog id="modal-action" class="modal">
-      <div class="modal-box ta-card max-w-sm">
-        <h3 class="font-bold text-lg mb-2" id="action-modal-title">Sahkan Tindakan</h3>
-        <p class="text-sm text-slate-400 mb-4" id="action-modal-text"></p>
-        <form action="bookings.php<?= $search !== '' || $statusFilter !== 'All' ? '?' . http_build_query(array_filter(['q' => $search !== '' ? $search : null, 'status' => $statusFilter !== 'All' ? $statusFilter : null])) : '' ?>" method="POST" class="flex justify-end gap-2">
-          <input type="hidden" name="action" id="action-modal-action" />
-          <input type="hidden" name="booking_id" id="action-modal-id" />
-          <button type="button" class="btn btn-ghost" onclick="document.getElementById('modal-action').close()">Batal</button>
-          <button type="submit" id="action-modal-submit" class="btn text-white border-0" style="background:var(--ta-brand)">Sahkan</button>
-        </form>
-      </div>
-      <form method="dialog" class="modal-backdrop"><button>close</button></form>
-    </dialog>
+        <!-- Modal: Sahkan Tindakan Status -->
+        <dialog id="modal-action" class="modal">
+          <div class="modal-box card max-w-sm">
+            <h3 class="font-bold text-lg mb-2" id="action-modal-title">Sahkan Tindakan</h3>
+            <p class="text-sm text-slate-400 mb-4" id="action-modal-text"></p>
+            <form action="bookings.php<?= $search !== '' || $statusFilter !== 'All' ? '?' . http_build_query(array_filter(['q' => $search !== '' ? $search : null, 'status' => $statusFilter !== 'All' ? $statusFilter : null])) : '' ?>" method="POST" class="flex justify-end gap-2">
+              <input type="hidden" name="action" id="action-modal-action" />
+              <input type="hidden" name="csrf_token" value="<?= generate_csrf_token() ?>" />
+              <input type="hidden" name="booking_id" id="action-modal-id" />
+              <button type="button" class="btn btn-ghost" onclick="document.getElementById('modal-action').close()">Batal</button>
+              <button type="submit" id="action-modal-submit" class="btn text-white border-0" style="background:var(--ta-brand)">Sahkan</button>
+            </form>
+          </div>
+          <form method="dialog" class="modal-backdrop"><button>close</button></form>
+        </dialog>
 
-    <script>
-        function openApproveModal(id, bookingNo) {
-            document.getElementById('approve-booking-id').value = id;
-            document.getElementById('approve-booking-no').textContent = bookingNo;
-            const select = document.getElementById('approve-driver-select');
-            if (select) select.value = '';
-            const preview = document.getElementById('approve-vehicle-preview');
-            if (preview) preview.textContent = '—';
-            document.getElementById('modal-approve').showModal();
-        }
+    </div>
+</main>
 
-        function updateApproveVehiclePreview() {
-            const select = document.getElementById('approve-driver-select');
-            const opt = select.options[select.selectedIndex];
-            document.getElementById('approve-vehicle-preview').textContent = (opt && opt.dataset.vehicle) ? opt.dataset.vehicle : '—';
-        }
-
-        function openViewModal(b) {
-            document.getElementById('view-booking-no').textContent   = b.booking_no;
-            document.getElementById('view-requester').textContent    = b.requester_name;
-            document.getElementById('view-status').textContent       = b.status;
-            document.getElementById('view-trip-type').textContent    = b.trip_type;
-            document.getElementById('view-pax').textContent          = b.passenger_total;
-            document.getElementById('view-origin').textContent       = b.origin;
-            document.getElementById('view-destination').textContent  = b.destination;
-            document.getElementById('view-depart').textContent       = b.depart_datetime;
-            document.getElementById('view-return').textContent       = b.return_datetime;
-            document.getElementById('view-vehicle').textContent      = b.vehicle;
-            document.getElementById('view-driver').textContent       = b.driver;
-            document.getElementById('view-purpose').textContent      = b.purpose;
-            document.getElementById('view-approved-by').textContent  = b.approved_by;
-            document.getElementById('modal-view').showModal();
-        }
-
-        function openActionModal(id, action, text, buttonLabel, isDanger) {
-            document.getElementById('action-modal-id').value     = id;
-            document.getElementById('action-modal-action').value = action;
-            document.getElementById('action-modal-text').textContent = text;
-            const submitBtn = document.getElementById('action-modal-submit');
-            submitBtn.textContent = buttonLabel;
-            submitBtn.style.background = isDanger ? 'var(--color-error)' : 'var(--ta-brand)';
-            document.getElementById('modal-action').showModal();
-        }
-
-        function dismissToast() {
-            const toast = document.getElementById('toast-alert');
-            if (!toast) return;
-            toast.classList.add('ta-toast-hide');
-            toast.addEventListener('animationend', () => toast.remove(), { once: true });
-        }
-
-        (function () {
-            if (document.getElementById('toast-alert')) {
-                setTimeout(dismissToast, 4000);
-            }
-        })();
-    </script>
-
-    <!-- Skrip Tukar Mod Tema Terang/Gelap -->
-    <script>
-        const themeToggleBtn = document.getElementById('theme-toggle');
-        const themeToggleIcon = document.getElementById('theme-toggle-icon');
-
-        const LIGHT_THEME = 'light';
-        const DARK_THEME  = 'dracula';
-
-        const moonIcon = `<svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M21.752 15.002A9.72 9.72 0 0118 15.75c-5.385 0-9.75-4.365-9.75-9.75 0-1.33.266-2.597.748-3.752A9.753 9.753 0 003 11.25C3 16.635 7.365 21 12.75 21a9.753 9.753 0 009.002-5.998z" /></svg>`;
-        const sunIcon = `<svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M12 3v2.25m6.364.386l-1.591 1.591M21 12h-2.25m-.386 6.364l-1.591-1.591M12 18.75V21m-4.773-4.227l-1.591 1.591M5.25 12H3m4.227-4.773L5.636 5.636M15.75 12a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0z" /></svg>`;
-
-        function applyTheme(theme) {
-            document.documentElement.setAttribute('data-theme', theme);
-            localStorage.setItem('theme', theme);
-            themeToggleIcon.innerHTML = theme === DARK_THEME ? sunIcon : moonIcon;
-        }
-
-        const savedTheme = localStorage.getItem('theme');
-        const systemPrefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-        const initialTheme = savedTheme || (systemPrefersDark ? DARK_THEME : LIGHT_THEME);
-
-        applyTheme(initialTheme);
-
-        themeToggleBtn.addEventListener('click', () => {
-            const currentTheme = document.documentElement.getAttribute('data-theme');
-            const newTheme = currentTheme === DARK_THEME ? LIGHT_THEME : DARK_THEME;
-            applyTheme(newTheme);
-        });
-    </script>
-
-    <script src="./assets/js/plugins/perfect-scrollbar.min.js" async></script>
-</body>
-</html>
+<?php include 'includes/layout_footer.php'; ?>
