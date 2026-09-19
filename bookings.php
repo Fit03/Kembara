@@ -55,6 +55,26 @@ $tripTypeLabel = fn(string $t) => match ($t) {
     'Return'  => 'Pergi Balik',
     default   => $t,
 };
+  $bookingStatusBadge = static function (array $booking) use ($statusBadge): string {
+    return match ($booking['workflow_stage'] ?? null) {
+      'DriverAssigned' => 'badge badge-warning',
+      'ReassignmentRequired' => 'badge badge-error',
+      'DriverAccepted' => 'badge badge-info',
+      default => $statusBadge($booking['status']),
+    };
+  };
+  $bookingStatusLabel = static function (array $booking) use ($statusLabel, $currentUserId): string {
+    if (($booking['workflow_stage'] ?? null) === 'DriverAssigned'
+      && (int)($booking['driver_user_id'] ?? 0) === $currentUserId) {
+      return 'Menunggu Respons Anda';
+    }
+    return match ($booking['workflow_stage'] ?? null) {
+      'DriverAssigned' => 'Menunggu Pemandu Terima',
+      'ReassignmentRequired' => 'Perlu Tugasan Semula',
+      'DriverAccepted' => 'Menunggu Kelulusan',
+      default => $statusLabel($booking['status']),
+    };
+  };
 
 function generateBookingNo(PDO $pdo): string {
     do {
@@ -69,6 +89,7 @@ function generateBookingNo(PDO $pdo): string {
    Tindakan Borang
    ========================================================== */
 $flash = null;
+$redirectAfterPost = null;
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (!verify_csrf_token($_POST['csrf_token'] ?? '')) {
@@ -156,18 +177,37 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 }
             }
 
+              $requesterSignaturePath = null;
+              $signatureMode = $_POST['signature_mode'] ?? 'new';
+              if ($signatureMode === 'saved') {
+                if (!$hasSavedSignature) {
+                  throw new RuntimeException('Tiada tandatangan tersimpan. Sila sediakan tandatangan baharu.');
+                }
+                $requesterSignaturePath = $currentUserSignature;
+              } else {
+                if (!empty($_FILES['signature_file']['name']) && $_FILES['signature_file']['error'] === UPLOAD_ERR_OK) {
+                  $requesterSignaturePath = save_signature_upload($_FILES['signature_file'], $currentUserId);
+                  $pdo->prepare("UPDATE users SET signature_path = ? WHERE user_id = ?")->execute([$requesterSignaturePath, $currentUserId]);
+                } elseif (!empty($_POST['signature_data'])) {
+                  $requesterSignaturePath = save_signature_dataurl($_POST['signature_data'], $currentUserId);
+                  $pdo->prepare("UPDATE users SET signature_path = ? WHERE user_id = ?")->execute([$requesterSignaturePath, $currentUserId]);
+                } else {
+                  throw new RuntimeException('Sila sediakan tandatangan sebelum menghantar tempahan.');
+                }
+              }
+
             $bookingNo = generateBookingNo($pdo);
 
             // Pemandu & kenderaan belum ditetapkan — ditugaskan oleh Admin/SuperAdmin semasa kelulusan
             $stmt = $pdo->prepare(
                 "INSERT INTO vehicle_bookings
                  (booking_no, user_id, depart_datetime, return_datetime, trip_type, origin, destination,
-                  passenger_total, passenger_names, passenger_memo_path, purpose, status)
-                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Pending')"
+                  passenger_total, passenger_names, passenger_memo_path, purpose, requester_signature_path, status)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Pending')"
             );
             $stmt->execute([
                 $bookingNo, $currentUserId, $departRaw, $returnRaw !== '' ? $returnRaw : null,
-                $tripType, $origin, $dest, $pax > 0 ? $pax : null, $passengerNamesJson, $passenger_memo_path, $purpose,
+                $tripType, $origin, $dest, $pax > 0 ? $pax : null, $passengerNamesJson, $passenger_memo_path, $purpose, $requesterSignaturePath,
             ]);
             $newId = (int)$pdo->lastInsertId();
 
@@ -175,8 +215,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $hist->execute([$newId, "Tempahan {$bookingNo} dicipta.", $currentUserId]);
 
             $flash = ['type' => 'success', 'msg' => "Tempahan {$bookingNo} berjaya dihantar dan menunggu kelulusan."];
+            $redirectAfterPost = 'view.php?id=' . $newId;
 
-        } elseif (in_array($action, ['approve_booking', 'reject_booking', 'cancel_booking', 'complete_booking'], true)) {
+        } elseif (in_array($action, ['assign_driver', 'approve_booking', 'driver_accept', 'driver_reject', 'reject_booking', 'cancel_booking', 'complete_booking'], true)) {
             $bid = (int)($_POST['booking_id'] ?? 0);
             if ($bid <= 0) {
                 throw new RuntimeException('Tempahan tidak sah.');
@@ -184,16 +225,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
             $pdo->beginTransaction();
 
-            $bstmt = $pdo->prepare("SELECT * FROM vehicle_bookings WHERE booking_id = ? FOR UPDATE");
+            $bstmt = $pdo->prepare(
+              "SELECT vb.*, dr.user_id AS assigned_driver_user_id
+               FROM vehicle_bookings vb
+               LEFT JOIN drivers dr ON dr.driver_id = vb.driver_id
+               WHERE vb.booking_id = ? FOR UPDATE"
+            );
             $bstmt->execute([$bid]);
             $booking = $bstmt->fetch(PDO::FETCH_ASSOC);
             if (!$booking) {
                 throw new RuntimeException('Tempahan tidak dijumpai.');
             }
 
-            if ($action === 'approve_booking') {
-                if (!$canManage) throw new RuntimeException('Anda tidak mempunyai kebenaran untuk meluluskan tempahan.');
-                if ($booking['status'] !== 'Pending') throw new RuntimeException('Hanya tempahan berstatus Menunggu boleh diluluskan.');
+            if ($action === 'assign_driver') {
+              if (!$canManage) throw new RuntimeException('Anda tidak mempunyai kebenaran untuk menetapkan pemandu.');
+              if ($booking['status'] !== 'Pending' || !in_array($booking['workflow_stage'], ['Submitted', 'ReassignmentRequired'], true)) {
+                throw new RuntimeException('Hanya tempahan yang menunggu penetapan pemandu boleh diproses.');
+              }
 
                 $driverId = (int)($_POST['driver_id'] ?? 0);
                 if ($driverId <= 0) {
@@ -216,42 +264,95 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     throw new RuntimeException('Pemandu ini tiada kenderaan ditugaskan kepadanya.');
                 }
 
-                // Tandatangan pelulus adalah wajib untuk meluluskan tempahan
                 $signatureMode = $_POST['signature_mode'] ?? 'new';
-                $approverSignaturePath = null;
-
                 if ($signatureMode === 'saved') {
-                    if (!$hasSavedSignature) {
-                        throw new RuntimeException('Tiada tandatangan tersimpan. Sila lukis atau muat naik tandatangan.');
-                    }
-                    $approverSignaturePath = $currentUserSignature;
+                  if (!$hasSavedSignature) {
+                    throw new RuntimeException('Tiada tandatangan tersimpan. Sila sediakan tandatangan baharu.');
+                  }
+                  $approverSignaturePath = $currentUserSignature;
+                } elseif (!empty($_FILES['signature_file']['name']) && $_FILES['signature_file']['error'] === UPLOAD_ERR_OK) {
+                  $approverSignaturePath = save_signature_upload($_FILES['signature_file'], $currentUserId, $currentUserSignature);
+                  $pdo->prepare("UPDATE users SET signature_path = ? WHERE user_id = ?")->execute([$approverSignaturePath, $currentUserId]);
+                } elseif (!empty($_POST['signature_data'])) {
+                  $approverSignaturePath = save_signature_dataurl($_POST['signature_data'], $currentUserId, $currentUserSignature);
+                  $pdo->prepare("UPDATE users SET signature_path = ? WHERE user_id = ?")->execute([$approverSignaturePath, $currentUserId]);
                 } else {
-                    if (!empty($_FILES['signature_file']['name']) && $_FILES['signature_file']['error'] === UPLOAD_ERR_OK) {
-                        $approverSignaturePath = save_signature_upload($_FILES['signature_file'], $currentUserId, $currentUserSignature);
-                    } elseif (!empty($_POST['signature_data'])) {
-                        $approverSignaturePath = save_signature_dataurl($_POST['signature_data'], $currentUserId, $currentUserSignature);
-                    } else {
-                        throw new RuntimeException('Sila sediakan tandatangan (muat naik atau lukis) sebelum meluluskan.');
-                    }
-                    // Simpan sebagai tandatangan lalai pengguna untuk kegunaan akan datang
-                    $pdo->prepare("UPDATE users SET signature_path = ? WHERE user_id = ?")->execute([$approverSignaturePath, $currentUserId]);
+                  throw new RuntimeException('Sila sediakan tandatangan sebelum menetapkan pemandu.');
                 }
 
                 $upd = $pdo->prepare(
-                    "UPDATE vehicle_bookings SET status='Approved', driver_id=?, vehicle_id=?, approved_by=?, approved_at=NOW(), approver_signature_path=?
+                  "UPDATE vehicle_bookings SET status='Pending', workflow_stage='DriverAssigned', driver_id=?, vehicle_id=?, approved_by=?, approved_at=NULL, approver_signature_path=?
                      WHERE booking_id=?"
                 );
                 $upd->execute([$driverId, $drv['vehicle_id'], $currentUserId, $approverSignaturePath, $bid]);
-                $pdo->prepare("UPDATE vehicles SET status='Booked' WHERE vehicle_id=?")->execute([$drv['vehicle_id']]);
-                $pdo->prepare("INSERT INTO booking_history (booking_id, action, remarks, action_by) VALUES (?, 'Diluluskan', 'Tempahan diluluskan, pemandu & kenderaan ditugaskan.', ?)")->execute([$bid, $currentUserId]);
+                $pdo->prepare("INSERT INTO booking_history (booking_id, action, remarks, action_by) VALUES (?, 'Driver Assigned', 'Pemandu telah ditugaskan dan menunggu pengesahan.', ?)")->execute([$bid, $currentUserId]);
 
+                $flash = ['type' => 'success', 'msg' => "Pemandu telah ditugaskan untuk tempahan {$booking['booking_no']}."];
+
+              } elseif ($action === 'approve_booking') {
+                if (!$canManage) throw new RuntimeException('Anda tidak mempunyai kebenaran untuk meluluskan tempahan.');
+                if ($booking['status'] !== 'Pending' || $booking['workflow_stage'] !== 'DriverAccepted') {
+                  throw new RuntimeException('Tempahan hanya boleh diluluskan selepas pemandu menerima tugasan.');
+                }
+
+                $signatureMode = $_POST['signature_mode'] ?? 'new';
+                if ($signatureMode === 'saved') {
+                  if (!$hasSavedSignature) {
+                    throw new RuntimeException('Tiada tandatangan tersimpan. Sila sediakan tandatangan baharu.');
+                  }
+                  $approverSignaturePath = $currentUserSignature;
+                } else {
+                  if (!empty($_FILES['signature_file']['name']) && $_FILES['signature_file']['error'] === UPLOAD_ERR_OK) {
+                    $approverSignaturePath = save_signature_upload($_FILES['signature_file'], $currentUserId, $currentUserSignature);
+                  } elseif (!empty($_POST['signature_data'])) {
+                    $approverSignaturePath = save_signature_dataurl($_POST['signature_data'], $currentUserId, $currentUserSignature);
+                  } else {
+                    throw new RuntimeException('Sila sediakan tandatangan sebelum meluluskan.');
+                  }
+                  $pdo->prepare("UPDATE users SET signature_path = ? WHERE user_id = ?")->execute([$approverSignaturePath, $currentUserId]);
+                }
+
+                $pdo->prepare(
+                  "UPDATE vehicle_bookings
+                   SET status='Approved', approved_by=?, approved_at=NOW(), approver_signature_path=?
+                   WHERE booking_id=?"
+                )->execute([$currentUserId, $approverSignaturePath, $bid]);
+                $pdo->prepare("UPDATE vehicles SET status='Booked' WHERE vehicle_id=?")->execute([$booking['vehicle_id']]);
+                $pdo->prepare("INSERT INTO booking_history (booking_id, action, remarks, action_by) VALUES (?, 'Diluluskan', 'Admin meluluskan tempahan selepas pemandu menerima tugasan.', ?)")->execute([$bid, $currentUserId]);
                 $flash = ['type' => 'success', 'msg' => "Tempahan {$booking['booking_no']} telah diluluskan."];
+
+              } elseif ($action === 'driver_accept' || $action === 'driver_reject') {
+                if ((int)($booking['assigned_driver_user_id'] ?? 0) !== $currentUserId) {
+                  throw new RuntimeException('Hanya pemandu yang ditugaskan boleh memberi respons kepada tugasan ini.');
+                }
+                if ($booking['status'] !== 'Pending' || $booking['workflow_stage'] !== 'DriverAssigned') {
+                  throw new RuntimeException('Tugasan ini tidak lagi menunggu respons pemandu.');
+                }
+
+                if ($action === 'driver_accept') {
+                  $pdo->prepare(
+                    "UPDATE vehicle_bookings
+                    SET status='Approved', workflow_stage='AdminApproved', approved_at=NOW()
+                    WHERE booking_id=?"
+                  )->execute([$bid]);
+                  $pdo->prepare("UPDATE vehicles SET status='Booked' WHERE vehicle_id=?")->execute([$booking['vehicle_id']]);
+                  $pdo->prepare("INSERT INTO booking_history (booking_id, action, remarks, action_by) VALUES (?, 'Driver Accepted', 'Pemandu menerima tugasan. Tempahan diluluskan.', ?)")->execute([$bid, $currentUserId]);
+                  $flash = ['type' => 'success', 'msg' => "Tugasan diterima. Tempahan {$booking['booking_no']} telah diluluskan."];
+                } else {
+                  $pdo->prepare(
+                    "UPDATE vehicle_bookings
+                     SET status='Pending', workflow_stage='ReassignmentRequired', driver_id=NULL, vehicle_id=NULL, approved_by=NULL, approved_at=NULL, approver_signature_path=NULL
+                     WHERE booking_id=?"
+                  )->execute([$bid]);
+                  $pdo->prepare("INSERT INTO booking_history (booking_id, action, remarks, action_by) VALUES (?, 'Driver Rejected', 'Pemandu menolak tugasan. Menunggu penetapan pemandu baharu.', ?)")->execute([$bid, $currentUserId]);
+                  $flash = ['type' => 'success', 'msg' => "Tugasan ditolak. Admin perlu menetapkan pemandu baharu untuk {$booking['booking_no']}."];
+                }
 
             } elseif ($action === 'reject_booking') {
                 if (!$canManage) throw new RuntimeException('Anda tidak mempunyai kebenaran untuk menolak tempahan.');
-                if ($booking['status'] !== 'Pending') throw new RuntimeException('Hanya tempahan berstatus Menunggu boleh ditolak.');
+                if ($booking['status'] !== 'Pending' || $booking['workflow_stage'] === 'DriverAssigned') throw new RuntimeException('Tempahan ini sedang menunggu respons pemandu dan tidak boleh ditolak oleh admin pada masa ini.');
 
-                $pdo->prepare("UPDATE vehicle_bookings SET status='Rejected', approved_by=?, approved_at=NOW() WHERE booking_id=?")->execute([$currentUserId, $bid]);
+                $pdo->prepare("UPDATE vehicle_bookings SET status='Rejected', workflow_stage='AdminRejected', approved_by=?, approved_at=NOW() WHERE booking_id=?")->execute([$currentUserId, $bid]);
                 $pdo->prepare("INSERT INTO booking_history (booking_id, action, remarks, action_by) VALUES (?, 'Ditolak', 'Tempahan ditolak.', ?)")->execute([$bid, $currentUserId]);
 
                 $flash = ['type' => 'success', 'msg' => "Tempahan {$booking['booking_no']} telah ditolak."];
@@ -261,7 +362,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 if (!$isOwner && !$canManage) throw new RuntimeException('Anda tidak mempunyai kebenaran untuk membatalkan tempahan ini.');
                 if (!in_array($booking['status'], ['Pending', 'Approved'], true)) throw new RuntimeException('Tempahan ini tidak boleh dibatalkan.');
 
-                $pdo->prepare("UPDATE vehicle_bookings SET status='Cancelled' WHERE booking_id=?")->execute([$bid]);
+                $pdo->prepare("UPDATE vehicle_bookings SET status='Cancelled', workflow_stage='Cancelled' WHERE booking_id=?")->execute([$bid]);
                 if ($booking['status'] === 'Approved') {
                     $pdo->prepare("UPDATE vehicles SET status='Available' WHERE vehicle_id=?")->execute([$booking['vehicle_id']]);
                 }
@@ -273,7 +374,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 if (!$canManage) throw new RuntimeException('Anda tidak mempunyai kebenaran untuk menamatkan tempahan.');
                 if ($booking['status'] !== 'Approved') throw new RuntimeException('Hanya tempahan berstatus Diluluskan boleh ditamatkan.');
 
-                $pdo->prepare("UPDATE vehicle_bookings SET status='Completed' WHERE booking_id=?")->execute([$bid]);
+                $pdo->prepare("UPDATE vehicle_bookings SET status='Completed', workflow_stage='Completed' WHERE booking_id=?")->execute([$bid]);
                 $pdo->prepare("UPDATE vehicles SET status='Available' WHERE vehicle_id=?")->execute([$booking['vehicle_id']]);
                 $pdo->prepare("INSERT INTO booking_history (booking_id, action, remarks, action_by) VALUES (?, 'Selesai', 'Perjalanan selesai.', ?)")->execute([$bid, $currentUserId]);
 
@@ -290,6 +391,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 
     $_SESSION['flash'] = $flash;
+    if ($redirectAfterPost !== null) {
+      header("Location: {$redirectAfterPost}");
+      exit();
+    }
     $qs = [];
     if (isset($_GET['q']) && $_GET['q'] !== '') $qs['q'] = $_GET['q'];
     if (isset($_GET['status']) && $_GET['status'] !== '') $qs['status'] = $_GET['status'];
@@ -333,8 +438,14 @@ $where  = [];
 $params = [];
 
 if ($role === 'User') {
-    $where[] = 'vb.user_id = :uid';
+  $where[] = '(vb.user_id = :uid OR EXISTS (
+    SELECT 1
+    FROM drivers assigned_driver
+    WHERE assigned_driver.driver_id = vb.driver_id
+      AND assigned_driver.user_id = :driver_uid
+  ))';
     $params[':uid'] = $currentUserId;
+  $params[':driver_uid'] = $currentUserId;
 }
 if ($statusFilter !== 'All') {
     $where[] = 'vb.status = :status';
@@ -355,7 +466,8 @@ $countStmt->execute($params);
 $totalRows = (int)$countStmt->fetchColumn();
 
 $stmt = $pdo->prepare(
-    "SELECT vb.*, u.fullname AS requester_name, v.plate_no, v.vehicle_name,
+        "SELECT vb.*, u.fullname AS requester_name, v.plate_no, v.vehicle_name,
+          dr.user_id AS driver_user_id,
             du.fullname AS driver_name, ap.fullname AS approved_by_name
      FROM vehicle_bookings vb
     JOIN users u ON u.user_id = vb.user_id
@@ -416,6 +528,11 @@ $searchPlaceholder = "Cari no. tempahan, destinasi...";
 $extraJS = '
     <script>
         function openApproveModal(id, bookingNo) {
+          document.getElementById("approve-booking-action").value = "assign_driver";
+          document.getElementById("approve-modal-title").textContent = "Tugaskan Pemandu";
+          document.getElementById("approve-modal-submit").textContent = "Tugaskan Pemandu";
+          document.getElementById("approve-driver-fields").classList.remove("hidden");
+            document.getElementById("approve-signature-fields").classList.remove("hidden");
             document.getElementById("approve-booking-id").value = id;
             document.getElementById("approve-booking-no").textContent = bookingNo;
             const select = document.getElementById("approve-driver-select");
@@ -436,6 +553,27 @@ $extraJS = '
 
             document.getElementById("modal-approve").showModal();
         }
+
+          function openFinalApproveModal(id, bookingNo) {
+            document.getElementById("approve-booking-action").value = "approve_booking";
+            document.getElementById("approve-modal-title").textContent = "Luluskan Tempahan";
+            document.getElementById("approve-modal-submit").textContent = "Luluskan Tempahan";
+            document.getElementById("approve-driver-fields").classList.add("hidden");
+            document.getElementById("approve-signature-fields").classList.remove("hidden");
+            document.getElementById("approve-booking-id").value = id;
+            document.getElementById("approve-booking-no").textContent = bookingNo;
+
+            const savedRadio = document.querySelector(\'input[name="signature_mode"][value="saved"]\');
+            if (savedRadio) savedRadio.checked = true;
+            toggleApproveSignatureMode();
+            const fileInput = document.getElementById("approve-signature-file");
+            if (fileInput) fileInput.value = "";
+            const dataInput = document.getElementById("approve-signature-data");
+            if (dataInput) dataInput.value = "";
+            const sigPreview = document.getElementById("approve-signature-preview");
+            if (sigPreview) sigPreview.textContent = "Tiada tandatangan dipilih.";
+            document.getElementById("modal-approve").showModal();
+          }
 
         function updateApproveVehiclePreview() {
             const select = document.getElementById("approve-driver-select");
@@ -694,15 +832,25 @@ include 'includes/layout_header.php';
                       <?php endif; ?>
                     </td>
                     <td class="px-3 py-3 text-sm border-b text-center whitespace-nowrap" style="border-color:var(--ta-border)">
-                      <span class="ta-badge <?= $statusBadge($b['status']) ?>"><?= htmlspecialchars($statusLabel($b['status'])) ?></span>
+                      <span class="ta-badge <?= $bookingStatusBadge($b) ?>"><?= htmlspecialchars($bookingStatusLabel($b)) ?></span>
                     </td>
                     <td class="px-3 py-3 text-sm border-b text-center whitespace-nowrap" style="border-color:var(--ta-border)">
                       <a href="view.php?id=<?= (int)$b['booking_id'] ?><?= ($qs = $_SERVER['QUERY_STRING'] ?? '') !== '' ? '&from=' . urlencode($qs) : '' ?>" class="btn btn-ghost btn-xs" title="Lihat Butiran">
                         <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178z" /><path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
                       </a>
 
-                      <?php if ($canManage && $b['status'] === 'Pending'): ?>
-                        <button type="button" class="btn btn-ghost btn-xs text-success" title="Luluskan"
+                      <?php if ($role === 'User' && (int)($b['driver_user_id'] ?? 0) === $currentUserId && $b['status'] === 'Pending' && $b['workflow_stage'] === 'DriverAssigned'): ?>
+                        <button type="button" class="btn btn-ghost btn-xs text-success" title="Terima Tugasan"
+                          onclick="openActionModal(<?= (int)$b['booking_id'] ?>, 'driver_accept', 'Terima tugasan untuk tempahan <?= htmlspecialchars(addslashes($b['booking_no'])) ?>?', 'Terima', false)">
+                          <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75L9 17.25 19.5 6.75" /></svg>
+                        </button>
+                        <button type="button" class="btn btn-ghost btn-xs text-error" title="Tolak Tugasan"
+                          onclick="openActionModal(<?= (int)$b['booking_id'] ?>, 'driver_reject', 'Tolak tugasan untuk tempahan <?= htmlspecialchars(addslashes($b['booking_no'])) ?>?', 'Tolak', true)">
+                          <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+                        </button>
+                      <?php endif; ?>
+                      <?php if ($canManage && $b['status'] === 'Pending' && in_array($b['workflow_stage'], ['Submitted', 'ReassignmentRequired'], true)): ?>
+                        <button type="button" class="btn btn-ghost btn-xs text-success" title="Tugaskan Pemandu"
                           onclick="openApproveModal(<?= (int)$b['booking_id'] ?>, '<?= htmlspecialchars(addslashes($b['booking_no'])) ?>')">
                           <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5" /></svg>
                         </button>
@@ -754,23 +902,20 @@ include 'includes/layout_header.php';
           <?php endif; ?>
         </div>
 
-        <!-- Modal: Luluskan & Tugaskan Pemandu -->
+        <!-- Modal: Tugaskan Pemandu -->
         <dialog id="modal-approve" class="modal">
           <div class="modal-box card max-w-md">
             <form method="dialog"><button class="btn btn-sm btn-circle btn-ghost absolute right-3 top-3">✕</button></form>
-            <h3 class="font-bold text-lg mb-1">Luluskan Tempahan</h3>
+            <h3 id="approve-modal-title" class="font-bold text-lg mb-1">Tugaskan Pemandu</h3>
             <p class="text-sm text-slate-400 mb-4">No. Tempahan: <span id="approve-booking-no" class="font-semibold"></span></p>
-            <?php if (empty($assignableDrivers)): ?>
-              <p class="text-sm text-slate-400">Tiada pemandu yang tersedia buat masa ini. Sila kemaskini status pemandu di halaman Pemandu terlebih dahulu.</p>
-              <div class="modal-action mt-2">
-                <button type="button" class="btn btn-ghost" onclick="document.getElementById('modal-approve').close()">Tutup</button>
-              </div>
-            <?php else: ?>
-            <form action="bookings.php<?= $search !== '' || $statusFilter !== 'All' ? '?' . http_build_query(array_filter(['q' => $search !== '' ? $search : null, 'status' => $statusFilter !== 'All' ? $statusFilter : null])) : '' ?>" method="POST" enctype="multipart/form-data" class="flex flex-col gap-3" onsubmit="return validateApproveForm()">
-              <input type="hidden" name="action" value="approve_booking" />
+            <form action="bookings.php<?= $search !== '' || $statusFilter !== 'All' ? '?' . http_build_query(array_filter(['q' => $search !== '' ? $search : null, 'status' => $statusFilter !== 'All' ? $statusFilter : null])) : '' ?>" method="POST" enctype="multipart/form-data" class="flex flex-col gap-3">
+              <input type="hidden" name="action" id="approve-booking-action" value="assign_driver" />
               <input type="hidden" name="csrf_token" value="<?= generate_csrf_token() ?>" />
               <input type="hidden" name="booking_id" id="approve-booking-id" />
-              <div>
+              <div id="approve-driver-fields">
+                <?php if (empty($assignableDrivers)): ?>
+                  <p class="text-sm text-slate-400 mb-2">Tiada pemandu yang tersedia buat masa ini.</p>
+                <?php endif; ?>
                 <label class="text-xs font-medium block mb-1">Tugaskan Pemandu</label>
                 <select name="driver_id" id="approve-driver-select" required class="select select-bordered w-full" onchange="updateApproveVehiclePreview()">
                   <option value="">— Pilih Pemandu —</option>
@@ -786,14 +931,9 @@ include 'includes/layout_header.php';
                   <?php endforeach; ?>
                 </select>
               </div>
-              <div class="rounded-lg p-3 text-xs flex items-center gap-2" style="background:var(--ta-canvas)">
-                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 shrink-0" style="color:var(--ta-muted)" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M8.25 18.75a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m3 0h6m-9 0H3.375a1.125 1.125 0 01-1.125-1.125V14.25m17.25 4.5a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m3 0h1.125c.621 0 1.129-.504 1.09-1.124a17.902 17.902 0 00-3.213-9.193 2.056 2.056 0 00-1.58-.86H14.25M16.5 18.75h-2.25m0-11.177v-.958c0-.568-.422-1.048-.987-1.106a48.554 48.554 0 00-10.026 0 1.106 1.106 0 00-.987 1.106v7.635m12-6.677v6.677m0 0h-12" /></svg>
-                <span>Kenderaan ditugaskan: <span id="approve-vehicle-preview" class="font-semibold" style="color:var(--ta-ink)">—</span></span>
-              </div>
 
-              <div class="border-t pt-3" style="border-color:var(--ta-border)">
+              <div id="approve-signature-fields" class="border-t pt-3" style="border-color:var(--ta-border)">
                 <label class="text-xs font-medium block mb-2">Tandatangan Pelulus <span class="text-error">*</span></label>
-
                 <?php if ($hasSavedSignature): ?>
                   <label class="flex items-center gap-2 mb-2 p-2 rounded-lg border cursor-pointer" style="border-color:var(--ta-border)">
                     <input type="radio" name="signature_mode" value="saved" class="radio radio-sm" checked onchange="toggleApproveSignatureMode()" />
@@ -806,9 +946,8 @@ include 'includes/layout_header.php';
                   </label>
                 <?php else: ?>
                   <input type="hidden" name="signature_mode" value="new" />
-                  <p class="text-xs text-slate-400 mb-2">Anda belum mempunyai tandatangan tersimpan. Sila lukis atau muat naik sekarang.</p>
+                  <p class="text-xs text-slate-400 mb-2">Sila lukis atau muat naik tandatangan.</p>
                 <?php endif; ?>
-
                 <div id="approve-signature-new-fields" class="<?= $hasSavedSignature ? 'hidden' : '' ?> flex flex-col gap-2">
                   <div class="flex gap-2">
                     <label for="approve-signature-file" class="btn btn-sm btn-outline gap-1.5 flex-1 cursor-pointer">Muat Naik</label>
@@ -819,13 +958,16 @@ include 'includes/layout_header.php';
                   <div id="approve-signature-preview" class="text-xs text-slate-400">Tiada tandatangan dipilih.</div>
                 </div>
               </div>
+              <div class="rounded-lg p-3 text-xs flex items-center gap-2" style="background:var(--ta-canvas)">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 shrink-0" style="color:var(--ta-muted)" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M8.25 18.75a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m3 0h6m-9 0H3.375a1.125 1.125 0 01-1.125-1.125V14.25m17.25 4.5a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m3 0h1.125c.621 0 1.129-.504 1.09-1.124a17.902 17.902 0 00-3.213-9.193 2.056 2.056 0 00-1.58-.86H14.25M16.5 18.75h-2.25m0-11.177v-.958c0-.568-.422-1.048-.987-1.106a48.554 48.554 0 00-10.026 0 1.106 1.106 0 00-.987 1.106v7.635m12-6.677v6.677m0 0h-12" /></svg>
+                <span>Kenderaan ditugaskan: <span id="approve-vehicle-preview" class="font-semibold" style="color:var(--ta-ink)">—</span></span>
+              </div>
 
               <div class="modal-action mt-2">
                 <button type="button" class="btn btn-ghost" onclick="document.getElementById('modal-approve').close()">Batal</button>
-                <button type="submit" class="btn text-white border-0" style="background:var(--ta-brand)">Luluskan Tempahan</button>
+                <button type="submit" id="approve-modal-submit" class="btn text-white border-0" style="background:var(--ta-brand)" onclick="return validateApproveForm()">Tugaskan Pemandu</button>
               </div>
             </form>
-            <?php endif; ?>
           </div>
           <form method="dialog" class="modal-backdrop"><button>close</button></form>
         </dialog>

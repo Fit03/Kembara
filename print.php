@@ -18,7 +18,7 @@ if ($bookingId <= 0) {
 }
 
 $stmt = $pdo->prepare(
-    "SELECT vb.*, u.fullname AS requester_name, u.phone_no, u.signature_path AS requester_signature,
+    "SELECT vb.*, u.fullname AS requester_name, u.phone_no, vb.requester_signature_path AS requester_signature,
                 d.department_name,
                 v.plate_no, v.vehicle_name,
                 du.fullname AS driver_name,
@@ -205,7 +205,9 @@ if ($requesterSigAbs && is_file($requesterSigAbs)) {
     $pdf->Image($requesterSigAbs, $col1_x + (65 - $sigW) / 2, $y - $sigH - 1, $sigW, $sigH);
 }
 
-$approverSigAbs = !empty($booking['approver_signature_path']) ? __DIR__ . '/' . ltrim($booking['approver_signature_path'], '/') : null;
+$approverSigAbs = in_array($booking['status'], ['Approved', 'Completed'], true) && !empty($booking['approver_signature_path'])
+    ? __DIR__ . '/' . ltrim($booking['approver_signature_path'], '/')
+    : null;
 if ($approverSigAbs && is_file($approverSigAbs)) {
     $pdf->Image($approverSigAbs, $col2_x + (65 - $sigW) / 2, $y - $sigH - 1, $sigW, $sigH);
 }

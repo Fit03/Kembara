@@ -3,6 +3,7 @@
 require_once __DIR__ . '/includes/auth.php';
 require_login();
 require_once __DIR__ . '/config/database.php';
+require_once __DIR__ . '/includes/signature.php';
 
 
 $fullname      = $_SESSION['fullname'];
@@ -20,6 +21,11 @@ $avatarStmt = $pdo->prepare("SELECT profile_picture FROM users WHERE user_id = ?
 $avatarStmt->execute([$currentUserId]);
 $profilePicture = $avatarStmt->fetchColumn();
 $hasPhoto = $profilePicture && is_file(__DIR__ . '/' . $profilePicture);
+
+$signatureStmt = $pdo->prepare("SELECT signature_path FROM users WHERE user_id = ?");
+$signatureStmt->execute([$currentUserId]);
+$currentUserSignature = $signatureStmt->fetchColumn() ?: null;
+$hasSavedSignature = $currentUserSignature && is_file(__DIR__ . '/' . $currentUserSignature);
 
 $badgeColor = match($role) {
   'SuperAdmin' => 'badge badge-error',
@@ -483,12 +489,58 @@ $fullyBookedDatesJson = json_encode(array_values($fullyBookedDates));
               <span>Pemandu dan kenderaan akan ditugaskan secara automatik oleh pentadbir semasa proses kelulusan tempahan ini.</span>
             </div>
 
+            <div class="border-t pt-4" style="border-color:var(--ta-border)">
+              <label class="text-xs font-medium block mb-2">Tandatangan Pemohon <span class="text-error">*</span></label>
+              <?php if ($hasSavedSignature): ?>
+                <label class="flex items-center gap-2 mb-2 p-2 rounded-lg border cursor-pointer" style="border-color:var(--ta-border)">
+                  <input type="radio" name="signature_mode" value="saved" class="radio radio-sm" checked onchange="toggleBookingSignatureMode()" />
+                  <img src="<?= htmlspecialchars($currentUserSignature) ?>?v=<?= time() ?>" alt="Tandatangan tersimpan" class="h-8 object-contain" />
+                  <span class="text-xs">Guna tandatangan tersimpan</span>
+                </label>
+                <label class="flex items-center gap-2 mb-2 text-xs cursor-pointer">
+                  <input type="radio" name="signature_mode" value="new" class="radio radio-sm" onchange="toggleBookingSignatureMode()" />
+                  Cipta tandatangan baharu
+                </label>
+              <?php else: ?>
+                <input type="hidden" name="signature_mode" value="new" />
+                <p class="text-xs text-slate-400 mb-2">Tiada tandatangan tersimpan. Sila cipta atau muat naik tandatangan.</p>
+              <?php endif; ?>
+              <div id="booking-signature-new-fields" class="<?= $hasSavedSignature ? 'hidden' : '' ?> flex flex-col gap-2">
+                <div class="flex gap-2">
+                  <label for="booking-signature-file" class="btn btn-sm btn-outline gap-1.5 flex-1 cursor-pointer">Muat Naik</label>
+                  <button type="button" class="btn btn-sm btn-outline gap-1.5 flex-1" onclick="openBookingSignaturePad()">Lukis</button>
+                </div>
+                <input type="file" name="signature_file" id="booking-signature-file" accept=".jpg,.jpeg,.png" class="hidden" onchange="previewBookingSignatureFile(this)" />
+                <input type="hidden" name="signature_data" id="booking-signature-data" />
+                <div id="booking-signature-preview" class="text-xs text-slate-400">Tiada tandatangan dipilih.</div>
+              </div>
+            </div>
+
             <div class="flex items-center justify-end gap-2 pt-2">
               <a href="bookings.php" class="btn btn-ghost">Batal</a>
               <button type="submit" class="btn text-white border-0" style="background:var(--ta-brand)">Hantar Tempahan</button>
             </div>
           </form>
         </div>
+
+        <dialog id="booking-signature-pad" class="modal">
+          <div class="modal-box card max-w-lg">
+            <form method="dialog"><button class="btn btn-sm btn-circle btn-ghost absolute right-3 top-3">✕</button></form>
+            <h3 class="font-bold text-lg mb-1">Cipta Tandatangan</h3>
+            <p class="text-sm text-slate-400 mb-3">Gunakan tetikus atau jari untuk menandatangani.</p>
+            <div class="rounded-xl border" style="border-color:var(--ta-border); background:#fff;">
+              <canvas id="booking-signature-canvas" style="width:100%; height:220px; display:block; touch-action:none; cursor:crosshair;"></canvas>
+            </div>
+            <div class="modal-action mt-3 justify-between">
+              <button type="button" class="btn btn-ghost btn-sm" onclick="clearBookingSignaturePad()">Padam</button>
+              <div class="flex gap-2">
+                <button type="button" class="btn btn-ghost" onclick="document.getElementById('booking-signature-pad').close()">Batal</button>
+                <button type="button" class="btn text-white border-0" style="background:var(--ta-brand)" onclick="saveBookingSignaturePad()">Guna Tandatangan Ini</button>
+              </div>
+            </div>
+          </div>
+          <form method="dialog" class="modal-backdrop"><button>close</button></form>
+        </dialog>
 
         <footer class="pt-6 pb-2">
           <div class="text-sm leading-normal text-center text-slate-400">
@@ -958,6 +1010,105 @@ $fullyBookedDatesJson = json_encode(array_values($fullyBookedDates));
                 });
             }
         });
+
+          function toggleBookingSignatureMode() {
+            const selected = document.querySelector('input[name="signature_mode"]:checked');
+            const fields = document.getElementById('booking-signature-new-fields');
+            if (fields) fields.classList.toggle('hidden', selected && selected.value === 'saved');
+          }
+
+          function previewBookingSignatureFile(input) {
+            const dataInput = document.getElementById('booking-signature-data');
+            const preview = document.getElementById('booking-signature-preview');
+            if (dataInput) dataInput.value = '';
+            if (preview) preview.textContent = input.files && input.files[0] ? input.files[0].name : 'Tiada tandatangan dipilih.';
+          }
+
+          let bookingSignatureContext;
+          let bookingSignatureHasStroke = false;
+
+          function openBookingSignaturePad() {
+            document.getElementById('booking-signature-pad').showModal();
+            requestAnimationFrame(initBookingSignaturePad);
+          }
+
+          function initBookingSignaturePad() {
+            const canvas = document.getElementById('booking-signature-canvas');
+            if (!canvas) return;
+            const rect = canvas.getBoundingClientRect();
+            const ratio = window.devicePixelRatio || 1;
+            canvas.width = rect.width * ratio;
+            canvas.height = 220 * ratio;
+            bookingSignatureContext = canvas.getContext('2d');
+            bookingSignatureContext.scale(ratio, ratio);
+            bookingSignatureContext.lineWidth = 2.2;
+            bookingSignatureContext.lineCap = 'round';
+            bookingSignatureContext.strokeStyle = '#1e293b';
+            bookingSignatureContext.fillStyle = '#ffffff';
+            bookingSignatureContext.fillRect(0, 0, rect.width, 220);
+            bookingSignatureHasStroke = false;
+
+            const position = (event) => {
+              const bounds = canvas.getBoundingClientRect();
+              const touch = event.touches ? event.touches[0] : event;
+              return { x: touch.clientX - bounds.left, y: touch.clientY - bounds.top };
+            };
+            const start = (event) => {
+              event.preventDefault();
+              const point = position(event);
+              bookingSignatureContext.beginPath();
+              bookingSignatureContext.moveTo(point.x, point.y);
+              canvas.dataset.drawing = 'true';
+            };
+            const move = (event) => {
+              if (canvas.dataset.drawing !== 'true') return;
+              event.preventDefault();
+              const point = position(event);
+              bookingSignatureContext.lineTo(point.x, point.y);
+              bookingSignatureContext.stroke();
+              bookingSignatureHasStroke = true;
+            };
+            const end = () => { canvas.dataset.drawing = 'false'; };
+            canvas.onmousedown = start;
+            canvas.onmousemove = move;
+            canvas.onmouseup = end;
+            canvas.onmouseleave = end;
+            canvas.ontouchstart = start;
+            canvas.ontouchmove = move;
+            canvas.ontouchend = end;
+          }
+
+          function clearBookingSignaturePad() {
+            const canvas = document.getElementById('booking-signature-canvas');
+            if (!canvas || !bookingSignatureContext) return;
+            const rect = canvas.getBoundingClientRect();
+            bookingSignatureContext.fillStyle = '#ffffff';
+            bookingSignatureContext.fillRect(0, 0, rect.width, 220);
+            bookingSignatureHasStroke = false;
+          }
+
+          function saveBookingSignaturePad() {
+            if (!bookingSignatureHasStroke) {
+              alert('Sila tandatangan dahulu.');
+              return;
+            }
+            const canvas = document.getElementById('booking-signature-canvas');
+            document.getElementById('booking-signature-data').value = canvas.toDataURL('image/png');
+            document.getElementById('booking-signature-file').value = '';
+            document.getElementById('booking-signature-preview').textContent = 'Tandatangan dilukis sedia untuk dihantar.';
+            document.getElementById('booking-signature-pad').close();
+          }
+
+          document.getElementById('booking-form').addEventListener('submit', function (event) {
+            const selected = document.querySelector('input[name="signature_mode"]:checked');
+            const hasSaved = selected && selected.value === 'saved';
+            const fileInput = document.getElementById('booking-signature-file');
+            const dataInput = document.getElementById('booking-signature-data');
+            if (!hasSaved && !(fileInput.files && fileInput.files.length) && !dataInput.value) {
+              event.preventDefault();
+              alert('Sila sediakan tandatangan sebelum menghantar tempahan.');
+            }
+          });
     </script>
 
     <!-- Skrip Tukar Mod Tema Terang/Gelap -->

@@ -3,6 +3,7 @@
 require_once __DIR__ . '/includes/auth.php';
 require_login();
 require_once __DIR__ . '/config/database.php';
+require_once __DIR__ . '/includes/booking_progress.php';
 
 
 $fullname      = $_SESSION['fullname'];
@@ -82,7 +83,7 @@ if ($bookingId <= 0) {
 $stmt = $pdo->prepare(
     "SELECT vb.*, u.fullname AS requester_name,
             v.plate_no, v.vehicle_name,
-            du.fullname AS driver_name, du.profile_picture AS driver_photo,
+            du.fullname AS driver_name, du.user_id AS driver_user_id, du.profile_picture AS driver_photo,
             dr.license AS driver_license, dr.status AS driver_status,
             ap.fullname AS approved_by_name
      FROM vehicle_bookings vb
@@ -103,8 +104,9 @@ if (!$b) {
     exit();
 }
 
-// Pengguna biasa hanya boleh melihat tempahan sendiri
-if ($role === 'User' && (int)$b['user_id'] !== $currentUserId) {
+// Pengguna biasa boleh melihat tempahan sendiri atau tugasan pemandu mereka.
+$isAssignedDriver = (int)($b['driver_user_id'] ?? 0) === $currentUserId;
+if ($role === 'User' && (int)$b['user_id'] !== $currentUserId && !$isAssignedDriver) {
     $_SESSION['flash'] = ['type' => 'error', 'msg' => 'Anda tidak mempunyai akses kepada tempahan ini.'];
     header("Location: bookings.php");
     exit();
@@ -162,6 +164,8 @@ include 'includes/layout_header.php';
 <main class="xl:ml-64 relative min-h-screen pb-24 xl:pb-0">
     <?php include 'includes/top_nav.php'; ?>
     <div class="w-full px-4 sm:px-6 py-6 mx-auto max-w-4xl">
+
+      <?php render_booking_progress($b); ?>
 
         <?php if ($flash): ?>
           <div id="toast-alert" class="card shadow-2xl px-4 py-3.5 rounded-2xl flex items-center gap-3 border mb-5" style="border-color: var(--color-<?= $flash['type'] === 'success' ? 'success' : 'error' ?>); max-width: 26rem; backdrop-filter: blur(16px);">
@@ -302,6 +306,26 @@ include 'includes/layout_header.php';
                   </div>
                 </div>
               </div>
+              <?php if ((int)($b['driver_user_id'] ?? 0) === $currentUserId && $b['status'] === 'Pending' && $b['workflow_stage'] === 'DriverAssigned'): ?>
+              <div class="mt-4 p-4 rounded-xl border" style="border-color:var(--ta-border); background:var(--ta-canvas)">
+                <p class="text-sm font-semibold mb-1">Pengesahan Tugasan Pemandu</p>
+                <p class="text-xs mb-3" style="color:var(--ta-muted)">Sila terima atau tolak tugasan ini. Jika diterima, tempahan akan diluluskan.</p>
+                <div class="flex flex-wrap gap-2">
+                  <form action="bookings.php" method="POST">
+                    <input type="hidden" name="csrf_token" value="<?= generate_csrf_token() ?>" />
+                    <input type="hidden" name="action" value="driver_accept" />
+                    <input type="hidden" name="booking_id" value="<?= (int)$b['booking_id'] ?>" />
+                    <button type="submit" class="btn btn-success btn-sm text-white">Terima Tugasan</button>
+                  </form>
+                  <form action="bookings.php" method="POST">
+                    <input type="hidden" name="csrf_token" value="<?= generate_csrf_token() ?>" />
+                    <input type="hidden" name="action" value="driver_reject" />
+                    <input type="hidden" name="booking_id" value="<?= (int)$b['booking_id'] ?>" />
+                    <button type="submit" class="btn btn-error btn-sm text-white">Tolak Tugasan</button>
+                  </form>
+                </div>
+              </div>
+              <?php endif; ?>
               <?php else: ?>
               <div class="rounded-xl border border-dashed p-4 flex items-center gap-3" style="border-color:var(--ta-border); color:var(--ta-muted)">
                 <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z" /></svg>
