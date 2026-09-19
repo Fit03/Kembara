@@ -410,7 +410,7 @@ include 'includes/layout_header.php';
                   <tr><td colspan="6" class="px-3 py-6 text-sm text-center text-slate-400">Tiada pengguna dijumpai.</td></tr>
                 <?php endif; ?>
                 <?php foreach ($users as $u): ?>
-                  <tr class="hover:bg-slate-50/70 transition-colors">
+                  <tr class="hover:bg-slate-50/70 transition-colors" data-href="view-user.php?id=<?= (int)$u['user_id'] ?>">
                     <td class="px-3 py-3 text-sm border-b whitespace-nowrap" style="border-color:var(--ta-border)">
                       <div class="flex items-center gap-2.5">
                           <?php
@@ -439,17 +439,9 @@ include 'includes/layout_header.php';
                     </td>
                     <td class="px-3 py-3 text-sm border-b whitespace-nowrap" style="border-color:var(--ta-border)"><?= htmlspecialchars(date('d M Y', strtotime($u['created_at']))) ?></td>
                     <td class="px-3 py-3 text-sm border-b text-center whitespace-nowrap" style="border-color:var(--ta-border)">
-                      <button type="button" class="btn btn-ghost btn-xs" title="Kemaskini"
-                        onclick='openEditModal(<?= json_encode([
-                            "user_id"       => (int)$u["user_id"],
-                            "fullname"      => $u["fullname"],
-                            "email"         => $u["email"],
-                            "phone_no"      => $u["phone_no"],
-                            "department_id" => $u["department_id"],
-                            "role"          => $u["role"],
-                        ], JSON_UNESCAPED_UNICODE | JSON_HEX_APOS | JSON_HEX_QUOT) ?>)'>
+                      <a href="view-user.php?id=<?= (int)$u['user_id'] ?>&amp;mode=edit" class="btn btn-ghost btn-xs" title="Kemaskini">
                         <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931z" /></svg>
-                      </button>
+                      </a>
                       <?php if ((int)$u['user_id'] !== $currentUserId): ?>
                         <button type="button" class="btn btn-ghost btn-xs text-error" title="Padam"
                           onclick="openDeleteModal(<?= (int)$u['user_id'] ?>, '<?= htmlspecialchars(addslashes($u['fullname'])) ?>')">

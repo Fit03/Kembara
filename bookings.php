@@ -815,7 +815,7 @@ include 'includes/layout_header.php';
                   <tr><td colspan="<?= $canManage ? 7 : 6 ?>" class="px-3 py-6 text-sm text-center text-slate-400">Tiada tempahan dijumpai.</td></tr>
                 <?php endif; ?>
                 <?php foreach ($bookings as $b): ?>
-                  <tr class="hover:bg-slate-50/70 transition-colors">
+                  <tr class="hover:bg-slate-50/70 transition-colors" data-href="view.php?id=<?= (int)$b['booking_id'] ?>&amp;from=<?= urlencode($_SERVER['QUERY_STRING'] ?? '') ?>">
                     <td class="px-3 py-3 text-sm border-b whitespace-nowrap font-semibold" style="border-color:var(--ta-border)"><?= htmlspecialchars($b['booking_no']) ?></td>
                     <?php if ($canManage): ?>
                     <td class="px-3 py-3 text-sm border-b whitespace-nowrap" style="border-color:var(--ta-border)"><?= htmlspecialchars($b['requester_name']) ?></td>

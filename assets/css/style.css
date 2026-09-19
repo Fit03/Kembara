@@ -153,6 +153,19 @@ table tr:hover { background-color: color-mix(in oklch, var(--color-base-content)
     transform: translateY(1px);
 }
 
+tr[data-href], tr[data-row-href] {
+    cursor: pointer;
+}
+li[data-href] {
+    cursor: pointer;
+}
+tr[data-href]:focus-visible, tr[data-row-href]:focus-visible,
+li[data-href]:focus-visible,
+.card.clickable:focus-visible {
+    outline: 2px solid var(--ta-brand);
+    outline-offset: -2px;
+}
+
 #toast-alert {
     position: fixed;
     top: 1.25rem;

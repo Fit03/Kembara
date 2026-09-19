@@ -239,7 +239,7 @@ if ($role === 'User') {
     })();
 
     $myUpcomingStmt = $pdo->prepare(
-        "SELECT vb.booking_no, v.plate_no, v.vehicle_name, vb.destination, vb.depart_datetime, vb.status
+        "SELECT vb.booking_id, vb.booking_no, v.plate_no, v.vehicle_name, vb.destination, vb.depart_datetime, vb.status
          FROM vehicle_bookings vb
          LEFT JOIN vehicles v ON v.vehicle_id = vb.vehicle_id
          LEFT JOIN drivers assigned_driver ON assigned_driver.driver_id = vb.driver_id
@@ -256,7 +256,7 @@ if ($role === 'User') {
         : null;
 
     $myHistoryStmt = $pdo->prepare(
-           "SELECT vb.booking_no, v.plate_no, v.vehicle_name, vb.destination, vb.depart_datetime, vb.status
+           "SELECT vb.booking_id, vb.booking_no, v.plate_no, v.vehicle_name, vb.destination, vb.depart_datetime, vb.status
          FROM vehicle_bookings vb
             LEFT JOIN vehicles v ON v.vehicle_id = vb.vehicle_id
             LEFT JOIN drivers assigned_driver ON assigned_driver.driver_id = vb.driver_id
@@ -354,7 +354,7 @@ include 'includes/layout_header.php';
               <ul class="ta-divide">
                 <?php foreach ($myUpcomingTrips as $t): ?>
                   <?php $badgeInfo = $statusBadge($t['status']); ?>
-                  <li class="py-3 flex items-center justify-between gap-3">
+                  <li class="py-3 flex items-center justify-between gap-3" data-href="view.php?id=<?= (int)$t['booking_id'] ?>">
                     <div class="min-w-0">
                       <p class="mb-0 text-sm font-semibold truncate"><?= htmlspecialchars($t['plate_no']) ?> &middot; <?= htmlspecialchars($t['destination'] ?? '—') ?></p>
                       <p class="mb-0 text-xs text-slate-400"><?= htmlspecialchars(date('d M, H:i', strtotime($t['depart_datetime']))) ?></p>
@@ -374,7 +374,7 @@ include 'includes/layout_header.php';
               <ul class="ta-divide">
                 <?php foreach ($myBookingHistory as $h): ?>
                   <?php $badgeInfo = $statusBadge($h['status']); ?>
-                  <li class="py-3 flex items-center justify-between gap-3">
+                  <li class="py-3 flex items-center justify-between gap-3" data-href="view.php?id=<?= (int)$h['booking_id'] ?>">
                     <div class="min-w-0">
                       <p class="mb-0 text-sm font-semibold truncate"><?= htmlspecialchars($h['plate_no']) ?> &middot; <?= htmlspecialchars($h['destination'] ?? '—') ?></p>
                       <p class="mb-0 text-xs text-slate-400"><?= htmlspecialchars(date('d M, H:i', strtotime($h['depart_datetime']))) ?></p>

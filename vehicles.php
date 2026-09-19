@@ -616,7 +616,8 @@ include 'includes/layout_header.php';
                     $expired = $daysRemaining !== null && $daysRemaining < 0;
                     $soon    = $daysRemaining !== null && $daysRemaining >= 0 && $daysRemaining <= 30;
                   ?>
-                  <tr class="hover:bg-slate-50/70 transition-colors">
+                  <tr class="hover:bg-slate-50/70 transition-colors cursor-pointer"
+                      data-row-href="view-vehicle.php?id=<?= (int)$v['vehicle_id'] ?>&amp;mode=view">
                     <td class="px-3 py-3 text-sm border-b whitespace-nowrap" style="border-color:var(--ta-border)">
                       <p class="mb-0 font-medium"><a href="view-vehicle.php?id=<?= (int)$v['vehicle_id'] ?>&amp;mode=view" class="link link-hover"><?= htmlspecialchars($v['plate_no']) ?></a></p>
                       <p class="mb-0 text-xs text-slate-400"><?= htmlspecialchars($v['vehicle_name'] ?? '') ?: '—' ?></p>
@@ -658,9 +659,6 @@ include 'includes/layout_header.php';
                     </td>
                     <?php if ($canManage): ?>
                     <td class="px-3 py-3 text-sm border-b text-center whitespace-nowrap" style="border-color:var(--ta-border)">
-                      <a href="view-vehicle.php?id=<?= (int)$v['vehicle_id'] ?>&amp;mode=view" class="btn btn-ghost btn-xs" title="Lihat">
-                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M2.25 12s3.5-6.75 9.75-6.75S21.75 12 21.75 12s-3.5 6.75-9.75 6.75S2.25 12 2.25 12z" /><circle cx="12" cy="12" r="2.25" /></svg>
-                      </a>
                       <a href="view-vehicle.php?id=<?= (int)$v['vehicle_id'] ?>&amp;mode=edit" class="btn btn-ghost btn-xs" title="Kemaskini">
                         <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931z" /></svg>
                       </a>
