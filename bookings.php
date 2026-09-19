@@ -521,51 +521,39 @@ $completedCount = (int)($statusCounts['Completed'] ?? 0);
 $pendingApprovals = $pdo->query("SELECT COUNT(*) FROM vehicle_bookings WHERE status = 'Pending'")->fetchColumn();
 
 $tabs = ['All' => 'Semua', 'Pending' => 'Menunggu', 'Approved' => 'Diluluskan', 'Rejected' => 'Ditolak', 'Cancelled' => 'Dibatalkan', 'Completed' => 'Selesai'];
-?>
-<!DOCTYPE html>
-<html lang="ms" data-theme="light">
-<head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, shrink-to-fit=no" />
-    <title>e-Kenderaan - Tempahan</title>
 
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700&display=swap" rel="stylesheet" />
+// --- Layout Config ---
+$pageTitle = "Tempahan";
+$showSearch = true;
+$searchAction = "bookings.php";
+$searchPlaceholder = "Cari no. tempahan, destinasi...";
+$extraJS = '
+    <script>
+        function openApproveModal(id, bookingNo) {
+          document.getElementById("approve-booking-action").value = "assign_driver";
+          document.getElementById("approve-modal-title").textContent = "Tugaskan Pemandu";
+          document.getElementById("approve-modal-submit").textContent = "Tugaskan Pemandu";
+          document.getElementById("approve-driver-fields").classList.remove("hidden");
+            document.getElementById("approve-signature-fields").classList.remove("hidden");
+            document.getElementById("approve-booking-id").value = id;
+            document.getElementById("approve-booking-no").textContent = bookingNo;
+            const select = document.getElementById("approve-driver-select");
+            if (select) select.value = "";
+            const preview = document.getElementById("approve-vehicle-preview");
+            if (preview) preview.textContent = "—";
 
-    <link href="https://cdn.jsdelivr.net/npm/daisyui@5" rel="stylesheet" type="text/css" />
-    <link href="https://cdn.jsdelivr.net/npm/daisyui@5/themes.css" rel="stylesheet" type="text/css" />
-    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+            const savedRadio = document.querySelector(\'input[name="signature_mode"][value="saved"]\');
+            if (savedRadio) savedRadio.checked = true;
+            toggleApproveSignatureMode();
 
-    <style>
-        :root, [data-theme] {
-            --ta-canvas: var(--color-base-200);
-            --ta-surface: var(--color-base-100);
-            --ta-border: var(--color-base-300);
-            --ta-ink: var(--color-base-content);
-            --ta-muted: color-mix(in oklch, var(--color-base-content) 55%, transparent);
-            --ta-brand: var(--color-primary);
-            --ta-brand-50: color-mix(in oklch, var(--color-primary) 12%, var(--color-base-100));
-        }
+            const fileInput = document.getElementById("approve-signature-file");
+            if (fileInput) fileInput.value = "";
+            const dataInput = document.getElementById("approve-signature-data");
+            if (dataInput) dataInput.value = "";
+            const sigPreview = document.getElementById("approve-signature-preview");
+            if (sigPreview) sigPreview.textContent = "Tiada tandatangan dipilih.";
 
-        .bg-white { background-color: var(--ta-surface) !important; }
-        .text-slate-400, .text-slate-500 { color: var(--ta-muted) !important; }
-        .text-slate-700, .text-slate-800 { color: var(--ta-ink) !important; }
-        .hover\:bg-slate-50:hover, .hover\:bg-slate-100:hover { background-color: var(--ta-canvas) !important; }
-        .hover\:text-slate-700:hover { color: var(--ta-ink) !important; }
-
-        * { font-family: 'Outfit', ui-sans-serif, system-ui, sans-serif; }
-
-        body {
-            background: var(--ta-canvas);
-            color: var(--ta-ink);
-            zoom: 110%;
-            transition: background-color 0.2s ease, color 0.2s ease;
-        }
-
-        .ta-card, .ta-sidebar, nav {
-            background: var(--ta-surface) !important;
-            border-color: var(--ta-border) !important;
-            color: var(--ta-ink) !important;
+            document.getElementById("modal-approve").showModal();
         }
 
           function openFinalApproveModal(id, bookingNo) {
@@ -652,186 +640,86 @@ $tabs = ['All' => 'Semua', 'Pending' => 'Menunggu', 'Approved' => 'Diluluskan', 
                 apprSigCtx.stroke();
                 apprSigHasStroke = true;
             }
+            function end() { apprSigDrawing = false; }
+
+            canvas.onmousedown = start;
+            canvas.onmousemove = move;
+            canvas.onmouseup = end;
+            canvas.onmouseleave = end;
+            canvas.ontouchstart = start;
+            canvas.ontouchmove = move;
+            canvas.ontouchend = end;
         }
-    </style>
-</head>
-<body class="min-h-screen">
 
-    <!-- Menu Sisi (Sidebar) -->
-    <aside id="sidenav-main" class="fixed inset-y-0 left-0 z-[70] w-64 hidden xl:flex xl:flex-col overflow-y-auto ta-sidebar">
-        <div class="h-16 flex items-center px-6 border-b" style="border-color:var(--ta-border)">
-            <a class="flex items-center gap-2.5" href="dashboard.php">
-            <img src="assets/img/logo.png" alt="Logo e-Kenderaan" class="h-8 w-auto object-contain shrink-0" />
-            <span class="font-bold tracking-tight text-[1.05rem]">e-Kenderaan</span>
-            </a>
-        </div>
+        function clearApproveSignaturePad() {
+            const canvas = document.getElementById("approve-signature-pad-canvas");
+            if (!canvas || !apprSigCtx) return;
+            const rect = canvas.getBoundingClientRect();
+            apprSigCtx.fillStyle = "#ffffff";
+            apprSigCtx.fillRect(0, 0, rect.width, 220);
+            apprSigHasStroke = false;
+        }
 
-      <div class="flex-1 px-4 py-5">
-        <p class="px-3 mb-2 text-[0.65rem] font-semibold uppercase tracking-widest text-slate-400">Menu Utama</p>
-        <ul class="flex flex-col gap-1">
-          <li>
-            <a class="ta-nav-link" href="dashboard.php">
-              <svg class="ta-nav-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M3.75 3v11.25A2.25 2.25 0 006 16.5h2.25M3.75 3h-1.5M3.75 3h16.5M21.75 3v11.25A2.25 2.25 0 0119.5 16.5H17.25m-10.5 0h6m-6 0v3.75A1.5 1.5 0 007.5 21.75h9a1.5 1.5 0 001.5-1.5V16.5m-10.5 0h10.5" /></svg>
-              <span>Dashboard</span>
-            </a>
-          </li>
-          <li>
-            <a class="ta-nav-link active" href="bookings.php">
-              <svg class="ta-nav-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 012.25-2.25h13.5A2.25 2.25 0 0121 7.5v11.25m-18 0A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75m-18 0v-7.5A2.25 2.25 0 015.25 9h13.5A2.25 2.25 0 0121 11.25v7.5m-13.5-6h.008v.008h-.008v-.008zm0 3h.008v.008h-.008v-.008zm3-3h.008v.008h-.008v-.008zm0 3h.008v.008h-.008v-.008z" /></svg>
-              <span>Tempahan</span>
-            </a>
-          </li>
-          <li>
-            <a class="ta-nav-link" href="vehicles.php">
-              <svg class="ta-nav-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M8.25 18.75a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m3 0h6m-9 0H3.375a1.125 1.125 0 01-1.125-1.125V14.25m17.25 4.5a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m3 0h1.125c.621 0 1.129-.504 1.09-1.124a17.902 17.902 0 00-3.213-9.193 2.056 2.056 0 00-1.58-.86H14.25M16.5 18.75h-2.25m0-11.177v-.958c0-.568-.422-1.048-.987-1.106a48.554 48.554 0 00-10.026 0 1.106 1.106 0 00-.987 1.106v7.635m12-6.677v6.677m0 0h-12" /></svg>
-              <span>Kenderaan</span>
-            </a>
-          </li>
-          <li>
-            <a class="ta-nav-link" href="drivers.php">
-              <svg class="ta-nav-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M2.25 8.25h19.5M2.25 9h19.5m-16.5 5.25h6m-6 2.25h3m-3.75 3h15a2.25 2.25 0 002.25-2.25V6.75A2.25 2.25 0 0019.5 4.5h-15a2.25 2.25 0 00-2.25 2.25v10.5A2.25 2.25 0 004.5 19.5z" /></svg>
-              <span>Pemandu</span>
-            </a>
-          </li>
+        function saveApproveSignaturePad() {
+            if (!apprSigHasStroke) {
+                alert("Sila tandatangan dahulu.");
+                return;
+            }
+            const canvas = document.getElementById("approve-signature-pad-canvas");
+            document.getElementById("approve-signature-data").value = canvas.toDataURL("image/png");
+            const fileInput = document.getElementById("approve-signature-file");
+            if (fileInput) fileInput.value = "";
+            const preview = document.getElementById("approve-signature-preview");
+            if (preview) preview.textContent = "Tandatangan dilukis sedia untuk dihantar.";
+            document.getElementById("modal-approve-signature-pad").close();
+        }
 
-          <?php if ($role === 'SuperAdmin'): ?>
-          <li>
-            <a class="ta-nav-link" href="users.php">
-              <svg class="ta-nav-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M15 19.128a9.38 9.38 0 002.625.372 9.337 9.337 0 004.121-.952 4.125 4.125 0 00-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 018.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0111.964-3.07M12 6.375a3.375 3.375 0 11-6.75 0 3.375 3.375 0 016.75 0zm8.25 2.25a2.625 2.625 0 11-5.25 0 2.625 2.625 0 015.25 0z" /></svg>
-              <span>Pengguna</span>
-            </a>
-          </li>
-          <?php endif; ?>
-        </ul>
-      </div>
+        function validateApproveForm() {
+            const selected = document.querySelector(\'input[name="signature_mode"]:checked\');
+            const mode = selected ? selected.value : "new";
+            if (mode === "saved") return true;
 
-      <div class="p-4 border-t" style="border-color:var(--ta-border)">
-        <div class="rounded-xl p-3.5" style="background:var(--ta-brand-50)">
-          <p class="text-xs font-semibold mb-0.5" style="color:var(--ta-brand)">Perbendaharaan Negeri Selangor</p>
-          <p class="text-xs text-slate-500 leading-relaxed">Sistem tempahan kenderaan rasmi Negeri Selangor.</p>
-        </div>
-      </div>
-    </aside>
+            const fileInput = document.getElementById("approve-signature-file");
+            const dataInput = document.getElementById("approve-signature-data");
+            const hasFile = fileInput && fileInput.files && fileInput.files.length > 0;
+            const hasDrawn = dataInput && dataInput.value !== "";
+            if (!hasFile && !hasDrawn) {
+                alert("Sila muat naik atau lukis tandatangan sebelum meluluskan.");
+                return false;
+            }
+            return true;
+        }
 
-    <!-- Navbar Bawah (mobile) -->
-    <div class="fixed inset-x-0 bottom-0 z-[70] xl:hidden">
-      <div class="relative">
-        <a href="dashboard.php" class="absolute left-1/2 -translate-x-1/2 -top-7 z-10 flex flex-col items-center gap-1">
-          <span class="w-16 h-16 rounded-full flex items-center justify-center shadow-lg" style="background:var(--ta-brand); color:#fff; box-shadow:0 6px 16px -4px color-mix(in oklch, var(--ta-brand) 60%, transparent), 0 0 0 6px var(--ta-canvas)">
-            <svg xmlns="http://www.w3.org/2000/svg" class="h-7 w-7" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M3.75 3v11.25A2.25 2.25 0 006 16.5h2.25M3.75 3h-1.5M3.75 3h16.5M21.75 3v11.25A2.25 2.25 0 0119.5 16.5H17.25m-10.5 0h6m-6 0v3.75A1.5 1.5 0 007.5 21.75h9a1.5 1.5 0 001.5-1.5V16.5m-10.5 0h10.5" /></svg>
-          </span>
-          <span class="text-[11px] font-semibold" style="color:var(--ta-brand)">Dashboard</span>
-        </a>
+        function openActionModal(id, action, text, buttonLabel, isDanger) {
+            document.getElementById("action-modal-id").value     = id;
+            document.getElementById("action-modal-action").value = action;
+            document.getElementById("action-modal-text").textContent = text;
+            const submitBtn = document.getElementById("action-modal-submit");
+            submitBtn.textContent = buttonLabel;
+            submitBtn.style.background = isDanger ? "var(--color-error)" : "var(--ta-brand)";
+            document.getElementById("modal-action").showModal();
+        }
 
-        <div class="flex items-center justify-around px-2 pt-2" style="background:var(--ta-surface); border-top:1px solid var(--ta-border); height:4.25rem; padding-bottom:env(safe-area-inset-bottom)">
-          <a href="bookings.php" class="flex flex-col items-center gap-1 flex-1 py-1" style="color:var(--ta-brand)">
-            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 012.25-2.25h13.5A2.25 2.25 0 0121 7.5v11.25m-18 0A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75m-18 0v-7.5A2.25 2.25 0 015.25 9h13.5A2.25 2.25 0 0121 11.25v7.5m-13.5-6h.008v.008h-.008v-.008zm0 3h.008v.008h-.008v-.008zm3-3h.008v.008h-.008v-.008zm0 3h.008v.008h-.008v-.008z" /></svg>
-            <span class="text-[11px] font-medium">Tempahan</span>
-          </a>
-          <a href="vehicles.php" class="flex flex-col items-center gap-1 flex-1 py-1" style="color:var(--ta-muted)">
-            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M8.25 18.75a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m3 0h6m-9 0H3.375a1.125 1.125 0 01-1.125-1.125V14.25m17.25 4.5a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m3 0h1.125c.621 0 1.129-.504 1.09-1.124a17.902 17.902 0 00-3.213-9.193 2.056 2.056 0 00-1.58-.86H14.25M16.5 18.75h-2.25m0-11.177v-.958c0-.568-.422-1.048-.987-1.106a48.554 48.554 0 00-10.026 0 1.106 1.106 0 00-.987 1.106v7.635m12-6.677v6.677m0 0h-12" /></svg>
-            <span class="text-[11px] font-medium">Kenderaan</span>
-          </a>
-          <div class="flex-1 flex justify-center"><span class="w-16"></span></div>
-          <a href="drivers.php" class="flex flex-col items-center gap-1 flex-1 py-1" style="color:var(--ta-muted)">
-            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M2.25 8.25h19.5M2.25 9h19.5m-16.5 5.25h6m-6 2.25h3m-3.75 3h15a2.25 2.25 0 002.25-2.25V6.75A2.25 2.25 0 0019.5 4.5h-15a2.25 2.25 0 00-2.25 2.25v10.5A2.25 2.25 0 004.5 19.5z" /></svg>
-            <span class="text-[11px] font-medium">Pemandu</span>
-          </a>
-          <?php if ($role === 'SuperAdmin'): ?>
-          <a href="users.php" class="flex flex-col items-center gap-1 flex-1 py-1" style="color:var(--ta-muted)">
-            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M15 19.128a9.38 9.38 0 002.625.372 9.337 9.337 0 004.121-.952 4.125 4.125 0 00-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 018.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0111.964-3.07M12 6.375a3.375 3.375 0 11-6.75 0 3.375 3.375 0 016.75 0zm8.25 2.25a2.625 2.625 0 11-5.25 0 2.625 2.625 0 015.25 0z" /></svg>
-            <span class="text-[11px] font-medium">Pengguna</span>
-          </a>
-          <?php endif; ?>
-        </div>
-      </div>
-    </div>
+        function dismissToast() {
+            const toast = document.getElementById("toast-alert");
+            if (!toast) return;
+            toast.classList.add("ta-toast-hide");
+            toast.addEventListener("animationend", () => toast.remove(), { once: true });
+        }
 
-    <main class="xl:ml-64 relative min-h-screen pb-24 xl:pb-0">
-      <!-- Navigasi Atas -->
-      <nav class="sticky top-0 z-50 flex items-center justify-between gap-4 px-4 sm:px-6 py-3 bg-white border-b" style="border-color:var(--ta-border)">
-        <div class="flex items-center gap-3">
-            <div>
-                <h6 class="font-bold text-base leading-tight">Tempahan</h6>
-                <p class="text-xs leading-tight" style="color:var(--ta-muted)">
-                    <span class="opacity-70">Halaman</span>
-                    <span class="mx-1 opacity-40">/</span>
-                    <span>Tempahan</span>
-                </p>
-            </div>
-        </div>
+        (function () {
+            if (document.getElementById("toast-alert")) {
+                setTimeout(dismissToast, 4000);
+            }
+        })();
+    </script>
+';
 
-        <form action="bookings.php" method="GET" class="hidden md:flex items-center gap-2 rounded-lg px-3 py-2 flex-1 max-w-sm" style="background:var(--ta-canvas); border:1px solid var(--ta-border)">
-            <?php if ($statusFilter !== 'All'): ?><input type="hidden" name="status" value="<?= htmlspecialchars($statusFilter) ?>" /><?php endif; ?>
-            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 shrink-0" style="color:var(--ta-muted)" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" /></svg>
-            <input type="text" name="q" value="<?= htmlspecialchars($search) ?>" placeholder="Cari no. tempahan, destinasi..." class="bg-transparent border-0 outline-none text-sm w-full placeholder:text-slate-400" />
-        </form>
-
-            <div class="flex items-center gap-1.5 sm:gap-2">
-                <button type="button" id="theme-toggle" class="btn btn-ghost btn-circle text-slate-500 hover:bg-slate-100 border-0 h-10 w-10 min-h-0">
-                    <span id="theme-toggle-icon"></span>
-                </button>
-
-                <div class="dropdown dropdown-end">
-                    <div tabindex="0" role="button" class="btn btn-ghost btn-circle border-0 h-10 w-10 min-h-0 relative text-slate-500 hover:bg-slate-100">
-                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8">
-                            <path stroke-linecap="round" stroke-linejoin="round" d="M14.857 17.082a23.848 23.848 0 005.454-1.31A8.967 8.967 0 0118 9.75v-.7V9A6 6 0 006 9v.75a8.967 8.967 0 01-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 01-5.714 0m5.714 0a3 3 0 11-5.714 0" />
-                        </svg>
-                        <?php if ($pendingApprovals > 0): ?>
-                            <span class="absolute top-2 right-2 flex h-2.5 w-2.5">
-                                <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-error opacity-75"></span>
-                                <span class="relative inline-flex rounded-full h-2.5 w-2.5 bg-error"></span>
-                            </span>
-                        <?php endif; ?>
-                    </div>
-                    <div tabindex="0" class="dropdown-content z-[99] menu p-0 shadow-xl ta-card rounded-2xl w-80 mt-2 border" style="border-color: var(--ta-border);">
-                        <div class="px-4 py-3 border-b flex items-center justify-between" style="border-color: var(--ta-border);">
-                            <span class="font-bold text-sm">Notifikasi</span>
-                        </div>
-                        <div class="max-h-64 overflow-y-auto">
-                            <?php if ($pendingApprovals > 0): ?>
-                                <a href="bookings.php?status=Pending" class="flex items-start gap-3 p-3.5 hover:bg-slate-50 transition-colors">
-                                    <div class="p-2 rounded-full bg-warning/15 text-warning shrink-0 mt-0.5">
-                                        <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                                    </div>
-                                    <div class="flex-1 min-w-0">
-                                        <p class="text-xs font-semibold">Tempahan Menunggu Kelulusan</p>
-                                        <p class="text-[11px] text-slate-400 mt-0.5">Terdapat <?= $pendingApprovals ?> tempahan yang memerlukan tindakan anda.</p>
-                                    </div>
-                                </a>
-                            <?php else: ?>
-                                <div class="p-6 text-center text-slate-400 text-xs">Tiada notifikasi baharu.</div>
-                            <?php endif; ?>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="dropdown dropdown-end">
-                    <div tabindex="0" role="button" class="btn btn-ghost rounded-full pl-1 pr-2 py-1 flex items-center gap-2 h-auto min-h-0">
-                        <div class="avatar placeholder">
-                            <div class="rounded-full w-8 h-8 flex items-center justify-center font-bold text-xs uppercase text-white" style="background:var(--ta-brand)">
-                                <?= htmlspecialchars(substr($fullname, 0, 1)) ?>
-                            </div>
-                        </div>
-                        <span class="text-sm font-semibold hidden sm:inline-block"><?= htmlspecialchars($fullname) ?></span>
-                    </div>
-                    <ul tabindex="0" class="dropdown-content z-[99] menu p-3 shadow-lg ta-card rounded-2xl w-64 mt-2 border" style="border-color: var(--ta-border);">
-                        <li class="px-3 py-2 border-b mb-1" style="border-color:var(--ta-border)">
-                            <div class="flex items-center justify-between gap-2">
-                                <p class="font-bold text-sm truncate"><?= htmlspecialchars($fullname) ?></p>
-                                <span class="ta-badge <?= $badgeColor ?>"><?= htmlspecialchars($role) ?></span>
-                            </div>
-                            <p class="text-xs text-slate-400 mt-1 truncate"><?= htmlspecialchars($email) ?></p>
-                        </li>
-                        <li><a href="profile.php" class="py-2.5 text-xs font-medium">Profil Saya</a></li>
-                        <div class="divider my-1"></div>
-                        <li><a href="logout.php" class="py-2.5 text-xs font-semibold text-red-600">Log Keluar</a></li>
-                    </ul>
-                </div>
-            </div>
-      </nav>
-
-      <div class="w-full px-4 sm:px-6 py-6 mx-auto">
+include 'includes/layout_header.php';
+?>
+<main class="xl:ml-64 relative min-h-screen pb-24 xl:pb-0">
+    <?php include 'includes/top_nav.php'; ?>
+    <div class="w-full px-4 sm:px-6 py-6 mx-auto">
 
         <?php if ($flash): ?>
           <div id="toast-alert" class="card shadow-2xl px-4 py-3.5 rounded-2xl flex items-center gap-3 border" style="border-color: var(--color-<?= $flash['type'] === 'success' ? 'success' : 'error' ?>); max-width: 26rem; backdrop-filter: blur(16px);">
@@ -1016,58 +904,75 @@ $tabs = ['All' => 'Semua', 'Pending' => 'Menunggu', 'Approved' => 'Diluluskan', 
           <?php endif; ?>
         </div>
 
-        <footer class="pt-6 pb-2">
-          <div class="text-sm leading-normal text-center text-slate-400">
-            © <?= date('Y') ?> e-Kenderaan &middot; Perbendaharaan Negeri Selangor
-          </div>
-        </footer>
-      </div>
-    </main>
+        <!-- Modal: Tugaskan Pemandu -->
+        <dialog id="modal-approve" class="modal">
+          <div class="modal-box card max-w-md">
+            <form method="dialog"><button class="btn btn-sm btn-circle btn-ghost absolute right-3 top-3">✕</button></form>
+            <h3 id="approve-modal-title" class="font-bold text-lg mb-1">Tugaskan Pemandu</h3>
+            <p class="text-sm text-slate-400 mb-4">No. Tempahan: <span id="approve-booking-no" class="font-semibold"></span></p>
+            <form action="bookings.php<?= $search !== '' || $statusFilter !== 'All' ? '?' . http_build_query(array_filter(['q' => $search !== '' ? $search : null, 'status' => $statusFilter !== 'All' ? $statusFilter : null])) : '' ?>" method="POST" enctype="multipart/form-data" class="flex flex-col gap-3">
+              <input type="hidden" name="action" id="approve-booking-action" value="assign_driver" />
+              <input type="hidden" name="csrf_token" value="<?= generate_csrf_token() ?>" />
+              <input type="hidden" name="booking_id" id="approve-booking-id" />
+              <div id="approve-driver-fields">
+                <?php if (empty($assignableDrivers)): ?>
+                  <p class="text-sm text-slate-400 mb-2">Tiada pemandu yang tersedia buat masa ini.</p>
+                <?php endif; ?>
+                <label class="text-xs font-medium block mb-1">Tugaskan Pemandu</label>
+                <select name="driver_id" id="approve-driver-select" required class="select select-bordered w-full" onchange="updateApproveVehiclePreview()">
+                  <option value="">— Pilih Pemandu —</option>
+                  <?php foreach ($assignableDrivers as $ad): ?>
+                    <?php
+                      $vehicleLabel = $ad['vehicle_id']
+                          ? trim(($ad['vehicle_name'] ?: '') . ' — ' . $ad['plate_no'])
+                          : 'Tiada kenderaan ditugaskan';
+                    ?>
+                    <option value="<?= (int)$ad['driver_id'] ?>" data-vehicle="<?= htmlspecialchars($vehicleLabel) ?>" <?= !$ad['vehicle_id'] ? 'disabled' : '' ?>>
+                      <?= htmlspecialchars($ad['fullname']) ?> — <?= htmlspecialchars($ad['vehicle_name'] ?: 'Jenis Kenderaan Tidak Diketahui') ?><?= !$ad['vehicle_id'] ? ' (tiada kenderaan)' : '' ?>
+                    </option>
+                  <?php endforeach; ?>
+                </select>
+              </div>
 
-    <!-- Modal: Luluskan & Tugaskan Pemandu -->
-    <dialog id="modal-approve" class="modal">
-      <div class="modal-box ta-card max-w-md">
-        <form method="dialog"><button class="btn btn-sm btn-circle btn-ghost absolute right-3 top-3">✕</button></form>
-        <h3 class="font-bold text-lg mb-1">Luluskan Tempahan</h3>
-        <p class="text-sm text-slate-400 mb-4">No. Tempahan: <span id="approve-booking-no" class="font-semibold"></span></p>
-        <?php if (empty($assignableDrivers)): ?>
-          <p class="text-sm text-slate-400">Tiada pemandu yang tersedia buat masa ini. Sila kemaskini status pemandu di halaman Pemandu terlebih dahulu.</p>
-          <div class="modal-action mt-2">
-            <button type="button" class="btn btn-ghost" onclick="document.getElementById('modal-approve').close()">Tutup</button>
+              <div id="approve-signature-fields" class="border-t pt-3" style="border-color:var(--ta-border)">
+                <label class="text-xs font-medium block mb-2">Tandatangan Pelulus <span class="text-error">*</span></label>
+                <?php if ($hasSavedSignature): ?>
+                  <label class="flex items-center gap-2 mb-2 p-2 rounded-lg border cursor-pointer" style="border-color:var(--ta-border)">
+                    <input type="radio" name="signature_mode" value="saved" class="radio radio-sm" checked onchange="toggleApproveSignatureMode()" />
+                    <img src="<?= htmlspecialchars($currentUserSignature) ?>?v=<?= time() ?>" alt="Tandatangan Tersimpan" class="h-8 object-contain" />
+                    <span class="text-xs">Guna tandatangan tersimpan</span>
+                  </label>
+                  <label class="flex items-center gap-2 mb-2 text-xs cursor-pointer">
+                    <input type="radio" name="signature_mode" value="new" class="radio radio-sm" onchange="toggleApproveSignatureMode()" />
+                    Tandatangan baharu
+                  </label>
+                <?php else: ?>
+                  <input type="hidden" name="signature_mode" value="new" />
+                  <p class="text-xs text-slate-400 mb-2">Sila lukis atau muat naik tandatangan.</p>
+                <?php endif; ?>
+                <div id="approve-signature-new-fields" class="<?= $hasSavedSignature ? 'hidden' : '' ?> flex flex-col gap-2">
+                  <div class="flex gap-2">
+                    <label for="approve-signature-file" class="btn btn-sm btn-outline gap-1.5 flex-1 cursor-pointer">Muat Naik</label>
+                    <button type="button" class="btn btn-sm btn-outline gap-1.5 flex-1" onclick="openApproveSignaturePad()">Lukis</button>
+                  </div>
+                  <input type="file" name="signature_file" id="approve-signature-file" accept=".jpg,.jpeg,.png" class="hidden" onchange="previewApproveSignatureFile(this)" />
+                  <input type="hidden" name="signature_data" id="approve-signature-data" />
+                  <div id="approve-signature-preview" class="text-xs text-slate-400">Tiada tandatangan dipilih.</div>
+                </div>
+              </div>
+              <div class="rounded-lg p-3 text-xs flex items-center gap-2" style="background:var(--ta-canvas)">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 shrink-0" style="color:var(--ta-muted)" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M8.25 18.75a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m3 0h6m-9 0H3.375a1.125 1.125 0 01-1.125-1.125V14.25m17.25 4.5a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m3 0h1.125c.621 0 1.129-.504 1.09-1.124a17.902 17.902 0 00-3.213-9.193 2.056 2.056 0 00-1.58-.86H14.25M16.5 18.75h-2.25m0-11.177v-.958c0-.568-.422-1.048-.987-1.106a48.554 48.554 0 00-10.026 0 1.106 1.106 0 00-.987 1.106v7.635m12-6.677v6.677m0 0h-12" /></svg>
+                <span>Kenderaan ditugaskan: <span id="approve-vehicle-preview" class="font-semibold" style="color:var(--ta-ink)">—</span></span>
+              </div>
+
+              <div class="modal-action mt-2">
+                <button type="button" class="btn btn-ghost" onclick="document.getElementById('modal-approve').close()">Batal</button>
+                <button type="submit" id="approve-modal-submit" class="btn text-white border-0" style="background:var(--ta-brand)" onclick="return validateApproveForm()">Tugaskan Pemandu</button>
+              </div>
+            </form>
           </div>
-        <?php else: ?>
-        <form action="bookings.php<?= $search !== '' || $statusFilter !== 'All' ? '?' . http_build_query(array_filter(['q' => $search !== '' ? $search : null, 'status' => $statusFilter !== 'All' ? $statusFilter : null])) : '' ?>" method="POST" class="flex flex-col gap-3">
-          <input type="hidden" name="action" value="approve_booking" />
-          <input type="hidden" name="booking_id" id="approve-booking-id" />
-          <div>
-            <label class="text-xs font-medium block mb-1">Tugaskan Pemandu</label>
-            <select name="driver_id" id="approve-driver-select" required class="select select-bordered w-full" onchange="updateApproveVehiclePreview()">
-              <option value="">— Pilih Pemandu —</option>
-              <?php foreach ($assignableDrivers as $ad): ?>
-                <?php
-                  $vehicleLabel = $ad['vehicle_id']
-                      ? trim(($ad['vehicle_name'] ?: '') . ' — ' . $ad['plate_no'])
-                      : 'Tiada kenderaan ditugaskan';
-                ?>
-                <option value="<?= (int)$ad['driver_id'] ?>" data-vehicle="<?= htmlspecialchars($vehicleLabel) ?>" <?= !$ad['vehicle_id'] ? 'disabled' : '' ?>>
-                  <?= htmlspecialchars($ad['fullname']) ?> — <?= htmlspecialchars($ad['license']) ?><?= !$ad['vehicle_id'] ? ' (tiada kenderaan)' : '' ?>
-                </option>
-              <?php endforeach; ?>
-            </select>
-          </div>
-          <div class="rounded-lg p-3 text-xs flex items-center gap-2" style="background:var(--ta-canvas)">
-            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 shrink-0" style="color:var(--ta-muted)" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M8.25 18.75a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m3 0h6m-9 0H3.375a1.125 1.125 0 01-1.125-1.125V14.25m17.25 4.5a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m3 0h1.125c.621 0 1.129-.504 1.09-1.124a17.902 17.902 0 00-3.213-9.193 2.056 2.056 0 00-1.58-.86H14.25M16.5 18.75h-2.25m0-11.177v-.958c0-.568-.422-1.048-.987-1.106a48.554 48.554 0 00-10.026 0 1.106 1.106 0 00-.987 1.106v7.635m12-6.677v6.677m0 0h-12" /></svg>
-            <span>Kenderaan ditugaskan: <span id="approve-vehicle-preview" class="font-semibold" style="color:var(--ta-ink)">—</span></span>
-          </div>
-          <div class="modal-action mt-2">
-            <button type="button" class="btn btn-ghost" onclick="document.getElementById('modal-approve').close()">Batal</button>
-            <button type="submit" class="btn text-white border-0" style="background:var(--ta-brand)">Luluskan Tempahan</button>
-          </div>
-        </form>
-        <?php endif; ?>
-      </div>
-      <form method="dialog" class="modal-backdrop"><button>close</button></form>
-    </dialog>
+          <form method="dialog" class="modal-backdrop"><button>close</button></form>
+        </dialog>
 
         <!-- Modal: Lukis Tandatangan Pelulus -->
         <dialog id="modal-approve-signature-pad" class="modal">
