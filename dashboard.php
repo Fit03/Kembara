@@ -295,7 +295,7 @@ include 'includes/layout_header.php';
         <!-- Kad Statistik Peribadi -->
         <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-5">
           <div class="card p-5" data-href="bookings.php?mine=1">
-            <div class="ta-icon-box mb-4">
+            <div class="ta-icon-box ta-icon-box-blue mb-4">
               <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.6"><path stroke-linecap="round" stroke-linejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 012.25-2.25h13.5A2.25 2.25 0 0121 7.5v11.25m-18 0A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75m-18 0v-7.5A2.25 2.25 0 015.25 9h13.5A2.25 2.25 0 0121 11.25v7.5" /></svg>
             </div>
             <p class="text-sm mb-1" style="color:var(--ta-muted)">Tempahan Aktif Saya</p>
@@ -317,7 +317,7 @@ include 'includes/layout_header.php';
           <?php endif; ?>
 
           <div class="card p-5" data-href="bookings.php?mine=1&status=Completed">
-            <div class="ta-icon-box mb-4">
+            <div class="ta-icon-box ta-icon-box-purple mb-4">
               <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.6"><path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5" /></svg>
             </div>
             <p class="text-sm mb-1" style="color:var(--ta-muted)">Selesai Bulan Ini</p>
@@ -325,7 +325,7 @@ include 'includes/layout_header.php';
           </div>
 
           <div class="card p-5">
-            <div class="ta-icon-box mb-4">
+            <div class="ta-icon-box ta-icon-box-orange mb-4">
               <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.6"><path stroke-linecap="round" stroke-linejoin="round" d="M8.25 6.75H15.75M8.25 6.75a2.25 2.25 0 01-2.25-2.25V4.5A2.25 2.25 0 018.25 2.25h7.5A2.25 2.25 0 0118 4.5v.75a2.25 2.25 0 01-2.25 2.25M8.25 6.75v10.5a2.25 2.25 0 002.25 2.25h3a2.25 2.25 0 002.25-2.25V6.75" /></svg>
             </div>
             <p class="text-sm mb-1" style="color:var(--ta-muted)">Hari Ke Perjalanan Seterusnya</p>

@@ -280,7 +280,7 @@ include 'includes/layout_header.php';
         <!-- Baris 1: Kad Statistik -->
         <div class="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-5">
           <div class="card p-5" data-href="drivers.php">
-            <div class="ta-icon-box mb-4">
+            <div class="ta-icon-box ta-icon-box-blue mb-4">
               <svg xmlns="http://www.w3.org/2000/svg" class="h-5.5 w-5.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.6"><path stroke-linecap="round" stroke-linejoin="round" d="M2.25 8.25h19.5M2.25 9h19.5m-16.5 5.25h6m-6 2.25h3m-3.75 3h15a2.25 2.25 0 002.25-2.25V6.75A2.25 2.25 0 0019.5 4.5h-15a2.25 2.25 0 00-2.25 2.25v10.5A2.25 2.25 0 004.5 19.5z" /></svg>
             </div>
             <p class="text-sm mb-1" style="color:var(--ta-muted)">Jumlah Pemandu</p>
@@ -288,7 +288,7 @@ include 'includes/layout_header.php';
           </div>
 
           <div class="card p-5" data-href="drivers.php?status=Available">
-            <div class="ta-icon-box mb-4">
+            <div class="ta-icon-box ta-icon-box-green mb-4">
               <svg xmlns="http://www.w3.org/2000/svg" class="h-5.5 w-5.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.6"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
             </div>
             <p class="text-sm mb-1" style="color:var(--ta-muted)">Boleh Bertugas</p>
@@ -296,7 +296,7 @@ include 'includes/layout_header.php';
           </div>
 
           <div class="card p-5" data-href="drivers.php?status=Leave">
-            <div class="ta-icon-box mb-4">
+            <div class="ta-icon-box ta-icon-box-purple mb-4">
               <svg xmlns="http://www.w3.org/2000/svg" class="h-5.5 w-5.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.6"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
             </div>
             <p class="text-sm mb-1" style="color:var(--ta-muted)">Cuti</p>
@@ -304,7 +304,7 @@ include 'includes/layout_header.php';
           </div>
 
           <div class="card p-5" data-href="drivers.php?status=Inactive">
-            <div class="ta-icon-box mb-4">
+            <div class="ta-icon-box ta-icon-box-orange mb-4">
               <svg xmlns="http://www.w3.org/2000/svg" class="h-5.5 w-5.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.6"><path stroke-linecap="round" stroke-linejoin="round" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" /></svg>
             </div>
             <p class="text-sm mb-1" style="color:var(--ta-muted)">Tidak Aktif</p>

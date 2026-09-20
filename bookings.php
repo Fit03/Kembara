@@ -337,8 +337,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 if ((int)($booking['assigned_driver_user_id'] ?? 0) !== $currentUserId) {
                   throw new RuntimeException('Hanya pemandu yang ditugaskan boleh memberi respons kepada tugasan ini.');
                 }
-                if ($booking['status'] !== 'Pending' || $booking['workflow_stage'] !== 'DriverAssigned') {
+                if ($action === 'driver_accept'
+                  && ($booking['status'] !== 'Pending' || $booking['workflow_stage'] !== 'DriverAssigned')) {
                   throw new RuntimeException('Tugasan ini tidak lagi menunggu respons pemandu.');
+                }
+                if ($action === 'driver_reject'
+                  && !(($booking['status'] === 'Pending' && $booking['workflow_stage'] === 'DriverAssigned')
+                    || ($booking['status'] === 'Approved' && $booking['workflow_stage'] === 'AdminApproved'))) {
+                  throw new RuntimeException('Tugasan ini tidak boleh ditolak pada masa ini.');
                 }
 
                 if ($action === 'driver_accept') {
@@ -384,7 +390,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $flash = ['type' => 'success', 'msg' => "Tempahan {$booking['booking_no']} telah dibatalkan."];
 
             } elseif ($action === 'complete_booking') {
-                if (!$canManage) throw new RuntimeException('Anda tidak mempunyai kebenaran untuk menamatkan tempahan.');
+              $isAssignedDriver = (int)($booking['assigned_driver_user_id'] ?? 0) === $currentUserId;
+              if (!$canManage && !$isAssignedDriver) throw new RuntimeException('Anda tidak mempunyai kebenaran untuk menamatkan tempahan.');
                 if ($booking['status'] !== 'Approved') throw new RuntimeException('Hanya tempahan berstatus Diluluskan boleh ditamatkan.');
 
                 $pdo->prepare("UPDATE vehicle_bookings SET status='Completed', workflow_stage='Completed' WHERE booking_id=?")->execute([$bid]);
@@ -519,17 +526,40 @@ $assignableDrivers = $pdo->query(
 // Kiraan statistik (skop mengikut peranan)
 $statCountStmt = $pdo->prepare(
     "SELECT status, COUNT(*) AS total FROM vehicle_bookings vb"
-    . ($role === 'User' ? " WHERE vb.user_id = :uid" : "")
+  . ($role === 'User' ? " WHERE vb.user_id = :uid OR EXISTS (
+    SELECT 1
+    FROM drivers assigned_driver
+    WHERE assigned_driver.driver_id = vb.driver_id
+      AND assigned_driver.user_id = :driver_uid
+    )" : "")
     . " GROUP BY status"
 );
-$statCountStmt->execute($role === 'User' ? [':uid' => $currentUserId] : []);
+$statCountStmt->execute($role === 'User' ? [
+  ':uid' => $currentUserId,
+  ':driver_uid' => $currentUserId,
+] : []);
 $statusCounts   = $statCountStmt->fetchAll(PDO::FETCH_KEY_PAIR);
 $totalBookings  = (int)array_sum($statusCounts);
 $pendingCount   = (int)($statusCounts['Pending'] ?? 0);
 $approvedCount  = (int)($statusCounts['Approved'] ?? 0);
 $completedCount = (int)($statusCounts['Completed'] ?? 0);
 
-$pendingApprovals = $pdo->query("SELECT COUNT(*) FROM vehicle_bookings WHERE status = 'Pending'")->fetchColumn();
+if ($role === 'User') {
+  $pendingApprovalsStmt = $pdo->prepare(
+    "SELECT COUNT(*)
+     FROM vehicle_bookings vb
+     LEFT JOIN drivers assigned_driver ON assigned_driver.driver_id = vb.driver_id
+     WHERE vb.status = 'Pending'
+       AND (vb.user_id = :uid OR assigned_driver.user_id = :driver_uid)"
+  );
+  $pendingApprovalsStmt->execute([
+    ':uid' => $currentUserId,
+    ':driver_uid' => $currentUserId,
+  ]);
+  $pendingApprovals = $pendingApprovalsStmt->fetchColumn();
+} else {
+  $pendingApprovals = $pdo->query("SELECT COUNT(*) FROM vehicle_bookings WHERE status = 'Pending'")->fetchColumn();
+}
 
 $tabs = ['All' => 'Semua', 'Pending' => 'Menunggu', 'Approved' => 'Diluluskan', 'Rejected' => 'Ditolak', 'Cancelled' => 'Dibatalkan', 'Completed' => 'Selesai'];
 
@@ -751,7 +781,7 @@ include 'includes/layout_header.php';
         <!-- Baris 1: Kad Statistik -->
         <div class="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-5">
           <div class="card p-5" data-href="bookings.php">
-            <div class="ta-icon-box mb-4">
+            <div class="ta-icon-box ta-icon-box-blue mb-4">
               <svg xmlns="http://www.w3.org/2000/svg" class="h-5.5 w-5.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.6"><path stroke-linecap="round" stroke-linejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 012.25-2.25h13.5A2.25 2.25 0 0121 7.5v11.25m-18 0A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75m-18 0v-7.5A2.25 2.25 0 015.25 9h13.5A2.25 2.25 0 0121 11.25v7.5" /></svg>
             </div>
             <p class="text-sm mb-1" style="color:var(--ta-muted)">Jumlah Tempahan</p>
@@ -762,10 +792,10 @@ include 'includes/layout_header.php';
           <div class="aura aura-dual text-yellow-600 bg-orange-200 duration-3000">
           <?php endif; ?>
             <div class="card p-5" data-href="bookings.php?status=Pending" data-priority="warning">
-              <div class="ta-icon-box mb-4">
+              <div class="ta-icon-box ta-icon-box-green mb-4">
               <svg xmlns="http://www.w3.org/2000/svg" class="h-5.5 w-5.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.6"><path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
             </div>
-            <p class="text-sm mb-1" style="color:var(--ta-muted)">Menunggu Kelulusan</p>
+            <p class="text-sm mb-1" style="color:var(--ta-muted)"><?= $role === 'User' ? 'Menunggu Tindakan' : 'Menunggu Kelulusan' ?></p>
             <h5 class="text-2xl font-bold"><?= $pendingCount ?></h5>
           </div>
           <?php if ($pendingApprovals > 0): ?>
@@ -773,7 +803,7 @@ include 'includes/layout_header.php';
           <?php endif; ?>
 
           <div class="card p-5" data-href="bookings.php?status=Approved">
-            <div class="ta-icon-box mb-4">
+            <div class="ta-icon-box ta-icon-box-purple mb-4">
               <svg xmlns="http://www.w3.org/2000/svg" class="h-5.5 w-5.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.6"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
             </div>
             <p class="text-sm mb-1" style="color:var(--ta-muted)">Diluluskan</p>
@@ -781,7 +811,7 @@ include 'includes/layout_header.php';
           </div>
 
           <div class="card p-5" data-href="bookings.php?status=Completed">
-            <div class="ta-icon-box mb-4">
+            <div class="ta-icon-box ta-icon-box-orange mb-4">
               <svg xmlns="http://www.w3.org/2000/svg" class="h-5.5 w-5.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.6"><path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5" /></svg>
             </div>
             <p class="text-sm mb-1" style="color:var(--ta-muted)">Selesai</p>
@@ -857,6 +887,8 @@ include 'includes/layout_header.php';
                           onclick="openActionModal(<?= (int)$b['booking_id'] ?>, 'driver_accept', 'Terima tugasan untuk tempahan <?= htmlspecialchars(addslashes($b['booking_no'])) ?>?', 'Terima', false)">
                           <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75L9 17.25 19.5 6.75" /></svg>
                         </button>
+                      <?php endif; ?>
+                      <?php if ($role === 'User' && (int)($b['driver_user_id'] ?? 0) === $currentUserId && (($b['status'] === 'Pending' && $b['workflow_stage'] === 'DriverAssigned') || ($b['status'] === 'Approved' && $b['workflow_stage'] === 'AdminApproved'))): ?>
                         <button type="button" class="btn btn-ghost btn-xs text-error" title="Tolak Tugasan"
                           onclick="openActionModal(<?= (int)$b['booking_id'] ?>, 'driver_reject', 'Tolak tugasan untuk tempahan <?= htmlspecialchars(addslashes($b['booking_no'])) ?>?', 'Tolak', true)">
                           <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
@@ -873,7 +905,7 @@ include 'includes/layout_header.php';
                         </button>
                       <?php endif; ?>
 
-                      <?php if ($canManage && $b['status'] === 'Approved'): ?>
+                      <?php if (($canManage || ($role === 'User' && (int)($b['driver_user_id'] ?? 0) === $currentUserId)) && $b['status'] === 'Approved'): ?>
                         <button type="button" class="btn btn-ghost btn-xs text-info" title="Tandakan Selesai"
                           onclick="openActionModal(<?= (int)$b['booking_id'] ?>, 'complete_booking', 'Tandakan tempahan <?= htmlspecialchars(addslashes($b['booking_no'])) ?> sebagai selesai?', 'Selesai', false)">
                           <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
