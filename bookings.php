@@ -217,7 +217,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $flash = ['type' => 'success', 'msg' => "Tempahan {$bookingNo} berjaya dihantar dan menunggu kelulusan."];
             $redirectAfterPost = 'view.php?id=' . $newId;
 
-        } elseif (in_array($action, ['assign_driver', 'approve_booking', 'driver_accept', 'driver_reject', 'reject_booking', 'cancel_booking', 'complete_booking'], true)) {
+        } elseif (in_array($action, ['assign_driver', 'approve_booking', 'driver_accept', 'driver_reject', 'reject_booking', 'cancel_booking', 'complete_booking', 'delete_booking'], true)) {
             $bid = (int)($_POST['booking_id'] ?? 0);
             if ($bid <= 0) {
                 throw new RuntimeException('Tempahan tidak sah.');
@@ -237,7 +237,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 throw new RuntimeException('Tempahan tidak dijumpai.');
             }
 
-            if ($action === 'assign_driver') {
+            if ($action === 'delete_booking') {
+              if (!$canManage) throw new RuntimeException('Anda tidak mempunyai kebenaran untuk memadam tempahan.');
+
+              if (!empty($booking['vehicle_id'])) {
+                $pdo->prepare("UPDATE vehicles SET status='Available' WHERE vehicle_id=?")->execute([$booking['vehicle_id']]);
+              }
+              $pdo->prepare("DELETE FROM booking_history WHERE booking_id=?")->execute([$bid]);
+              $pdo->prepare("DELETE FROM vehicle_bookings WHERE booking_id=?")->execute([$bid]);
+
+              $flash = ['type' => 'success', 'msg' => "Tempahan {$booking['booking_no']} telah dipadam."];
+
+            } elseif ($action === 'assign_driver') {
               if (!$canManage) throw new RuntimeException('Anda tidak mempunyai kebenaran untuk menetapkan pemandu.');
               if ($booking['status'] !== 'Pending' || !in_array($booking['workflow_stage'], ['Submitted', 'ReassignmentRequired'], true)) {
                 throw new RuntimeException('Hanya tempahan yang menunggu penetapan pemandu boleh diproses.');
@@ -874,6 +885,12 @@ include 'includes/layout_header.php';
                           onclick="openActionModal(<?= (int)$b['booking_id'] ?>, 'cancel_booking', 'Batalkan tempahan <?= htmlspecialchars(addslashes($b['booking_no'])) ?>?', 'Batalkan', true)">
                           <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M18.364 18.364A9 9 0 105.636 5.636a9 9 0 0012.728 12.728z" /></svg>
                         </button>
+                      <?php endif; ?>
+                      <?php if ($canManage): ?>
+                        <button type="button" class="btn btn-ghost btn-xs text-error" title="Padam"
+                          onclick="openActionModal(<?= (int)$b['booking_id'] ?>, 'delete_booking', 'Padam tempahan <?= htmlspecialchars(addslashes($b['booking_no'])) ?>? Tindakan ini tidak boleh dibuat asal.', 'Padam', true)">
+                          <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0" /></svg>
+                      </button>
                       <?php endif; ?>
                     </td>
                   </tr>
