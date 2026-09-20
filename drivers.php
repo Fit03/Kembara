@@ -135,6 +135,9 @@ if (isset($_SESSION['flash'])) {
    Data Halaman
    ========================================================== */
 $search  = trim($_GET['q'] ?? '');
+$statusFilter = $_GET['status'] ?? '';
+$vehicleFilter = max(0, (int)($_GET['vehicle_id'] ?? 0));
+if (!in_array($statusFilter, ['Available', 'Leave', 'Inactive'], true)) $statusFilter = '';
 $perPage = 10;
 $page    = max(1, (int)($_GET['page'] ?? 1));
 $offset  = ($page - 1) * $perPage;
@@ -144,6 +147,8 @@ function buildDriversPageUrl(int $p, string $search): string {
     if ($search !== '') {
         $params['q'] = $search;
     }
+    if ($GLOBALS['statusFilter'] !== '') $params['status'] = $GLOBALS['statusFilter'];
+    if ($GLOBALS['vehicleFilter'] > 0) $params['vehicle_id'] = $GLOBALS['vehicleFilter'];
     return 'drivers.php?' . http_build_query($params);
 }
 
@@ -151,43 +156,28 @@ $baseFrom = "FROM drivers dr
              JOIN users u ON u.user_id = dr.user_id
              LEFT JOIN vehicles v ON v.driver_id = dr.driver_id";
 
-if ($search !== '') {
-    $like = "%{$search}%";
-
-    $countStmt = $pdo->prepare("SELECT COUNT(DISTINCT dr.driver_id) $baseFrom
-        WHERE u.fullname LIKE :like1 OR dr.license LIKE :like2");
-    $countStmt->execute([':like1' => $like, ':like2' => $like]);
-    $totalRows = (int)$countStmt->fetchColumn();
-
-    $stmt = $pdo->prepare(
-        "SELECT dr.driver_id, dr.license, dr.status, u.user_id, u.fullname, u.email, u.phone_no, u.profile_picture,
-                GROUP_CONCAT(DISTINCT v.plate_no SEPARATOR ', ') AS assigned_vehicles
-         $baseFrom
-         WHERE u.fullname LIKE :like1 OR dr.license LIKE :like2
-         GROUP BY dr.driver_id
-         ORDER BY FIELD(dr.status, 'Available', 'Leave', 'Inactive'), u.fullname
-         LIMIT :limit OFFSET :offset"
-    );
-    $stmt->bindValue(':like1', $like);
-    $stmt->bindValue(':like2', $like);
-    $stmt->bindValue(':limit', $perPage, PDO::PARAM_INT);
-    $stmt->bindValue(':offset', $offset, PDO::PARAM_INT);
-    $stmt->execute();
-} else {
-    $totalRows = (int)$pdo->query("SELECT COUNT(*) FROM drivers")->fetchColumn();
-
-    $stmt = $pdo->prepare(
-        "SELECT dr.driver_id, dr.license, dr.status, u.user_id, u.fullname, u.email, u.phone_no, u.profile_picture,
-                GROUP_CONCAT(DISTINCT v.plate_no SEPARATOR ', ') AS assigned_vehicles
-         $baseFrom
-         GROUP BY dr.driver_id
-         ORDER BY FIELD(dr.status, 'Available', 'Leave', 'Inactive'), u.fullname
-         LIMIT :limit OFFSET :offset"
-    );
-    $stmt->bindValue(':limit', $perPage, PDO::PARAM_INT);
-    $stmt->bindValue(':offset', $offset, PDO::PARAM_INT);
-    $stmt->execute();
-}
+$where = [];
+$params = [];
+if ($search !== '') { $where[] = '(u.fullname LIKE :like1 OR dr.license LIKE :like2)'; $like = "%{$search}%"; $params[':like1'] = $like; $params[':like2'] = $like; }
+if ($statusFilter !== '') { $where[] = 'dr.status = :status'; $params[':status'] = $statusFilter; }
+if ($vehicleFilter > 0) { $where[] = 'v.vehicle_id = :vehicle_id'; $params[':vehicle_id'] = $vehicleFilter; }
+$whereSql = $where ? 'WHERE ' . implode(' AND ', $where) : '';
+$countStmt = $pdo->prepare("SELECT COUNT(DISTINCT dr.driver_id) $baseFrom $whereSql");
+foreach ($params as $key => $value) $countStmt->bindValue($key, $value);
+$countStmt->execute();
+$totalRows = (int)$countStmt->fetchColumn();
+$stmt = $pdo->prepare(
+  "SELECT dr.driver_id, dr.license, dr.status, u.user_id, u.fullname, u.email, u.phone_no, u.profile_picture,
+      GROUP_CONCAT(DISTINCT v.plate_no SEPARATOR ', ') AS assigned_vehicles
+   $baseFrom $whereSql
+   GROUP BY dr.driver_id
+   ORDER BY FIELD(dr.status, 'Available', 'Leave', 'Inactive'), u.fullname
+   LIMIT :limit OFFSET :offset"
+);
+foreach ($params as $key => $value) $stmt->bindValue($key, $value);
+$stmt->bindValue(':limit', $perPage, PDO::PARAM_INT);
+$stmt->bindValue(':offset', $offset, PDO::PARAM_INT);
+$stmt->execute();
 $drivers = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
 $totalPages = max(1, (int)ceil($totalRows / $perPage));
@@ -203,6 +193,7 @@ $eligibleUsers = $pdo->query(
      WHERE dr.driver_id IS NULL
      ORDER BY u.fullname"
 )->fetchAll(PDO::FETCH_ASSOC);
+$filterVehicles = $pdo->query("SELECT vehicle_id, plate_no FROM vehicles ORDER BY plate_no")->fetchAll(PDO::FETCH_ASSOC);
 
 $statusCounts   = $pdo->query("SELECT status, COUNT(*) AS total FROM drivers GROUP BY status")
     ->fetchAll(PDO::FETCH_KEY_PAIR);
@@ -310,6 +301,19 @@ include 'includes/layout_header.php';
             <p class="text-sm mb-1" style="color:var(--ta-muted)">Tidak Aktif</p>
             <h5 class="text-2xl font-bold"><?= $inactiveCount ?></h5>
           </div>
+        </div>
+
+        <?php $hasDriverFilters = $statusFilter !== '' || $vehicleFilter > 0; ?>
+        <div class="card p-5 mt-5">
+          <details class="rounded-xl border" style="border-color:var(--ta-border)" <?= $hasDriverFilters ? 'open' : '' ?>>
+            <summary class="cursor-pointer list-none px-4 py-3 text-sm font-semibold flex items-center justify-between gap-3"><span class="flex items-center gap-2"><svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M3.75 6.75h16.5M6.75 12h10.5m-7.5 5.25h4.5" /></svg>Penapis Lanjutan<?= $hasDriverFilters ? ' <span class="ta-badge badge badge-info">Aktif</span>' : '' ?></span><span class="text-xs text-slate-400">Status &amp; kenderaan ditugaskan</span></summary>
+            <form action="drivers.php" method="GET" class="grid grid-cols-1 sm:grid-cols-3 gap-3 px-4 pb-4">
+              <input type="hidden" name="q" value="<?= htmlspecialchars($search) ?>" />
+              <div><label class="text-xs font-medium block mb-1">Status</label><select name="status" class="select select-bordered select-sm w-full"><option value="">Semua status</option><option value="Available" <?= $statusFilter === 'Available' ? 'selected' : '' ?>>Boleh Bertugas</option><option value="Leave" <?= $statusFilter === 'Leave' ? 'selected' : '' ?>>Cuti</option><option value="Inactive" <?= $statusFilter === 'Inactive' ? 'selected' : '' ?>>Tidak Aktif</option></select></div>
+              <div><label class="text-xs font-medium block mb-1">Kenderaan</label><select name="vehicle_id" class="select select-bordered select-sm w-full"><option value="0">Semua kenderaan</option><?php foreach ($filterVehicles as $filterVehicle): ?><option value="<?= (int)$filterVehicle['vehicle_id'] ?>" <?= $vehicleFilter === (int)$filterVehicle['vehicle_id'] ? 'selected' : '' ?>><?= htmlspecialchars($filterVehicle['plate_no']) ?></option><?php endforeach; ?></select></div>
+              <div class="flex items-end gap-2"><button type="submit" class="btn btn-sm text-white border-0" style="background:var(--ta-brand)">Tapis</button><?php if ($hasDriverFilters): ?><a href="drivers.php<?= $search !== '' ? '?q=' . urlencode($search) : '' ?>" class="btn btn-sm btn-ghost">Set Semula</a><?php endif; ?></div>
+            </form>
+          </details>
         </div>
 
         <!-- Baris 2: Jadual Pemandu -->

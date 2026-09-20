@@ -150,6 +150,11 @@ $departments = $pdo->query("SELECT department_id, department_name FROM departmen
     ->fetchAll(PDO::FETCH_ASSOC);
 
 $search = trim($_GET['q'] ?? '');
+$roleFilter = $_GET['role'] ?? '';
+$departmentFilter = max(0, (int)($_GET['department_id'] ?? 0));
+$registeredDate = trim($_GET['registered_date'] ?? '');
+if (!in_array($roleFilter, ['SuperAdmin', 'Admin', 'User'], true)) $roleFilter = '';
+if ($registeredDate !== '' && !DateTime::createFromFormat('Y-m-d', $registeredDate)) $registeredDate = '';
 $perPage = 10;
 $page    = max(1, (int)($_GET['page'] ?? 1));
 $offset  = ($page - 1) * $perPage;
@@ -159,48 +164,35 @@ function buildUsersPageUrl(int $p, string $search): string {
     if ($search !== '') {
         $params['q'] = $search;
     }
+    foreach (['role' => $GLOBALS['roleFilter'], 'department_id' => $GLOBALS['departmentFilter'], 'registered_date' => $GLOBALS['registeredDate']] as $key => $value) {
+      if ($value !== '' && $value !== 0) $params[$key] = $value;
+    }
     return 'users.php?' . http_build_query($params);
 }
 
-if ($search !== '') {
-    $like = "%{$search}%";
-
-    $countStmt = $pdo->prepare(
-        "SELECT COUNT(*) FROM users u
-         LEFT JOIN departments d ON d.department_id = u.department_id
-         WHERE u.fullname LIKE :like1 OR u.email LIKE :like2 OR d.department_name LIKE :like3"
-    );
-    $countStmt->execute([':like1' => $like, ':like2' => $like, ':like3' => $like]);
-    $totalRows = (int)$countStmt->fetchColumn();
-
-    $stmt = $pdo->prepare(
-        "SELECT u.*, d.department_name
-         FROM users u
-         LEFT JOIN departments d ON d.department_id = u.department_id
-         WHERE u.fullname LIKE :like1 OR u.email LIKE :like2 OR d.department_name LIKE :like3
-         ORDER BY u.created_at DESC
-         LIMIT :limit OFFSET :offset"
-    );
-    $stmt->bindValue(':like1', $like);
-    $stmt->bindValue(':like2', $like);
-    $stmt->bindValue(':like3', $like);
-    $stmt->bindValue(':limit', $perPage, PDO::PARAM_INT);
-    $stmt->bindValue(':offset', $offset, PDO::PARAM_INT);
-    $stmt->execute();
-} else {
-    $totalRows = (int)$pdo->query("SELECT COUNT(*) FROM users")->fetchColumn();
-
-    $stmt = $pdo->prepare(
-        "SELECT u.*, d.department_name
-         FROM users u
-         LEFT JOIN departments d ON d.department_id = u.department_id
-         ORDER BY u.created_at DESC
-         LIMIT :limit OFFSET :offset"
-    );
-    $stmt->bindValue(':limit', $perPage, PDO::PARAM_INT);
-    $stmt->bindValue(':offset', $offset, PDO::PARAM_INT);
-    $stmt->execute();
-}
+  $where = [];
+  $params = [];
+  if ($search !== '') { $where[] = '(u.fullname LIKE :like1 OR u.email LIKE :like2 OR d.department_name LIKE :like3)'; $like = "%{$search}%"; $params[':like1'] = $like; $params[':like2'] = $like; $params[':like3'] = $like; }
+  if ($roleFilter !== '') { $where[] = 'u.role = :role'; $params[':role'] = $roleFilter; }
+  if ($departmentFilter > 0) { $where[] = 'u.department_id = :department_id'; $params[':department_id'] = $departmentFilter; }
+  if ($registeredDate !== '') { $where[] = 'DATE(u.created_at) = :registered_date'; $params[':registered_date'] = $registeredDate; }
+  $whereSql = $where ? 'WHERE ' . implode(' AND ', $where) : '';
+  $countStmt = $pdo->prepare("SELECT COUNT(*) FROM users u LEFT JOIN departments d ON d.department_id = u.department_id $whereSql");
+  foreach ($params as $key => $value) $countStmt->bindValue($key, $value);
+  $countStmt->execute();
+  $totalRows = (int)$countStmt->fetchColumn();
+  $stmt = $pdo->prepare(
+    "SELECT u.*, d.department_name
+     FROM users u
+     LEFT JOIN departments d ON d.department_id = u.department_id
+     $whereSql
+     ORDER BY u.created_at DESC
+     LIMIT :limit OFFSET :offset"
+  );
+  foreach ($params as $key => $value) $stmt->bindValue($key, $value);
+  $stmt->bindValue(':limit', $perPage, PDO::PARAM_INT);
+  $stmt->bindValue(':offset', $offset, PDO::PARAM_INT);
+  $stmt->execute();
 $users = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
 $totalPages = max(1, (int)ceil($totalRows / $perPage));
@@ -378,6 +370,20 @@ include 'includes/layout_header.php';
             <p class="text-sm mb-1" style="color:var(--ta-muted)">Pengguna Biasa</p>
             <h5 class="text-2xl font-bold"><?= $totalStaff ?></h5>
           </div>
+        </div>
+
+        <?php $hasUserFilters = $roleFilter !== '' || $departmentFilter > 0 || $registeredDate !== ''; ?>
+        <div class="card p-5 mt-5">
+          <details class="rounded-xl border" style="border-color:var(--ta-border)" <?= $hasUserFilters ? 'open' : '' ?>>
+            <summary class="cursor-pointer list-none px-4 py-3 text-sm font-semibold flex items-center justify-between gap-3"><span class="flex items-center gap-2"><svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M3.75 6.75h16.5M6.75 12h10.5m-7.5 5.25h4.5" /></svg>Penapis Lanjutan<?= $hasUserFilters ? ' <span class="ta-badge badge badge-info">Aktif</span>' : '' ?></span><span class="text-xs text-slate-400">Peranan, jabatan &amp; tarikh daftar</span></summary>
+            <form action="users.php" method="GET" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 px-4 pb-4">
+              <input type="hidden" name="q" value="<?= htmlspecialchars($search) ?>" />
+              <div><label class="text-xs font-medium block mb-1">Peranan</label><select name="role" class="select select-bordered select-sm w-full"><option value="">Semua peranan</option><?php foreach (['SuperAdmin', 'Admin', 'User'] as $filterRole): ?><option value="<?= $filterRole ?>" <?= $roleFilter === $filterRole ? 'selected' : '' ?>><?= $filterRole === 'User' ? 'Pengguna Biasa' : $filterRole ?></option><?php endforeach; ?></select></div>
+              <div><label class="text-xs font-medium block mb-1">Jabatan</label><select name="department_id" class="select select-bordered select-sm w-full"><option value="0">Semua jabatan</option><?php foreach ($departments as $filterDepartment): ?><option value="<?= (int)$filterDepartment['department_id'] ?>" <?= $departmentFilter === (int)$filterDepartment['department_id'] ? 'selected' : '' ?>><?= htmlspecialchars($filterDepartment['department_name']) ?></option><?php endforeach; ?></select></div>
+              <div><label class="text-xs font-medium block mb-1">Didaftar pada</label><input type="date" name="registered_date" value="<?= htmlspecialchars($registeredDate) ?>" class="input input-bordered input-sm w-full" /></div>
+              <div class="flex items-end gap-2"><button type="submit" class="btn btn-sm text-white border-0" style="background:var(--ta-brand)">Tapis</button><?php if ($hasUserFilters): ?><a href="users.php<?= $search !== '' ? '?q=' . urlencode($search) : '' ?>" class="btn btn-sm btn-ghost">Set Semula</a><?php endif; ?></div>
+            </form>
+          </details>
         </div>
 
         <!-- Baris 2: Jadual Pengguna -->

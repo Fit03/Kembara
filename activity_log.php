@@ -261,7 +261,8 @@ include 'includes/layout_header.php';
         </div>
 
         <!-- Baris 2: Penapis -->
-        <div class="card p-5 mt-5">
+        <details class="card p-5 mt-5" <?= $search !== '' || $module !== '' || $range !== 'all' ? 'open' : '' ?>>
+          <summary class="cursor-pointer list-none text-sm font-semibold flex items-center justify-between gap-3"><span class="flex items-center gap-2"><svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M3.75 6.75h16.5M6.75 12h10.5m-7.5 5.25h4.5" /></svg>Penapis Aktiviti<?= $search !== '' || $module !== '' || $range !== 'all' ? ' <span class="ta-badge badge badge-info">Aktif</span>' : '' ?></span><span class="text-xs text-slate-400">Carian, modul &amp; tempoh</span></summary>
           <form action="activity_log.php" method="GET" class="flex flex-wrap items-end gap-3">
             <div class="flex-1 min-w-[14rem]">
               <label class="text-xs font-medium block mb-1" style="color:var(--ta-muted)">Carian</label>
@@ -293,7 +294,7 @@ include 'includes/layout_header.php';
               <?php endif; ?>
             </div>
           </form>
-        </div>
+        </details>
 
         <!-- Baris 3: Suapan Aktiviti -->
         <div class="card p-5 mt-5">

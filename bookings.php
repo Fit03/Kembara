@@ -437,6 +437,16 @@ if (!in_array($statusFilter, $validStatuses, true)) {
 }
 
 $search  = trim($_GET['q'] ?? '');
+$datePreset = $_GET['date_preset'] ?? '';
+$bookingDate = trim($_GET['booking_date'] ?? '');
+$requesterId = max(0, (int)($_GET['requester_id'] ?? 0));
+$vehicleId = max(0, (int)($_GET['vehicle_id'] ?? 0));
+$driverId = max(0, (int)($_GET['driver_id'] ?? 0));
+$tripTypeFilter = $_GET['trip_type'] ?? '';
+$validDatePresets = ['', 'today', 'yesterday'];
+if (!in_array($datePreset, $validDatePresets, true)) $datePreset = '';
+if ($bookingDate !== '' && !DateTime::createFromFormat('Y-m-d', $bookingDate)) $bookingDate = '';
+if (!in_array($tripTypeFilter, ['One Way', 'Return'], true)) $tripTypeFilter = '';
 $perPage = 10;
 $page    = max(1, (int)($_GET['page'] ?? 1));
 $offset  = ($page - 1) * $perPage;
@@ -445,12 +455,18 @@ function buildBookingsPageUrl(int $p, string $search, string $status): string {
     $params = ['page' => $p];
     if ($search !== '') $params['q'] = $search;
     if ($status !== 'All') $params['status'] = $status;
+  foreach (['date_preset' => $GLOBALS['datePreset'], 'booking_date' => $GLOBALS['bookingDate'], 'requester_id' => $GLOBALS['requesterId'], 'vehicle_id' => $GLOBALS['vehicleId'], 'driver_id' => $GLOBALS['driverId'], 'trip_type' => $GLOBALS['tripTypeFilter']] as $key => $value) {
+    if ($value !== '' && $value !== 0) $params[$key] = $value;
+  }
     return 'bookings.php?' . http_build_query($params);
 }
 function buildBookingsFilterUrl(string $search, string $status): string {
     $params = [];
     if ($search !== '') $params['q'] = $search;
     if ($status !== 'All') $params['status'] = $status;
+  foreach (['date_preset' => $GLOBALS['datePreset'], 'booking_date' => $GLOBALS['bookingDate'], 'requester_id' => $GLOBALS['requesterId'], 'vehicle_id' => $GLOBALS['vehicleId'], 'driver_id' => $GLOBALS['driverId'], 'trip_type' => $GLOBALS['tripTypeFilter']] as $key => $value) {
+    if ($value !== '' && $value !== 0) $params[$key] = $value;
+  }
     return 'bookings.php' . ($params ? '?' . http_build_query($params) : '');
 }
 
@@ -470,6 +486,30 @@ if ($role === 'User') {
 if ($statusFilter !== 'All') {
     $where[] = 'vb.status = :status';
     $params[':status'] = $statusFilter;
+}
+if ($datePreset === 'today') {
+  $where[] = 'DATE(vb.created_at) = CURRENT_DATE()';
+} elseif ($datePreset === 'yesterday') {
+  $where[] = 'DATE(vb.created_at) = DATE_SUB(CURRENT_DATE(), INTERVAL 1 DAY)';
+} elseif ($bookingDate !== '') {
+  $where[] = 'DATE(vb.created_at) = :booking_date';
+  $params[':booking_date'] = $bookingDate;
+}
+if ($requesterId > 0) {
+  $where[] = 'vb.user_id = :requester_id';
+  $params[':requester_id'] = $requesterId;
+}
+if ($vehicleId > 0) {
+  $where[] = 'vb.vehicle_id = :vehicle_id';
+  $params[':vehicle_id'] = $vehicleId;
+}
+if ($driverId > 0) {
+  $where[] = 'vb.driver_id = :driver_id';
+  $params[':driver_id'] = $driverId;
+}
+if ($tripTypeFilter !== '') {
+  $where[] = 'vb.trip_type = :trip_type';
+  $params[':trip_type'] = $tripTypeFilter;
 }
 if ($search !== '') {
     $like = "%{$search}%";
@@ -522,6 +562,10 @@ $assignableDrivers = $pdo->query(
      WHERE dr.status = 'Available'
      ORDER BY u.fullname"
 )->fetchAll(PDO::FETCH_ASSOC);
+
+$filterUsers = $pdo->query("SELECT user_id, fullname FROM users ORDER BY fullname")->fetchAll(PDO::FETCH_ASSOC);
+$filterVehicles = $pdo->query("SELECT vehicle_id, plate_no, vehicle_name FROM vehicles ORDER BY plate_no")->fetchAll(PDO::FETCH_ASSOC);
+$filterDrivers = $pdo->query("SELECT dr.driver_id, u.fullname FROM drivers dr JOIN users u ON u.user_id = dr.user_id ORDER BY u.fullname")->fetchAll(PDO::FETCH_ASSOC);
 
 // Kiraan statistik (skop mengikut peranan)
 $statCountStmt = $pdo->prepare(
@@ -817,6 +861,83 @@ include 'includes/layout_header.php';
             <p class="text-sm mb-1" style="color:var(--ta-muted)">Selesai</p>
             <h5 class="text-2xl font-bold"><?= $completedCount ?></h5>
           </div>
+        </div>
+
+        <?php $hasBookingFilters = $datePreset !== '' || $bookingDate !== '' || $requesterId > 0 || $vehicleId > 0 || $driverId > 0 || $tripTypeFilter !== ''; ?>
+        <div class="card p-5 mt-5">
+          <details class="rounded-xl border" style="border-color:var(--ta-border)" <?= $hasBookingFilters ? 'open' : '' ?>>
+            <summary class="cursor-pointer list-none px-4 py-3 text-sm font-semibold flex items-center justify-between gap-3">
+              <span class="flex items-center gap-2">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M3.75 6.75h16.5M6.75 12h10.5m-7.5 5.25h4.5" /></svg>
+                Penapis Lanjutan<?= $hasBookingFilters ? ' <span class="ta-badge badge badge-info">Aktif</span>' : '' ?>
+              </span>
+              <span class="text-xs text-slate-400">Tarikh, pemohon, kenderaan &amp; pemandu</span>
+            </summary>
+            <form action="bookings.php" method="GET" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 px-4 pb-4">
+              <input type="hidden" name="q" value="<?= htmlspecialchars($search) ?>" />
+              <input type="hidden" name="status" value="<?= $statusFilter !== 'All' ? htmlspecialchars($statusFilter) : '' ?>" />
+              <div>
+                <label class="text-xs font-medium block mb-1">Tempahan Dibuat</label>
+                <select name="date_preset" class="select select-bordered select-sm w-full">
+                  <option value="">Semua tarikh</option>
+                  <option value="today" <?= $datePreset === 'today' ? 'selected' : '' ?>>Hari ini</option>
+                  <option value="yesterday" <?= $datePreset === 'yesterday' ? 'selected' : '' ?>>Semalam</option>
+                </select>
+              </div>
+              <div>
+                <label class="text-xs font-medium block mb-1">Tarikh khusus</label>
+                <input type="date" name="booking_date" value="<?= htmlspecialchars($bookingDate) ?>" class="input input-bordered input-sm w-full" />
+              </div>
+              <div>
+                <label class="text-xs font-medium block mb-1">Status</label>
+                <select name="status" class="select select-bordered select-sm w-full">
+                  <option value="">Semua status</option>
+                  <?php foreach ($validStatuses as $filterStatus): ?>
+                    <option value="<?= htmlspecialchars($filterStatus) ?>" <?= $statusFilter === $filterStatus ? 'selected' : '' ?>><?= htmlspecialchars($statusLabel($filterStatus)) ?></option>
+                  <?php endforeach; ?>
+                </select>
+              </div>
+              <div>
+                <label class="text-xs font-medium block mb-1">Pemohon</label>
+                <select name="requester_id" class="select select-bordered select-sm w-full">
+                  <option value="0">Semua pemohon</option>
+                  <?php foreach ($filterUsers as $filterUser): ?>
+                    <option value="<?= (int)$filterUser['user_id'] ?>" <?= $requesterId === (int)$filterUser['user_id'] ? 'selected' : '' ?>><?= htmlspecialchars($filterUser['fullname']) ?></option>
+                  <?php endforeach; ?>
+                </select>
+              </div>
+              <div>
+                <label class="text-xs font-medium block mb-1">Kenderaan</label>
+                <select name="vehicle_id" class="select select-bordered select-sm w-full">
+                  <option value="0">Semua kenderaan</option>
+                  <?php foreach ($filterVehicles as $filterVehicle): ?>
+                    <option value="<?= (int)$filterVehicle['vehicle_id'] ?>" <?= $vehicleId === (int)$filterVehicle['vehicle_id'] ? 'selected' : '' ?>><?= htmlspecialchars(trim(($filterVehicle['plate_no'] ?? '') . ' ' . ($filterVehicle['vehicle_name'] ?? ''))) ?></option>
+                  <?php endforeach; ?>
+                </select>
+              </div>
+              <div>
+                <label class="text-xs font-medium block mb-1">Pemandu</label>
+                <select name="driver_id" class="select select-bordered select-sm w-full">
+                  <option value="0">Semua pemandu</option>
+                  <?php foreach ($filterDrivers as $filterDriver): ?>
+                    <option value="<?= (int)$filterDriver['driver_id'] ?>" <?= $driverId === (int)$filterDriver['driver_id'] ? 'selected' : '' ?>><?= htmlspecialchars($filterDriver['fullname']) ?></option>
+                  <?php endforeach; ?>
+                </select>
+              </div>
+              <div>
+                <label class="text-xs font-medium block mb-1">Jenis perjalanan</label>
+                <select name="trip_type" class="select select-bordered select-sm w-full">
+                  <option value="">Semua jenis</option>
+                  <option value="One Way" <?= $tripTypeFilter === 'One Way' ? 'selected' : '' ?>>Sehala</option>
+                  <option value="Return" <?= $tripTypeFilter === 'Return' ? 'selected' : '' ?>>Pergi Balik</option>
+                </select>
+              </div>
+              <div class="flex items-end gap-2">
+                <button type="submit" class="btn btn-sm text-white border-0" style="background:var(--ta-brand)">Tapis</button>
+                <?php if ($hasBookingFilters || $statusFilter !== 'All'): ?><a href="bookings.php<?= $search !== '' ? '?q=' . urlencode($search) : '' ?>" class="btn btn-sm btn-ghost">Set Semula</a><?php endif; ?>
+              </div>
+            </form>
+          </details>
         </div>
 
         <!-- Baris 2: Jadual Tempahan -->

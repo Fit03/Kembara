@@ -276,6 +276,11 @@ if (isset($_SESSION['flash'])) {
    Data Halaman
    ========================================================== */
 $search  = trim($_GET['q'] ?? '');
+$statusFilter = $_GET['status'] ?? '';
+$driverFilter = max(0, (int)($_GET['driver_id'] ?? 0));
+$roadTaxFilter = $_GET['road_tax_status'] ?? '';
+if (!in_array($statusFilter, ['Available', 'Booked', 'Maintenance', 'Inactive'], true)) $statusFilter = '';
+if (!in_array($roadTaxFilter, ['expired', 'soon', 'current'], true)) $roadTaxFilter = '';
 $perPage = 10;
 $page    = max(1, (int)($_GET['page'] ?? 1));
 $offset  = ($page - 1) * $perPage;
@@ -285,6 +290,9 @@ function buildVehiclesPageUrl(int $p, string $search): string {
     if ($search !== '') {
         $params['q'] = $search;
     }
+  foreach (['status' => $GLOBALS['statusFilter'], 'driver_id' => $GLOBALS['driverFilter'], 'road_tax_status' => $GLOBALS['roadTaxFilter']] as $key => $value) {
+    if ($value !== '' && $value !== 0) $params[$key] = $value;
+  }
     return 'vehicles.php?' . http_build_query($params);
 }
 
@@ -301,51 +309,38 @@ $baseFrom = "FROM vehicles v
                  ORDER BY next_booking.depart_datetime ASC, next_booking.booking_id ASC
                  LIMIT 1
                )";
-
-if ($search !== '') {
-    $like = "%{$search}%";
-
-    $countStmt = $pdo->prepare("SELECT COUNT(*) $baseFrom
-        WHERE v.plate_no LIKE :like1 OR v.vehicle_name LIKE :like2 OR v.vehicle_type LIKE :like3");
-    $countStmt->execute([':like1' => $like, ':like2' => $like, ':like3' => $like]);
-    $totalRows = (int)$countStmt->fetchColumn();
-
-    $stmt = $pdo->prepare(
-        "SELECT v.*, u.fullname AS driver_name,
-          current_booking.booking_id AS active_booking_id,
-          current_booking.booking_no AS active_booking_no,
-                current_booking.workflow_stage AS active_booking_stage,
-                current_booking.depart_datetime AS active_depart_datetime,
-                current_booking.return_datetime AS active_return_datetime
-         $baseFrom
-         WHERE v.plate_no LIKE :like1 OR v.vehicle_name LIKE :like2 OR v.vehicle_type LIKE :like3
-         ORDER BY FIELD(v.status, 'Available', 'Booked', 'Maintenance', 'Inactive'), v.plate_no
-         LIMIT :limit OFFSET :offset"
-    );
-    $stmt->bindValue(':like1', $like);
-    $stmt->bindValue(':like2', $like);
-    $stmt->bindValue(':like3', $like);
-    $stmt->bindValue(':limit', $perPage, PDO::PARAM_INT);
-    $stmt->bindValue(':offset', $offset, PDO::PARAM_INT);
-    $stmt->execute();
-} else {
-    $totalRows = (int)$pdo->query("SELECT COUNT(*) FROM vehicles")->fetchColumn();
-
-    $stmt = $pdo->prepare(
-        "SELECT v.*, u.fullname AS driver_name,
-          current_booking.booking_id AS active_booking_id,
-          current_booking.booking_no AS active_booking_no,
-                current_booking.workflow_stage AS active_booking_stage,
-                current_booking.depart_datetime AS active_depart_datetime,
-                current_booking.return_datetime AS active_return_datetime
-         $baseFrom
-         ORDER BY FIELD(v.status, 'Available', 'Booked', 'Maintenance', 'Inactive'), v.plate_no
-         LIMIT :limit OFFSET :offset"
-    );
-    $stmt->bindValue(':limit', $perPage, PDO::PARAM_INT);
-    $stmt->bindValue(':offset', $offset, PDO::PARAM_INT);
-    $stmt->execute();
-}
+        $where = [];
+        $params = [];
+        if ($search !== '') {
+          $where[] = '(v.plate_no LIKE :like1 OR v.vehicle_name LIKE :like2 OR v.vehicle_type LIKE :like3)';
+          $like = "%{$search}%";
+          $params[':like1'] = $like; $params[':like2'] = $like; $params[':like3'] = $like;
+        }
+        if ($statusFilter !== '') { $where[] = 'v.status = :status'; $params[':status'] = $statusFilter; }
+        if ($driverFilter > 0) { $where[] = 'v.driver_id = :driver_id'; $params[':driver_id'] = $driverFilter; }
+        if ($roadTaxFilter === 'expired') $where[] = 'v.road_tax_expiry < CURRENT_DATE()';
+        if ($roadTaxFilter === 'soon') $where[] = 'v.road_tax_expiry BETWEEN CURRENT_DATE() AND DATE_ADD(CURRENT_DATE(), INTERVAL 30 DAY)';
+        if ($roadTaxFilter === 'current') $where[] = '(v.road_tax_expiry IS NULL OR v.road_tax_expiry > DATE_ADD(CURRENT_DATE(), INTERVAL 30 DAY))';
+        $whereSql = $where ? 'WHERE ' . implode(' AND ', $where) : '';
+        $countStmt = $pdo->prepare("SELECT COUNT(*) $baseFrom $whereSql");
+        foreach ($params as $key => $value) $countStmt->bindValue($key, $value);
+        $countStmt->execute();
+        $totalRows = (int)$countStmt->fetchColumn();
+        $stmt = $pdo->prepare(
+          "SELECT v.*, u.fullname AS driver_name,
+            current_booking.booking_id AS active_booking_id,
+            current_booking.booking_no AS active_booking_no,
+            current_booking.workflow_stage AS active_booking_stage,
+            current_booking.depart_datetime AS active_depart_datetime,
+            current_booking.return_datetime AS active_return_datetime
+           $baseFrom $whereSql
+           ORDER BY FIELD(v.status, 'Available', 'Booked', 'Maintenance', 'Inactive'), v.plate_no
+           LIMIT :limit OFFSET :offset"
+        );
+        foreach ($params as $key => $value) $stmt->bindValue($key, $value);
+        $stmt->bindValue(':limit', $perPage, PDO::PARAM_INT);
+        $stmt->bindValue(':offset', $offset, PDO::PARAM_INT);
+        $stmt->execute();
 $vehicles = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
 $totalPages = max(1, (int)ceil($totalRows / $perPage));
@@ -571,6 +566,23 @@ include 'includes/layout_header.php';
             <p class="text-sm mb-1" style="color:var(--ta-muted)">Penyelenggaraan</p>
             <h5 class="text-2xl font-bold"><?= $maintenanceCount ?></h5>
           </div>
+        </div>
+
+        <?php $hasVehicleFilters = $statusFilter !== '' || $driverFilter > 0 || $roadTaxFilter !== ''; ?>
+        <div class="card p-5 mt-5">
+          <details class="rounded-xl border" style="border-color:var(--ta-border)" <?= $hasVehicleFilters ? 'open' : '' ?>>
+            <summary class="cursor-pointer list-none px-4 py-3 text-sm font-semibold flex items-center justify-between gap-3">
+              <span class="flex items-center gap-2"><svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M3.75 6.75h16.5M6.75 12h10.5m-7.5 5.25h4.5" /></svg>Penapis Lanjutan<?= $hasVehicleFilters ? ' <span class="ta-badge badge badge-info">Aktif</span>' : '' ?></span>
+              <span class="text-xs text-slate-400">Status, pemandu &amp; road tax</span>
+            </summary>
+            <form action="vehicles.php" method="GET" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 px-4 pb-4">
+              <input type="hidden" name="q" value="<?= htmlspecialchars($search) ?>" />
+              <div><label class="text-xs font-medium block mb-1">Status</label><select name="status" class="select select-bordered select-sm w-full"><option value="">Semua status</option><?php foreach (['Available' => 'Sedia Ada', 'Booked' => 'Sedang Digunakan', 'Maintenance' => 'Penyelenggaraan', 'Inactive' => 'Tidak Aktif'] as $key => $label): ?><option value="<?= $key ?>" <?= $statusFilter === $key ? 'selected' : '' ?>><?= $label ?></option><?php endforeach; ?></select></div>
+              <div><label class="text-xs font-medium block mb-1">Pemandu</label><select name="driver_id" class="select select-bordered select-sm w-full"><option value="0">Semua pemandu</option><?php foreach ($driverOptions as $driverOption): ?><option value="<?= (int)$driverOption['driver_id'] ?>" <?= $driverFilter === (int)$driverOption['driver_id'] ? 'selected' : '' ?>><?= htmlspecialchars($driverOption['fullname']) ?></option><?php endforeach; ?></select></div>
+              <div><label class="text-xs font-medium block mb-1">Road tax</label><select name="road_tax_status" class="select select-bordered select-sm w-full"><option value="">Semua dokumen</option><option value="expired" <?= $roadTaxFilter === 'expired' ? 'selected' : '' ?>>Telah tamat</option><option value="soon" <?= $roadTaxFilter === 'soon' ? 'selected' : '' ?>>Tamat dalam 30 hari</option><option value="current" <?= $roadTaxFilter === 'current' ? 'selected' : '' ?>>Masih terkini</option></select></div>
+              <div class="flex items-end gap-2"><button type="submit" class="btn btn-sm text-white border-0" style="background:var(--ta-brand)">Tapis</button><?php if ($hasVehicleFilters): ?><a href="vehicles.php<?= $search !== '' ? '?q=' . urlencode($search) : '' ?>" class="btn btn-sm btn-ghost">Set Semula</a><?php endif; ?></div>
+            </form>
+          </details>
         </div>
 
         <!-- Baris 2: Jadual Kenderaan -->
