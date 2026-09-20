@@ -232,6 +232,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $del = $pdo->prepare("DELETE FROM vehicles WHERE vehicle_id = ?");
             $del->execute([$vid]);
 
+            log_activity($pdo, $currentUserId, 'Kenderaan', 'Padam', "Kenderaan {$plateNo} telah dipadam."); 
+
             $oldRoadTaxAbsolutePath = is_string($vehicle['road_tax_document'])
               ? roadTaxAbsolutePath($vehicle['road_tax_document']) : null;
             if ($oldRoadTaxAbsolutePath && is_file($oldRoadTaxAbsolutePath)) {

@@ -128,8 +128,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 throw new RuntimeException('Pemandu tidak sah.');
             }
 
+            $info = $pdo->prepare("SELECT u.fullname, dr.license FROM drivers dr JOIN users u ON u.user_id = dr.user_id WHERE dr.driver_id = ?");
+            $info->execute([$did]);
+            $driverRow = $info->fetch();
+
             $del = $pdo->prepare("DELETE FROM drivers WHERE driver_id = ?");
             $del->execute([$did]);
+
+            $driverLabel = $driverRow ? "{$driverRow['fullname']} (lesen {$driverRow['license']})" : "ID {$did}";
+            log_activity($pdo, $currentUserId, 'Pemandu', 'Padam', "Rekod pemandu {$driverLabel} telah dipadam.");
 
             $flash = ['type' => 'success', 'msg' => 'Rekod pemandu berjaya dipadam.'];
         }

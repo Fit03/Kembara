@@ -246,6 +246,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
               $pdo->prepare("DELETE FROM booking_history WHERE booking_id=?")->execute([$bid]);
               $pdo->prepare("DELETE FROM vehicle_bookings WHERE booking_id=?")->execute([$bid]);
 
+              log_activity($pdo, $currentUserId, 'Tempahan', 'Padam', "Tempahan {$booking['booking_no']} telah dipadam.");
+
               $flash = ['type' => 'success', 'msg' => "Tempahan {$booking['booking_no']} telah dipadam."];
 
             } elseif ($action === 'assign_driver') {

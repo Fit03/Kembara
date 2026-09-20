@@ -121,6 +121,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $del = $pdo->prepare("DELETE FROM users WHERE user_id = ?");
             $del->execute([$uid]);
 
+            log_activity($pdo, $currentUserId, 'Pengguna', 'Padam', "Pengguna '{$victimName}' telah dipadam.");
+
             $flash = ['type' => 'success', 'msg' => "Pengguna '{$victimName}' berjaya dipadam."];
         }
     } catch (RuntimeException $e) {

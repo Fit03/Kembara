@@ -57,9 +57,10 @@ if (!in_array($range, ['today', '7d', '30d', 'all'], true)) {
 
 $unionSql = "
     SELECT al.module AS module, al.action AS action, al.description AS description,
-           COALESCE(u1.fullname, 'Pengguna Dipadam') AS actor_name,
+           COALESCE(u1.fullname, CASE WHEN al.user_id IS NULL THEN 'Tidak Dikenali' ELSE 'Pengguna Dipadam' END) AS actor_name,
            u1.profile_picture AS actor_photo, al.role_at_time AS role_at_time,
-           al.user_agent AS user_agent, al.created_at AS created_at
+           al.user_agent AS user_agent, al.ip_address AS ip_address,
+           NULL AS booking_id, al.created_at AS created_at
     FROM activity_log al
     LEFT JOIN users u1 ON u1.user_id = al.user_id
 
@@ -68,7 +69,8 @@ $unionSql = "
     SELECT 'Tempahan' AS module, bh.action AS action, bh.remarks AS description,
            COALESCE(u2.fullname, 'Pengguna Dipadam') AS actor_name,
            u2.profile_picture AS actor_photo, NULL AS role_at_time,
-           NULL AS user_agent, bh.action_datetime AS created_at
+           NULL AS user_agent, NULL AS ip_address,
+           bh.booking_id AS booking_id, bh.action_datetime AS created_at
     FROM booking_history bh
     LEFT JOIN users u2 ON u2.user_id = bh.action_by
 ";
@@ -78,10 +80,11 @@ $params = [];
 
 if ($search !== '') {
     $like = "%{$search}%";
-    $where[] = "(actor_name LIKE :search1 OR description LIKE :search2 OR action LIKE :search3)";
+    $where[] = "(actor_name LIKE :search1 OR description LIKE :search2 OR action LIKE :search3 OR ip_address LIKE :search4)";
     $params[':search1'] = $like;
     $params[':search2'] = $like;
     $params[':search3'] = $like;
+    $params[':search4'] = $like;
 }
 if ($module !== '') {
     $where[] = "module = :module";
@@ -134,21 +137,30 @@ $weekCount  = (int)$pdo->query("SELECT COUNT(*) FROM ({$unionSql}) AS activity W
 $totalCount = (int)$pdo->query("SELECT COUNT(*) FROM ({$unionSql}) AS activity")->fetchColumn();
 $activeToday = (int)$pdo->query("SELECT COUNT(DISTINCT actor_name) FROM ({$unionSql}) AS activity WHERE created_at >= CURDATE()")->fetchColumn();
 
-$moduleBadge = fn(string $m) => match ($m) {
-    'Log Masuk'  => 'badge-soft-info',
-    'Log Keluar' => 'badge-soft-neutral',
-    'Pengguna'   => 'badge-soft-error',
-    'Kenderaan'  => 'badge-soft-warning',
-    'Pemandu'    => 'badge-soft-success',
-    'Tempahan'   => 'badge-soft-info',
-    default      => 'badge-soft-neutral',
+// Hanya kolum Tindakan berwarna supaya mata terus tertumpu pada perkara penting.
+$actionBadge = fn(string $a) => match (true) {
+    in_array($a, ['Log Masuk Gagal', 'Ditolak', 'Dibatalkan', 'Driver Rejected', 'Padam'], true) => 'badge-soft-error',
+    in_array($a, ['Log Masuk', 'Diluluskan', 'Driver Accepted', 'Selesai', 'Tambah', 'Dicipta'], true) => 'badge-soft-success',
+    in_array($a, ['Kemaskini', 'Driver Assigned'], true) => 'badge-soft-warning',
+    $a === 'Log Keluar' => 'badge-soft-neutral',
+    default => 'badge-soft-info',
 };
 
-$actionBadge = fn(string $a) => match (true) {
-    in_array($a, ['Ditolak', 'Padam', 'Dibatalkan'], true) => 'badge-soft-error',
-    in_array($a, ['Diluluskan', 'Tambah', 'Dicipta'], true) => 'badge-soft-success',
-    $a === 'Kemaskini' => 'badge-soft-warning',
-    default => 'badge-soft-info',
+/** Masa relatif ringkas untuk aktiviti hari ini. */
+$relTime = function (int $ts): string {
+    $diff = time() - $ts;
+    return match (true) {
+        $diff < 60   => 'baru sahaja',
+        $diff < 3600 => floor($diff / 60) . ' min lalu',
+        default      => floor($diff / 3600) . ' jam lalu',
+    };
+};
+
+$dayLabel = function (string $ymd): string {
+    $pretty = date('d M Y', strtotime($ymd));
+    if ($ymd === date('Y-m-d'))                        return "Hari Ini · {$pretty}";
+    if ($ymd === date('Y-m-d', strtotime('-1 day')))   return "Semalam · {$pretty}";
+    return $pretty;
 };
 
 $moduleIcon = function (string $m): string {
@@ -296,52 +308,124 @@ include 'includes/layout_header.php';
           </form>
         </details>
 
-        <!-- Baris 3: Suapan Aktiviti -->
+        <!-- Baris 3: Jadual Log Aktiviti -->
         <div class="card p-5 mt-5">
           <div class="flex items-center justify-between gap-3 mb-4 flex-wrap">
             <div>
-              <h6 class="font-semibold">Suapan Aktiviti</h6>
-              <p class="mb-0 text-sm" style="color:var(--ta-muted)">Rekod aktiviti merentas seluruh sistem Kembara</p>
+              <h6 class="font-semibold">Log Aktiviti</h6>
+              <p class="mb-0 text-sm" style="color:var(--ta-muted)">Rekod aktiviti merentas seluruh sistem Kembara, yang terbaharu di atas</p>
             </div>
           </div>
 
-          <?php if (empty($activities)): ?>
-            <p class="text-sm text-center py-6" style="color:var(--ta-muted)">Tiada aktiviti dijumpai untuk penapis semasa.</p>
-          <?php else: ?>
-            <div class="ta-timeline">
-              <?php foreach ($activities as $a): ?>
-                <div class="ta-timeline-item">
-                  <span class="ta-timeline-dot">
-                    <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.2"><?= $moduleIcon($a['module']) ?></svg>
-                  </span>
-                  <div class="flex items-start justify-between gap-3 flex-wrap">
-                    <div class="min-w-0">
-                      <div class="flex items-center gap-2 flex-wrap">
-                        <span class="ta-badge <?= $moduleBadge($a['module']) ?>"><?= htmlspecialchars($a['module']) ?></span>
-                        <span class="ta-badge <?= $actionBadge($a['action']) ?>"><?= htmlspecialchars($a['action']) ?></span>
-                        <?php if (!empty($a['role_at_time']) && $roleBadge($a['role_at_time'])): ?>
-                          <span class="ta-badge <?= $roleBadge($a['role_at_time']) ?>"><?= htmlspecialchars($a['role_at_time']) ?></span>
+          <div class="overflow-x-auto -mx-1">
+            <table class="items-center w-full mb-0 align-top">
+              <thead>
+                <tr class="border-b" style="border-color:var(--ta-border)">
+                  <th class="px-3 py-2 text-xs font-semibold text-left uppercase text-slate-400 whitespace-nowrap">Masa</th>
+                  <th class="px-3 py-2 text-xs font-semibold text-left uppercase text-slate-400">Pengguna</th>
+                  <th class="px-3 py-2 text-xs font-semibold text-left uppercase text-slate-400">Modul</th>
+                  <th class="px-3 py-2 text-xs font-semibold text-left uppercase text-slate-400">Tindakan</th>
+                  <th class="px-3 py-2 text-xs font-semibold text-left uppercase text-slate-400">Butiran</th>
+                  <th class="px-3 py-2 text-xs font-semibold text-left uppercase text-slate-400 hidden lg:table-cell">Peranti / IP</th>
+                </tr>
+              </thead>
+              <tbody>
+                <?php if (empty($activities)): ?>
+                  <tr><td colspan="6" class="px-3 py-6 text-sm text-center text-slate-400">Tiada aktiviti dijumpai untuk penapis semasa.</td></tr>
+                <?php endif; ?>
+
+                <?php $lastDay = null; ?>
+                <?php foreach ($activities as $a):
+                  $ts       = strtotime($a['created_at']);
+                  $day      = date('Y-m-d', $ts);
+                  $isFail   = $a['action'] === 'Log Masuk Gagal';
+                  $unknown  = $a['actor_name'] === 'Tidak Dikenali';
+                  $photo    = $a['actor_photo'] ?? null;
+                  $hasPhoto = $photo && is_file(__DIR__ . '/' . $photo);
+                  $rBadge   = $roleBadge($a['role_at_time'] ?? null);
+                  $dev      = $deviceLabel($a['user_agent'] ?? null);
+                  $cell     = 'px-3 py-3 text-sm border-b';
+                ?>
+                  <?php if ($day !== $lastDay): $lastDay = $day; ?>
+                    <tr>
+                      <td colspan="6" class="px-3 pt-4 pb-1.5 text-[0.7rem] font-semibold uppercase tracking-wider" style="color:var(--ta-muted);background:var(--ta-canvas)">
+                        <?= htmlspecialchars($dayLabel($day)) ?>
+                      </td>
+                    </tr>
+                  <?php endif; ?>
+
+                  <tr class="hover:bg-base-200/60 transition-colors"
+                      <?= $isFail ? 'style="background:color-mix(in oklch,var(--color-error) 6%,transparent)"' : '' ?>>
+
+                    <!-- Masa -->
+                    <td class="<?= $cell ?> whitespace-nowrap" style="border-color:var(--ta-border);<?= $isFail ? 'box-shadow:inset 3px 0 0 var(--color-error)' : '' ?>">
+                      <p class="mb-0 font-medium tabular-nums"><?= date('H:i:s', $ts) ?></p>
+                      <?php if ($day === date('Y-m-d')): ?>
+                        <p class="mb-0 text-xs" style="color:var(--ta-muted)"><?= $relTime($ts) ?></p>
+                      <?php endif; ?>
+                    </td>
+
+                    <!-- Pengguna -->
+                    <td class="<?= $cell ?> whitespace-nowrap" style="border-color:var(--ta-border)">
+                      <div class="flex items-center gap-2.5">
+                        <?php if ($hasPhoto): ?>
+                          <div class="rounded-full w-8 h-8 overflow-hidden shrink-0">
+                            <img src="<?= htmlspecialchars($photo) ?>" alt="" class="w-full h-full object-cover" />
+                          </div>
+                        <?php else: ?>
+                          <div class="rounded-full w-8 h-8 flex items-center justify-center font-bold text-xs uppercase shrink-0 <?= $unknown ? '' : 'text-white' ?>"
+                               style="background:<?= $unknown ? 'var(--ta-canvas);color:var(--ta-muted)' : 'var(--ta-brand)' ?>">
+                            <?= $unknown ? '?' : htmlspecialchars(mb_substr($a['actor_name'], 0, 1)) ?>
+                          </div>
                         <?php endif; ?>
+                        <div class="min-w-0">
+                          <p class="mb-0 font-medium truncate"><?= htmlspecialchars($a['actor_name']) ?></p>
+                          <?php if ($rBadge): ?>
+                            <span class="ta-badge <?= $rBadge ?> !text-[0.65rem] !py-0"><?= htmlspecialchars($a['role_at_time']) ?></span>
+                          <?php endif; ?>
+                        </div>
                       </div>
-                      <h6 class="mb-0 mt-1.5 text-sm font-semibold leading-normal">
-                        <?= htmlspecialchars($a['actor_name']) ?>
-                      </h6>
+                    </td>
+
+                    <!-- Modul -->
+                    <td class="<?= $cell ?> whitespace-nowrap" style="border-color:var(--ta-border)">
+                      <span class="inline-flex items-center gap-1.5" style="color:var(--ta-muted)">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8"><?= $moduleIcon($a['module']) ?></svg>
+                        <span style="color:var(--ta-ink)"><?= htmlspecialchars($a['module']) ?></span>
+                      </span>
+                    </td>
+
+                    <!-- Tindakan -->
+                    <td class="<?= $cell ?> whitespace-nowrap" style="border-color:var(--ta-border)">
+                      <span class="ta-badge <?= $actionBadge($a['action']) ?>"><?= htmlspecialchars($a['action']) ?></span>
+                    </td>
+
+                    <!-- Butiran -->
+                    <td class="<?= $cell ?> min-w-[16rem] max-w-md break-words" style="border-color:var(--ta-border)">
                       <?php if (!empty($a['description'])): ?>
-                        <p class="mt-0.5 mb-0 text-xs leading-tight" style="color:var(--ta-muted)"><?= htmlspecialchars($a['description']) ?></p>
+                        <p class="mb-0 leading-snug"><?= htmlspecialchars($a['description']) ?></p>
+                      <?php else: ?>
+                        <span class="text-slate-400">—</span>
                       <?php endif; ?>
-                      <?php $dev = $deviceLabel($a['user_agent'] ?? null); if ($dev): ?>
-                        <p class="mt-1 mb-0 text-[11px] flex items-center gap-1" style="color:var(--ta-muted)">
-                          <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 17.25v1.007a3 3 0 01-.879 2.122L7.5 21h9l-.621-.621A3 3 0 0115 18.257V17.25m6-12V15a2.25 2.25 0 01-2.25 2.25H5.25A2.25 2.25 0 013 15V5.25m18 0V12a2.25 2.25 0 01-2.25 2.25H5.25A2.25 2.25 0 013 12V5.25" /></svg>
-                          <?= htmlspecialchars($dev) ?>
-                        </p>
+                      <?php if (!empty($a['booking_id'])): ?>
+                        <a href="view.php?id=<?= (int)$a['booking_id'] ?>" class="text-xs font-medium hover:underline" style="color:var(--ta-brand)">Lihat tempahan #<?= (int)$a['booking_id'] ?> →</a>
                       <?php endif; ?>
-                    </div>
-                    <span class="text-xs shrink-0" style="color:var(--ta-muted)"><?= htmlspecialchars(date('d M Y, H:i', strtotime($a['created_at']))) ?></span>
-                  </div>
-                </div>
-              <?php endforeach; ?>
-            </div>
-          <?php endif; ?>
+                    </td>
+
+                    <!-- Peranti / IP -->
+                    <td class="<?= $cell ?> whitespace-nowrap hidden lg:table-cell" style="border-color:var(--ta-border)">
+                      <?php if ($dev || !empty($a['ip_address'])): ?>
+                        <?php if ($dev): ?><p class="mb-0 text-xs"><?= htmlspecialchars($dev) ?></p><?php endif; ?>
+                        <?php if (!empty($a['ip_address'])): ?><p class="mb-0 text-xs font-mono" style="color:var(--ta-muted)"><?= htmlspecialchars($a['ip_address']) ?></p><?php endif; ?>
+                      <?php else: ?>
+                        <span class="text-slate-400">—</span>
+                      <?php endif; ?>
+                    </td>
+                  </tr>
+                <?php endforeach; ?>
+              </tbody>
+            </table>
+          </div>
 
           <?php if ($totalRows > 0): ?>
           <div class="flex items-center justify-between gap-3 flex-wrap mt-4 pt-4 border-t" style="border-color:var(--ta-border)">
