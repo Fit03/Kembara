@@ -563,8 +563,5 @@ $extraJS = '
         })();
     </script>
 ';
-
-include 'includes/layout_header.php';
-include 'includes/top_nav.php';
 include 'includes/layout_footer.php';
 ?>
