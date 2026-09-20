@@ -266,7 +266,18 @@ if ($role === 'User') {
     );
           $myHistoryStmt->execute([':uid' => $uid, ':driver_uid' => $uid]);
     $myBookingHistory = $myHistoryStmt->fetchAll(PDO::FETCH_ASSOC);
+
+        $myDriverStmt = $pdo->prepare("SELECT driver_id, status FROM drivers WHERE user_id = ? LIMIT 1");
+        $myDriverStmt->execute([$uid]);
+        $myDriver = $myDriverStmt->fetch(PDO::FETCH_ASSOC) ?: null;
 }
+
+      if (isset($_SESSION['flash'])) {
+        $dashboardFlash = $_SESSION['flash'];
+        unset($_SESSION['flash']);
+      } else {
+        $dashboardFlash = null;
+      }
 
 // --- Layout Config ---
 $pageTitle = "Dashboard";
@@ -288,6 +299,12 @@ include 'includes/layout_header.php';
             <?= htmlspecialchars($greeting) ?>, <span style="color:var(--ta-brand)"><?= htmlspecialchars($firstName) ?></span>
           </h4>
         </div>
+
+        <?php if ($role === 'User' && $dashboardFlash): ?>
+          <div class="card px-4 py-3 mb-5 border" style="border-color: var(--color-<?= $dashboardFlash['type'] === 'success' ? 'success' : 'error' ?>);">
+            <p class="text-sm font-medium mb-0"><?= htmlspecialchars($dashboardFlash['msg']) ?></p>
+          </div>
+        <?php endif; ?>
 
         <?php if ($role === 'User'): ?>
         <!-- ============ Paparan Peribadi (User) ============ -->
@@ -343,6 +360,28 @@ include 'includes/layout_header.php';
             Tempah Kenderaan
           </a>
         </div>
+
+        <?php if ($myDriver): ?>
+        <div class="card p-5 mt-5">
+          <div class="flex items-center justify-between gap-4 flex-wrap">
+            <div>
+              <h6 class="font-semibold mb-1">Status Pemandu Saya</h6>
+              <p class="text-sm mb-0" style="color:var(--ta-muted)">Kemaskini status anda supaya pentadbir tahu bila anda boleh bertugas.</p>
+            </div>
+            <form action="drivers.php" method="POST" class="flex items-center gap-2">
+              <input type="hidden" name="csrf_token" value="<?= generate_csrf_token() ?>" />
+              <input type="hidden" name="action" value="driver_update_self_status" />
+              <input type="hidden" name="redirect" value="dashboard.php" />
+              <select name="status" class="select select-bordered select-sm">
+                <option value="Available" <?= $myDriver['status'] === 'Available' ? 'selected' : '' ?>>Boleh Bertugas</option>
+                <option value="Leave" <?= $myDriver['status'] === 'Leave' ? 'selected' : '' ?>>Cuti</option>
+                <option value="Inactive" <?= $myDriver['status'] === 'Inactive' ? 'selected' : '' ?>>Tidak Aktif</option>
+              </select>
+              <button type="submit" class="btn btn-sm text-white border-0" style="background:var(--ta-brand)">Simpan</button>
+            </form>
+          </div>
+        </div>
+        <?php endif; ?>
 
         <!-- Perjalanan Akan Datang Saya + Sejarah Tempahan Saya -->
         <div class="grid grid-cols-1 lg:grid-cols-2 gap-5 mt-5">

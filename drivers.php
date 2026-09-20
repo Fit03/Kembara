@@ -51,16 +51,38 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         http_response_code(403);
         exit('Ralat Keselamatan: Token CSRF tidak sah atau telah tamat tempoh.');
     }
-    if (!$canManage) {
+    $action = $_POST['action'] ?? '';
+    $redirectPage = $_POST['redirect'] ?? 'drivers.php';
+    if (!in_array($redirectPage, ['drivers.php', 'dashboard.php'], true)) {
+      $redirectPage = 'drivers.php';
+    }
+
+    if (!$canManage && $action !== 'driver_update_self_status') {
         $_SESSION['flash'] = ['type' => 'error', 'msg' => 'Anda tidak mempunyai kebenaran untuk tindakan ini.'];
-        header("Location: drivers.php");
+      header("Location: {$redirectPage}");
         exit();
     }
 
-    $action = $_POST['action'] ?? '';
-
     try {
-        if ($action === 'add_driver') {
+        if ($action === 'driver_update_self_status') {
+          $status = $_POST['status'] ?? '';
+          if (!in_array($status, ['Available', 'Leave', 'Inactive'], true)) {
+            throw new RuntimeException('Status pemandu tidak sah.');
+          }
+
+          $stmt = $pdo->prepare("UPDATE drivers SET status = ? WHERE user_id = ?");
+          $stmt->execute([$status, $currentUserId]);
+          if ($stmt->rowCount() === 0) {
+            $check = $pdo->prepare("SELECT 1 FROM drivers WHERE user_id = ?");
+            $check->execute([$currentUserId]);
+            if (!$check->fetchColumn()) {
+              throw new RuntimeException('Akaun ini bukan akaun pemandu.');
+            }
+          }
+
+          $flash = ['type' => 'success', 'msg' => 'Status pemandu anda berjaya dikemaskini.'];
+
+        } elseif ($action === 'add_driver') {
             $uid     = (int)($_POST['user_id'] ?? 0);
             $license = trim($_POST['license'] ?? '');
             if ($license === '' || strlen($license) > 50) {
@@ -122,7 +144,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 
     $_SESSION['flash'] = $flash;
-    header("Location: drivers.php" . (isset($_GET['q']) && $_GET['q'] !== '' ? '?q=' . urlencode($_GET['q']) : ''));
+    header("Location: {$redirectPage}" . ($redirectPage === 'drivers.php' && isset($_GET['q']) && $_GET['q'] !== '' ? '?q=' . urlencode($_GET['q']) : ''));
     exit();
 }
 
