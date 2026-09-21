@@ -121,6 +121,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $del = $pdo->prepare("DELETE FROM users WHERE user_id = ?");
             $del->execute([$uid]);
 
+            log_activity($pdo, $currentUserId, 'Pengguna', 'Padam', "Pengguna '{$victimName}' telah dipadam.");
+
             $flash = ['type' => 'success', 'msg' => "Pengguna '{$victimName}' berjaya dipadam."];
         }
     } catch (RuntimeException $e) {
@@ -150,6 +152,11 @@ $departments = $pdo->query("SELECT department_id, department_name FROM departmen
     ->fetchAll(PDO::FETCH_ASSOC);
 
 $search = trim($_GET['q'] ?? '');
+$roleFilter = $_GET['role'] ?? '';
+$departmentFilter = max(0, (int)($_GET['department_id'] ?? 0));
+$registeredDate = trim($_GET['registered_date'] ?? '');
+if (!in_array($roleFilter, ['SuperAdmin', 'Admin', 'User'], true)) $roleFilter = '';
+if ($registeredDate !== '' && !DateTime::createFromFormat('Y-m-d', $registeredDate)) $registeredDate = '';
 $perPage = 10;
 $page    = max(1, (int)($_GET['page'] ?? 1));
 $offset  = ($page - 1) * $perPage;
@@ -159,48 +166,35 @@ function buildUsersPageUrl(int $p, string $search): string {
     if ($search !== '') {
         $params['q'] = $search;
     }
+    foreach (['role' => $GLOBALS['roleFilter'], 'department_id' => $GLOBALS['departmentFilter'], 'registered_date' => $GLOBALS['registeredDate']] as $key => $value) {
+      if ($value !== '' && $value !== 0) $params[$key] = $value;
+    }
     return 'users.php?' . http_build_query($params);
 }
 
-if ($search !== '') {
-    $like = "%{$search}%";
-
-    $countStmt = $pdo->prepare(
-        "SELECT COUNT(*) FROM users u
-         LEFT JOIN departments d ON d.department_id = u.department_id
-         WHERE u.fullname LIKE :like1 OR u.email LIKE :like2 OR d.department_name LIKE :like3"
-    );
-    $countStmt->execute([':like1' => $like, ':like2' => $like, ':like3' => $like]);
-    $totalRows = (int)$countStmt->fetchColumn();
-
-    $stmt = $pdo->prepare(
-        "SELECT u.*, d.department_name
-         FROM users u
-         LEFT JOIN departments d ON d.department_id = u.department_id
-         WHERE u.fullname LIKE :like1 OR u.email LIKE :like2 OR d.department_name LIKE :like3
-         ORDER BY u.created_at DESC
-         LIMIT :limit OFFSET :offset"
-    );
-    $stmt->bindValue(':like1', $like);
-    $stmt->bindValue(':like2', $like);
-    $stmt->bindValue(':like3', $like);
-    $stmt->bindValue(':limit', $perPage, PDO::PARAM_INT);
-    $stmt->bindValue(':offset', $offset, PDO::PARAM_INT);
-    $stmt->execute();
-} else {
-    $totalRows = (int)$pdo->query("SELECT COUNT(*) FROM users")->fetchColumn();
-
-    $stmt = $pdo->prepare(
-        "SELECT u.*, d.department_name
-         FROM users u
-         LEFT JOIN departments d ON d.department_id = u.department_id
-         ORDER BY u.created_at DESC
-         LIMIT :limit OFFSET :offset"
-    );
-    $stmt->bindValue(':limit', $perPage, PDO::PARAM_INT);
-    $stmt->bindValue(':offset', $offset, PDO::PARAM_INT);
-    $stmt->execute();
-}
+  $where = [];
+  $params = [];
+  if ($search !== '') { $where[] = '(u.fullname LIKE :like1 OR u.email LIKE :like2 OR d.department_name LIKE :like3)'; $like = "%{$search}%"; $params[':like1'] = $like; $params[':like2'] = $like; $params[':like3'] = $like; }
+  if ($roleFilter !== '') { $where[] = 'u.role = :role'; $params[':role'] = $roleFilter; }
+  if ($departmentFilter > 0) { $where[] = 'u.department_id = :department_id'; $params[':department_id'] = $departmentFilter; }
+  if ($registeredDate !== '') { $where[] = 'DATE(u.created_at) = :registered_date'; $params[':registered_date'] = $registeredDate; }
+  $whereSql = $where ? 'WHERE ' . implode(' AND ', $where) : '';
+  $countStmt = $pdo->prepare("SELECT COUNT(*) FROM users u LEFT JOIN departments d ON d.department_id = u.department_id $whereSql");
+  foreach ($params as $key => $value) $countStmt->bindValue($key, $value);
+  $countStmt->execute();
+  $totalRows = (int)$countStmt->fetchColumn();
+  $stmt = $pdo->prepare(
+    "SELECT u.*, d.department_name
+     FROM users u
+     LEFT JOIN departments d ON d.department_id = u.department_id
+     $whereSql
+     ORDER BY u.created_at DESC
+     LIMIT :limit OFFSET :offset"
+  );
+  foreach ($params as $key => $value) $stmt->bindValue($key, $value);
+  $stmt->bindValue(':limit', $perPage, PDO::PARAM_INT);
+  $stmt->bindValue(':offset', $offset, PDO::PARAM_INT);
+  $stmt->execute();
 $users = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
 $totalPages = max(1, (int)ceil($totalRows / $perPage));
@@ -348,7 +342,7 @@ include 'includes/layout_header.php';
         <!-- Baris 1: Kad Statistik -->
         <div class="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-5">
           <div class="card p-5" data-href="users.php">
-            <div class="ta-icon-box mb-4">
+            <div class="ta-icon-box ta-icon-box-blue mb-4">
               <svg xmlns="http://www.w3.org/2000/svg" class="h-5.5 w-5.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.6"><path stroke-linecap="round" stroke-linejoin="round" d="M15 19.128a9.38 9.38 0 002.625.372 9.337 9.337 0 004.121-.952 4.125 4.125 0 00-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 018.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0111.964-3.07M12 6.375a3.375 3.375 0 11-6.75 0 3.375 3.375 0 016.75 0zm8.25 2.25a2.625 2.625 0 11-5.25 0 2.625 2.625 0 015.25 0z" /></svg>
             </div>
             <p class="text-sm mb-1" style="color:var(--ta-muted)">Jumlah Pengguna</p>
@@ -356,7 +350,7 @@ include 'includes/layout_header.php';
           </div>
 
           <div class="card p-5" data-href="users.php?q=SuperAdmin">
-            <div class="ta-icon-box mb-4">
+            <div class="ta-icon-box ta-icon-box-green mb-4">
               <svg xmlns="http://www.w3.org/2000/svg" class="h-5.5 w-5.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.6"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75m5.25 2.25a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
             </div>
             <p class="text-sm mb-1" style="color:var(--ta-muted)">SuperAdmin</p>
@@ -364,7 +358,7 @@ include 'includes/layout_header.php';
           </div>
 
           <div class="card p-5" data-href="users.php?q=Admin">
-            <div class="ta-icon-box mb-4">
+            <div class="ta-icon-box ta-icon-box-purple mb-4">
               <svg xmlns="http://www.w3.org/2000/svg" class="h-5.5 w-5.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.6"><path stroke-linecap="round" stroke-linejoin="round" d="M9.75 3.104v5.714a2.25 2.25 0 01-.659 1.591L5 14.5M9.75 3.104c-.251.023-.501.05-.75.082m.75-.082a24.301 24.301 0 014.5 0m0 0v5.714c0 .597.237 1.17.659 1.591L19.8 15.3M14.25 3.104c.251.023.501.05.75.082M19.8 15.3l-1.57.393A9.065 9.065 0 0112 15a9.065 9.065 0 00-6.23-.693L5 14.5m14.8.8l1.402 1.402c1.232 1.232.65 3.318-1.067 3.611A48.309 48.309 0 0112 21c-2.773 0-5.491-.235-8.135-.687-1.718-.293-2.3-2.379-1.067-3.61L5 14.5" /></svg>
             </div>
             <p class="text-sm mb-1" style="color:var(--ta-muted)">Admin</p>
@@ -372,12 +366,26 @@ include 'includes/layout_header.php';
           </div>
 
           <div class="card p-5" data-href="users.php?q=User">
-            <div class="ta-icon-box mb-4">
+            <div class="ta-icon-box ta-icon-box-orange mb-4">
               <svg xmlns="http://www.w3.org/2000/svg" class="h-5.5 w-5.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.6"><path stroke-linecap="round" stroke-linejoin="round" d="M17.982 18.725A7.488 7.488 0 0012 15.75a7.488 7.488 0 00-5.982 2.975m11.963 0a9 9 0 10-11.963 0m11.963 0A8.966 8.966 0 0112 21a8.966 8.966 0 01-5.982-2.275M15 9.75a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
             </div>
             <p class="text-sm mb-1" style="color:var(--ta-muted)">Pengguna Biasa</p>
             <h5 class="text-2xl font-bold"><?= $totalStaff ?></h5>
           </div>
+        </div>
+
+        <?php $hasUserFilters = $roleFilter !== '' || $departmentFilter > 0 || $registeredDate !== ''; ?>
+        <div class="card p-5 mt-5">
+          <details class="rounded-xl border" style="border-color:var(--ta-border)" <?= $hasUserFilters ? 'open' : '' ?>>
+            <summary class="cursor-pointer list-none px-4 py-3 text-sm font-semibold flex items-center justify-between gap-3"><span class="flex items-center gap-2"><svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M3.75 6.75h16.5M6.75 12h10.5m-7.5 5.25h4.5" /></svg>Penapis Lanjutan<?= $hasUserFilters ? ' <span class="ta-badge badge badge-info">Aktif</span>' : '' ?></span><span class="text-xs text-slate-400">Peranan, jabatan &amp; tarikh daftar</span></summary>
+            <form action="users.php" method="GET" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 px-4 pb-4">
+              <input type="hidden" name="q" value="<?= htmlspecialchars($search) ?>" />
+              <div><label class="text-xs font-medium block mb-1">Peranan</label><select name="role" class="select select-bordered select-sm w-full"><option value="">Semua peranan</option><?php foreach (['SuperAdmin', 'Admin', 'User'] as $filterRole): ?><option value="<?= $filterRole ?>" <?= $roleFilter === $filterRole ? 'selected' : '' ?>><?= $filterRole === 'User' ? 'Pengguna Biasa' : $filterRole ?></option><?php endforeach; ?></select></div>
+              <div><label class="text-xs font-medium block mb-1">Jabatan</label><select name="department_id" class="select select-bordered select-sm w-full"><option value="0">Semua jabatan</option><?php foreach ($departments as $filterDepartment): ?><option value="<?= (int)$filterDepartment['department_id'] ?>" <?= $departmentFilter === (int)$filterDepartment['department_id'] ? 'selected' : '' ?>><?= htmlspecialchars($filterDepartment['department_name']) ?></option><?php endforeach; ?></select></div>
+              <div><label class="text-xs font-medium block mb-1">Didaftar pada</label><input type="date" name="registered_date" value="<?= htmlspecialchars($registeredDate) ?>" class="input input-bordered input-sm w-full" /></div>
+              <div class="flex items-end gap-2"><button type="submit" class="btn btn-sm text-white border-0" style="background:var(--ta-brand)">Tapis</button><?php if ($hasUserFilters): ?><a href="users.php<?= $search !== '' ? '?q=' . urlencode($search) : '' ?>" class="btn btn-sm btn-ghost">Set Semula</a><?php endif; ?></div>
+            </form>
+          </details>
         </div>
 
         <!-- Baris 2: Jadual Pengguna -->
@@ -410,7 +418,7 @@ include 'includes/layout_header.php';
                   <tr><td colspan="6" class="px-3 py-6 text-sm text-center text-slate-400">Tiada pengguna dijumpai.</td></tr>
                 <?php endif; ?>
                 <?php foreach ($users as $u): ?>
-                  <tr class="hover:bg-slate-50/70 transition-colors">
+                  <tr class="hover:bg-slate-50/70 transition-colors" data-href="view-user.php?id=<?= (int)$u['user_id'] ?>">
                     <td class="px-3 py-3 text-sm border-b whitespace-nowrap" style="border-color:var(--ta-border)">
                       <div class="flex items-center gap-2.5">
                           <?php
@@ -439,17 +447,9 @@ include 'includes/layout_header.php';
                     </td>
                     <td class="px-3 py-3 text-sm border-b whitespace-nowrap" style="border-color:var(--ta-border)"><?= htmlspecialchars(date('d M Y', strtotime($u['created_at']))) ?></td>
                     <td class="px-3 py-3 text-sm border-b text-center whitespace-nowrap" style="border-color:var(--ta-border)">
-                      <button type="button" class="btn btn-ghost btn-xs" title="Kemaskini"
-                        onclick='openEditModal(<?= json_encode([
-                            "user_id"       => (int)$u["user_id"],
-                            "fullname"      => $u["fullname"],
-                            "email"         => $u["email"],
-                            "phone_no"      => $u["phone_no"],
-                            "department_id" => $u["department_id"],
-                            "role"          => $u["role"],
-                        ], JSON_UNESCAPED_UNICODE | JSON_HEX_APOS | JSON_HEX_QUOT) ?>)'>
+                      <a href="view-user.php?id=<?= (int)$u['user_id'] ?>&amp;mode=edit" class="btn btn-ghost btn-xs" title="Kemaskini">
                         <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931z" /></svg>
-                      </button>
+                      </a>
                       <?php if ((int)$u['user_id'] !== $currentUserId): ?>
                         <button type="button" class="btn btn-ghost btn-xs text-error" title="Padam"
                           onclick="openDeleteModal(<?= (int)$u['user_id'] ?>, '<?= htmlspecialchars(addslashes($u['fullname'])) ?>')">

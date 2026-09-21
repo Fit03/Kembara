@@ -239,7 +239,7 @@ if ($role === 'User') {
     })();
 
     $myUpcomingStmt = $pdo->prepare(
-        "SELECT vb.booking_no, v.plate_no, v.vehicle_name, vb.destination, vb.depart_datetime, vb.status
+        "SELECT vb.booking_id, vb.booking_no, v.plate_no, v.vehicle_name, vb.destination, vb.depart_datetime, vb.status
          FROM vehicle_bookings vb
          LEFT JOIN vehicles v ON v.vehicle_id = vb.vehicle_id
          LEFT JOIN drivers assigned_driver ON assigned_driver.driver_id = vb.driver_id
@@ -256,7 +256,7 @@ if ($role === 'User') {
         : null;
 
     $myHistoryStmt = $pdo->prepare(
-           "SELECT vb.booking_no, v.plate_no, v.vehicle_name, vb.destination, vb.depart_datetime, vb.status
+           "SELECT vb.booking_id, vb.booking_no, v.plate_no, v.vehicle_name, vb.destination, vb.depart_datetime, vb.status
          FROM vehicle_bookings vb
             LEFT JOIN vehicles v ON v.vehicle_id = vb.vehicle_id
             LEFT JOIN drivers assigned_driver ON assigned_driver.driver_id = vb.driver_id
@@ -266,7 +266,18 @@ if ($role === 'User') {
     );
           $myHistoryStmt->execute([':uid' => $uid, ':driver_uid' => $uid]);
     $myBookingHistory = $myHistoryStmt->fetchAll(PDO::FETCH_ASSOC);
+
+        $myDriverStmt = $pdo->prepare("SELECT driver_id, status FROM drivers WHERE user_id = ? LIMIT 1");
+        $myDriverStmt->execute([$uid]);
+        $myDriver = $myDriverStmt->fetch(PDO::FETCH_ASSOC) ?: null;
 }
+
+      if (isset($_SESSION['flash'])) {
+        $dashboardFlash = $_SESSION['flash'];
+        unset($_SESSION['flash']);
+      } else {
+        $dashboardFlash = null;
+      }
 
 // --- Layout Config ---
 $pageTitle = "Dashboard";
@@ -289,13 +300,19 @@ include 'includes/layout_header.php';
           </h4>
         </div>
 
+        <?php if ($role === 'User' && $dashboardFlash): ?>
+          <div class="card px-4 py-3 mb-5 border" style="border-color: var(--color-<?= $dashboardFlash['type'] === 'success' ? 'success' : 'error' ?>);">
+            <p class="text-sm font-medium mb-0"><?= htmlspecialchars($dashboardFlash['msg']) ?></p>
+          </div>
+        <?php endif; ?>
+
         <?php if ($role === 'User'): ?>
         <!-- ============ Paparan Peribadi (User) ============ -->
 
         <!-- Kad Statistik Peribadi -->
         <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-5">
           <div class="card p-5" data-href="bookings.php?mine=1">
-            <div class="ta-icon-box mb-4">
+            <div class="ta-icon-box ta-icon-box-blue mb-4">
               <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.6"><path stroke-linecap="round" stroke-linejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 012.25-2.25h13.5A2.25 2.25 0 0121 7.5v11.25m-18 0A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75m-18 0v-7.5A2.25 2.25 0 015.25 9h13.5A2.25 2.25 0 0121 11.25v7.5" /></svg>
             </div>
             <p class="text-sm mb-1" style="color:var(--ta-muted)">Tempahan Aktif Saya</p>
@@ -317,7 +334,7 @@ include 'includes/layout_header.php';
           <?php endif; ?>
 
           <div class="card p-5" data-href="bookings.php?mine=1&status=Completed">
-            <div class="ta-icon-box mb-4">
+            <div class="ta-icon-box ta-icon-box-purple mb-4">
               <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.6"><path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5" /></svg>
             </div>
             <p class="text-sm mb-1" style="color:var(--ta-muted)">Selesai Bulan Ini</p>
@@ -325,7 +342,7 @@ include 'includes/layout_header.php';
           </div>
 
           <div class="card p-5">
-            <div class="ta-icon-box mb-4">
+            <div class="ta-icon-box ta-icon-box-orange mb-4">
               <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.6"><path stroke-linecap="round" stroke-linejoin="round" d="M8.25 6.75H15.75M8.25 6.75a2.25 2.25 0 01-2.25-2.25V4.5A2.25 2.25 0 018.25 2.25h7.5A2.25 2.25 0 0118 4.5v.75a2.25 2.25 0 01-2.25 2.25M8.25 6.75v10.5a2.25 2.25 0 002.25 2.25h3a2.25 2.25 0 002.25-2.25V6.75" /></svg>
             </div>
             <p class="text-sm mb-1" style="color:var(--ta-muted)">Hari Ke Perjalanan Seterusnya</p>
@@ -344,6 +361,28 @@ include 'includes/layout_header.php';
           </a>
         </div>
 
+        <?php if ($myDriver): ?>
+        <div class="card p-5 mt-5">
+          <div class="flex items-center justify-between gap-4 flex-wrap">
+            <div>
+              <h6 class="font-semibold mb-1">Status Pemandu Saya</h6>
+              <p class="text-sm mb-0" style="color:var(--ta-muted)">Kemaskini status anda supaya pentadbir tahu bila anda boleh bertugas.</p>
+            </div>
+            <form action="drivers.php" method="POST" class="flex items-center gap-2">
+              <input type="hidden" name="csrf_token" value="<?= generate_csrf_token() ?>" />
+              <input type="hidden" name="action" value="driver_update_self_status" />
+              <input type="hidden" name="redirect" value="dashboard.php" />
+              <select name="status" class="select select-bordered select-sm">
+                <option value="Available" <?= $myDriver['status'] === 'Available' ? 'selected' : '' ?>>Boleh Bertugas</option>
+                <option value="Leave" <?= $myDriver['status'] === 'Leave' ? 'selected' : '' ?>>Cuti</option>
+                <option value="Inactive" <?= $myDriver['status'] === 'Inactive' ? 'selected' : '' ?>>Tidak Aktif</option>
+              </select>
+              <button type="submit" class="btn btn-sm text-white border-0" style="background:var(--ta-brand)">Simpan</button>
+            </form>
+          </div>
+        </div>
+        <?php endif; ?>
+
         <!-- Perjalanan Akan Datang Saya + Sejarah Tempahan Saya -->
         <div class="grid grid-cols-1 lg:grid-cols-2 gap-5 mt-5">
           <div class="card p-5">
@@ -354,7 +393,7 @@ include 'includes/layout_header.php';
               <ul class="ta-divide">
                 <?php foreach ($myUpcomingTrips as $t): ?>
                   <?php $badgeInfo = $statusBadge($t['status']); ?>
-                  <li class="py-3 flex items-center justify-between gap-3">
+                  <li class="py-3 flex items-center justify-between gap-3" data-href="view.php?id=<?= (int)$t['booking_id'] ?>">
                     <div class="min-w-0">
                       <p class="mb-0 text-sm font-semibold truncate"><?= htmlspecialchars($t['plate_no']) ?> &middot; <?= htmlspecialchars($t['destination'] ?? '—') ?></p>
                       <p class="mb-0 text-xs text-slate-400"><?= htmlspecialchars(date('d M, H:i', strtotime($t['depart_datetime']))) ?></p>
@@ -374,7 +413,7 @@ include 'includes/layout_header.php';
               <ul class="ta-divide">
                 <?php foreach ($myBookingHistory as $h): ?>
                   <?php $badgeInfo = $statusBadge($h['status']); ?>
-                  <li class="py-3 flex items-center justify-between gap-3">
+                  <li class="py-3 flex items-center justify-between gap-3" data-href="view.php?id=<?= (int)$h['booking_id'] ?>">
                     <div class="min-w-0">
                       <p class="mb-0 text-sm font-semibold truncate"><?= htmlspecialchars($h['plate_no']) ?> &middot; <?= htmlspecialchars($h['destination'] ?? '—') ?></p>
                       <p class="mb-0 text-xs text-slate-400"><?= htmlspecialchars(date('d M, H:i', strtotime($h['depart_datetime']))) ?></p>
@@ -404,7 +443,7 @@ include 'includes/layout_header.php';
           <div class="aura aura-dual text-yellow-600 bg-orange-200 duration-3000">
           <?php endif; ?>
             <div class="card p-5" data-href="bookings.php?status=Pending" data-priority="warning">
-              <div class="ta-icon-box mb-4">
+              <div class="ta-icon-box ta-icon-box-green mb-4">
                 <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.6"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
               </div>
               <p class="text-sm mb-1" style="color:var(--ta-muted)">Menunggu Kelulusan</p>

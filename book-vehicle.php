@@ -63,19 +63,7 @@ $fullyBookedDatesJson = json_encode(array_values($fullyBookedDates));
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, shrink-to-fit=no" />
-    <title>Kembara - Tempah Kenderaan</title>
-    <link rel="icon" type="image/png" href="assets/img/favicon.png" />
-
-    <script>
-        (function () {
-            try {
-                const savedTheme = localStorage.getItem('theme');
-                const systemPrefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
-                const preferredTheme = savedTheme || (systemPrefersDark ? 'dracula' : 'garden');
-                document.documentElement.setAttribute('data-theme', preferredTheme);
-            } catch (e) {}
-        })();
-    </script>
+    <title>e-Kenderaan - Tempah Kenderaan</title>
 
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700&display=swap" rel="stylesheet" />

@@ -217,7 +217,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $flash = ['type' => 'success', 'msg' => "Tempahan {$bookingNo} berjaya dihantar dan menunggu kelulusan."];
             $redirectAfterPost = 'view.php?id=' . $newId;
 
-        } elseif (in_array($action, ['assign_driver', 'approve_booking', 'driver_accept', 'driver_reject', 'reject_booking', 'cancel_booking', 'complete_booking'], true)) {
+        } elseif (in_array($action, ['assign_driver', 'approve_booking', 'driver_accept', 'driver_reject', 'reject_booking', 'cancel_booking', 'complete_booking', 'delete_booking'], true)) {
             $bid = (int)($_POST['booking_id'] ?? 0);
             if ($bid <= 0) {
                 throw new RuntimeException('Tempahan tidak sah.');
@@ -237,7 +237,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 throw new RuntimeException('Tempahan tidak dijumpai.');
             }
 
-            if ($action === 'assign_driver') {
+            if ($action === 'delete_booking') {
+              if (!$canManage) throw new RuntimeException('Anda tidak mempunyai kebenaran untuk memadam tempahan.');
+
+              if (!empty($booking['vehicle_id'])) {
+                $pdo->prepare("UPDATE vehicles SET status='Available' WHERE vehicle_id=?")->execute([$booking['vehicle_id']]);
+              }
+              $pdo->prepare("DELETE FROM booking_history WHERE booking_id=?")->execute([$bid]);
+              $pdo->prepare("DELETE FROM vehicle_bookings WHERE booking_id=?")->execute([$bid]);
+
+              log_activity($pdo, $currentUserId, 'Tempahan', 'Padam', "Tempahan {$booking['booking_no']} telah dipadam.");
+
+              $flash = ['type' => 'success', 'msg' => "Tempahan {$booking['booking_no']} telah dipadam."];
+
+            } elseif ($action === 'assign_driver') {
               if (!$canManage) throw new RuntimeException('Anda tidak mempunyai kebenaran untuk menetapkan pemandu.');
               if ($booking['status'] !== 'Pending' || !in_array($booking['workflow_stage'], ['Submitted', 'ReassignmentRequired'], true)) {
                 throw new RuntimeException('Hanya tempahan yang menunggu penetapan pemandu boleh diproses.');
@@ -326,8 +339,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 if ((int)($booking['assigned_driver_user_id'] ?? 0) !== $currentUserId) {
                   throw new RuntimeException('Hanya pemandu yang ditugaskan boleh memberi respons kepada tugasan ini.');
                 }
-                if ($booking['status'] !== 'Pending' || $booking['workflow_stage'] !== 'DriverAssigned') {
+                if ($action === 'driver_accept'
+                  && ($booking['status'] !== 'Pending' || $booking['workflow_stage'] !== 'DriverAssigned')) {
                   throw new RuntimeException('Tugasan ini tidak lagi menunggu respons pemandu.');
+                }
+                if ($action === 'driver_reject'
+                  && !(($booking['status'] === 'Pending' && $booking['workflow_stage'] === 'DriverAssigned')
+                    || ($booking['status'] === 'Approved' && $booking['workflow_stage'] === 'AdminApproved'))) {
+                  throw new RuntimeException('Tugasan ini tidak boleh ditolak pada masa ini.');
                 }
 
                 if ($action === 'driver_accept') {
@@ -373,7 +392,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $flash = ['type' => 'success', 'msg' => "Tempahan {$booking['booking_no']} telah dibatalkan."];
 
             } elseif ($action === 'complete_booking') {
-                if (!$canManage) throw new RuntimeException('Anda tidak mempunyai kebenaran untuk menamatkan tempahan.');
+              $isAssignedDriver = (int)($booking['assigned_driver_user_id'] ?? 0) === $currentUserId;
+              if (!$canManage && !$isAssignedDriver) throw new RuntimeException('Anda tidak mempunyai kebenaran untuk menamatkan tempahan.');
                 if ($booking['status'] !== 'Approved') throw new RuntimeException('Hanya tempahan berstatus Diluluskan boleh ditamatkan.');
 
                 $pdo->prepare("UPDATE vehicle_bookings SET status='Completed', workflow_stage='Completed' WHERE booking_id=?")->execute([$bid]);
@@ -419,6 +439,16 @@ if (!in_array($statusFilter, $validStatuses, true)) {
 }
 
 $search  = trim($_GET['q'] ?? '');
+$datePreset = $_GET['date_preset'] ?? '';
+$bookingDate = trim($_GET['booking_date'] ?? '');
+$requesterId = max(0, (int)($_GET['requester_id'] ?? 0));
+$vehicleId = max(0, (int)($_GET['vehicle_id'] ?? 0));
+$driverId = max(0, (int)($_GET['driver_id'] ?? 0));
+$tripTypeFilter = $_GET['trip_type'] ?? '';
+$validDatePresets = ['', 'today', 'yesterday'];
+if (!in_array($datePreset, $validDatePresets, true)) $datePreset = '';
+if ($bookingDate !== '' && !DateTime::createFromFormat('Y-m-d', $bookingDate)) $bookingDate = '';
+if (!in_array($tripTypeFilter, ['One Way', 'Return'], true)) $tripTypeFilter = '';
 $perPage = 10;
 $page    = max(1, (int)($_GET['page'] ?? 1));
 $offset  = ($page - 1) * $perPage;
@@ -427,12 +457,18 @@ function buildBookingsPageUrl(int $p, string $search, string $status): string {
     $params = ['page' => $p];
     if ($search !== '') $params['q'] = $search;
     if ($status !== 'All') $params['status'] = $status;
+  foreach (['date_preset' => $GLOBALS['datePreset'], 'booking_date' => $GLOBALS['bookingDate'], 'requester_id' => $GLOBALS['requesterId'], 'vehicle_id' => $GLOBALS['vehicleId'], 'driver_id' => $GLOBALS['driverId'], 'trip_type' => $GLOBALS['tripTypeFilter']] as $key => $value) {
+    if ($value !== '' && $value !== 0) $params[$key] = $value;
+  }
     return 'bookings.php?' . http_build_query($params);
 }
 function buildBookingsFilterUrl(string $search, string $status): string {
     $params = [];
     if ($search !== '') $params['q'] = $search;
     if ($status !== 'All') $params['status'] = $status;
+  foreach (['date_preset' => $GLOBALS['datePreset'], 'booking_date' => $GLOBALS['bookingDate'], 'requester_id' => $GLOBALS['requesterId'], 'vehicle_id' => $GLOBALS['vehicleId'], 'driver_id' => $GLOBALS['driverId'], 'trip_type' => $GLOBALS['tripTypeFilter']] as $key => $value) {
+    if ($value !== '' && $value !== 0) $params[$key] = $value;
+  }
     return 'bookings.php' . ($params ? '?' . http_build_query($params) : '');
 }
 
@@ -452,6 +488,30 @@ if ($role === 'User') {
 if ($statusFilter !== 'All') {
     $where[] = 'vb.status = :status';
     $params[':status'] = $statusFilter;
+}
+if ($datePreset === 'today') {
+  $where[] = 'DATE(vb.created_at) = CURRENT_DATE()';
+} elseif ($datePreset === 'yesterday') {
+  $where[] = 'DATE(vb.created_at) = DATE_SUB(CURRENT_DATE(), INTERVAL 1 DAY)';
+} elseif ($bookingDate !== '') {
+  $where[] = 'DATE(vb.created_at) = :booking_date';
+  $params[':booking_date'] = $bookingDate;
+}
+if ($requesterId > 0) {
+  $where[] = 'vb.user_id = :requester_id';
+  $params[':requester_id'] = $requesterId;
+}
+if ($vehicleId > 0) {
+  $where[] = 'vb.vehicle_id = :vehicle_id';
+  $params[':vehicle_id'] = $vehicleId;
+}
+if ($driverId > 0) {
+  $where[] = 'vb.driver_id = :driver_id';
+  $params[':driver_id'] = $driverId;
+}
+if ($tripTypeFilter !== '') {
+  $where[] = 'vb.trip_type = :trip_type';
+  $params[':trip_type'] = $tripTypeFilter;
 }
 if ($search !== '') {
     $like = "%{$search}%";
@@ -505,20 +565,47 @@ $assignableDrivers = $pdo->query(
      ORDER BY u.fullname"
 )->fetchAll(PDO::FETCH_ASSOC);
 
+$filterUsers = $pdo->query("SELECT user_id, fullname FROM users ORDER BY fullname")->fetchAll(PDO::FETCH_ASSOC);
+$filterVehicles = $pdo->query("SELECT vehicle_id, plate_no, vehicle_name FROM vehicles ORDER BY plate_no")->fetchAll(PDO::FETCH_ASSOC);
+$filterDrivers = $pdo->query("SELECT dr.driver_id, u.fullname FROM drivers dr JOIN users u ON u.user_id = dr.user_id ORDER BY u.fullname")->fetchAll(PDO::FETCH_ASSOC);
+
 // Kiraan statistik (skop mengikut peranan)
 $statCountStmt = $pdo->prepare(
     "SELECT status, COUNT(*) AS total FROM vehicle_bookings vb"
-    . ($role === 'User' ? " WHERE vb.user_id = :uid" : "")
+  . ($role === 'User' ? " WHERE vb.user_id = :uid OR EXISTS (
+    SELECT 1
+    FROM drivers assigned_driver
+    WHERE assigned_driver.driver_id = vb.driver_id
+      AND assigned_driver.user_id = :driver_uid
+    )" : "")
     . " GROUP BY status"
 );
-$statCountStmt->execute($role === 'User' ? [':uid' => $currentUserId] : []);
+$statCountStmt->execute($role === 'User' ? [
+  ':uid' => $currentUserId,
+  ':driver_uid' => $currentUserId,
+] : []);
 $statusCounts   = $statCountStmt->fetchAll(PDO::FETCH_KEY_PAIR);
 $totalBookings  = (int)array_sum($statusCounts);
 $pendingCount   = (int)($statusCounts['Pending'] ?? 0);
 $approvedCount  = (int)($statusCounts['Approved'] ?? 0);
 $completedCount = (int)($statusCounts['Completed'] ?? 0);
 
-$pendingApprovals = $pdo->query("SELECT COUNT(*) FROM vehicle_bookings WHERE status = 'Pending'")->fetchColumn();
+if ($role === 'User') {
+  $pendingApprovalsStmt = $pdo->prepare(
+    "SELECT COUNT(*)
+     FROM vehicle_bookings vb
+     LEFT JOIN drivers assigned_driver ON assigned_driver.driver_id = vb.driver_id
+     WHERE vb.status = 'Pending'
+       AND (vb.user_id = :uid OR assigned_driver.user_id = :driver_uid)"
+  );
+  $pendingApprovalsStmt->execute([
+    ':uid' => $currentUserId,
+    ':driver_uid' => $currentUserId,
+  ]);
+  $pendingApprovals = $pendingApprovalsStmt->fetchColumn();
+} else {
+  $pendingApprovals = $pdo->query("SELECT COUNT(*) FROM vehicle_bookings WHERE status = 'Pending'")->fetchColumn();
+}
 
 $tabs = ['All' => 'Semua', 'Pending' => 'Menunggu', 'Approved' => 'Diluluskan', 'Rejected' => 'Ditolak', 'Cancelled' => 'Dibatalkan', 'Completed' => 'Selesai'];
 
@@ -740,7 +827,7 @@ include 'includes/layout_header.php';
         <!-- Baris 1: Kad Statistik -->
         <div class="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-5">
           <div class="card p-5" data-href="bookings.php">
-            <div class="ta-icon-box mb-4">
+            <div class="ta-icon-box ta-icon-box-blue mb-4">
               <svg xmlns="http://www.w3.org/2000/svg" class="h-5.5 w-5.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.6"><path stroke-linecap="round" stroke-linejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 012.25-2.25h13.5A2.25 2.25 0 0121 7.5v11.25m-18 0A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75m-18 0v-7.5A2.25 2.25 0 015.25 9h13.5A2.25 2.25 0 0121 11.25v7.5" /></svg>
             </div>
             <p class="text-sm mb-1" style="color:var(--ta-muted)">Jumlah Tempahan</p>
@@ -751,10 +838,10 @@ include 'includes/layout_header.php';
           <div class="aura aura-dual text-yellow-600 bg-orange-200 duration-3000">
           <?php endif; ?>
             <div class="card p-5" data-href="bookings.php?status=Pending" data-priority="warning">
-              <div class="ta-icon-box mb-4">
+              <div class="ta-icon-box ta-icon-box-green mb-4">
               <svg xmlns="http://www.w3.org/2000/svg" class="h-5.5 w-5.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.6"><path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
             </div>
-            <p class="text-sm mb-1" style="color:var(--ta-muted)">Menunggu Kelulusan</p>
+            <p class="text-sm mb-1" style="color:var(--ta-muted)"><?= $role === 'User' ? 'Menunggu Tindakan' : 'Menunggu Kelulusan' ?></p>
             <h5 class="text-2xl font-bold"><?= $pendingCount ?></h5>
           </div>
           <?php if ($pendingApprovals > 0): ?>
@@ -762,7 +849,7 @@ include 'includes/layout_header.php';
           <?php endif; ?>
 
           <div class="card p-5" data-href="bookings.php?status=Approved">
-            <div class="ta-icon-box mb-4">
+            <div class="ta-icon-box ta-icon-box-purple mb-4">
               <svg xmlns="http://www.w3.org/2000/svg" class="h-5.5 w-5.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.6"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
             </div>
             <p class="text-sm mb-1" style="color:var(--ta-muted)">Diluluskan</p>
@@ -770,12 +857,89 @@ include 'includes/layout_header.php';
           </div>
 
           <div class="card p-5" data-href="bookings.php?status=Completed">
-            <div class="ta-icon-box mb-4">
+            <div class="ta-icon-box ta-icon-box-orange mb-4">
               <svg xmlns="http://www.w3.org/2000/svg" class="h-5.5 w-5.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.6"><path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5" /></svg>
             </div>
             <p class="text-sm mb-1" style="color:var(--ta-muted)">Selesai</p>
             <h5 class="text-2xl font-bold"><?= $completedCount ?></h5>
           </div>
+        </div>
+
+        <?php $hasBookingFilters = $datePreset !== '' || $bookingDate !== '' || $requesterId > 0 || $vehicleId > 0 || $driverId > 0 || $tripTypeFilter !== ''; ?>
+        <div class="card p-5 mt-5">
+          <details class="rounded-xl border" style="border-color:var(--ta-border)" <?= $hasBookingFilters ? 'open' : '' ?>>
+            <summary class="cursor-pointer list-none px-4 py-3 text-sm font-semibold flex items-center justify-between gap-3">
+              <span class="flex items-center gap-2">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M3.75 6.75h16.5M6.75 12h10.5m-7.5 5.25h4.5" /></svg>
+                Penapis Lanjutan<?= $hasBookingFilters ? ' <span class="ta-badge badge badge-info">Aktif</span>' : '' ?>
+              </span>
+              <span class="text-xs text-slate-400">Tarikh, pemohon, kenderaan &amp; pemandu</span>
+            </summary>
+            <form action="bookings.php" method="GET" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 px-4 pb-4">
+              <input type="hidden" name="q" value="<?= htmlspecialchars($search) ?>" />
+              <input type="hidden" name="status" value="<?= $statusFilter !== 'All' ? htmlspecialchars($statusFilter) : '' ?>" />
+              <div>
+                <label class="text-xs font-medium block mb-1">Tempahan Dibuat</label>
+                <select name="date_preset" class="select select-bordered select-sm w-full">
+                  <option value="">Semua tarikh</option>
+                  <option value="today" <?= $datePreset === 'today' ? 'selected' : '' ?>>Hari ini</option>
+                  <option value="yesterday" <?= $datePreset === 'yesterday' ? 'selected' : '' ?>>Semalam</option>
+                </select>
+              </div>
+              <div>
+                <label class="text-xs font-medium block mb-1">Tarikh khusus</label>
+                <input type="date" name="booking_date" value="<?= htmlspecialchars($bookingDate) ?>" class="input input-bordered input-sm w-full" />
+              </div>
+              <div>
+                <label class="text-xs font-medium block mb-1">Status</label>
+                <select name="status" class="select select-bordered select-sm w-full">
+                  <option value="">Semua status</option>
+                  <?php foreach ($validStatuses as $filterStatus): ?>
+                    <option value="<?= htmlspecialchars($filterStatus) ?>" <?= $statusFilter === $filterStatus ? 'selected' : '' ?>><?= htmlspecialchars($statusLabel($filterStatus)) ?></option>
+                  <?php endforeach; ?>
+                </select>
+              </div>
+              <div>
+                <label class="text-xs font-medium block mb-1">Pemohon</label>
+                <select name="requester_id" class="select select-bordered select-sm w-full">
+                  <option value="0">Semua pemohon</option>
+                  <?php foreach ($filterUsers as $filterUser): ?>
+                    <option value="<?= (int)$filterUser['user_id'] ?>" <?= $requesterId === (int)$filterUser['user_id'] ? 'selected' : '' ?>><?= htmlspecialchars($filterUser['fullname']) ?></option>
+                  <?php endforeach; ?>
+                </select>
+              </div>
+              <div>
+                <label class="text-xs font-medium block mb-1">Kenderaan</label>
+                <select name="vehicle_id" class="select select-bordered select-sm w-full">
+                  <option value="0">Semua kenderaan</option>
+                  <?php foreach ($filterVehicles as $filterVehicle): ?>
+                    <option value="<?= (int)$filterVehicle['vehicle_id'] ?>" <?= $vehicleId === (int)$filterVehicle['vehicle_id'] ? 'selected' : '' ?>><?= htmlspecialchars(trim(($filterVehicle['plate_no'] ?? '') . ' ' . ($filterVehicle['vehicle_name'] ?? ''))) ?></option>
+                  <?php endforeach; ?>
+                </select>
+              </div>
+              <div>
+                <label class="text-xs font-medium block mb-1">Pemandu</label>
+                <select name="driver_id" class="select select-bordered select-sm w-full">
+                  <option value="0">Semua pemandu</option>
+                  <?php foreach ($filterDrivers as $filterDriver): ?>
+                    <option value="<?= (int)$filterDriver['driver_id'] ?>" <?= $driverId === (int)$filterDriver['driver_id'] ? 'selected' : '' ?>><?= htmlspecialchars($filterDriver['fullname']) ?></option>
+                  <?php endforeach; ?>
+                </select>
+              </div>
+              <div>
+                <label class="text-xs font-medium block mb-1">Jenis perjalanan</label>
+                <select name="trip_type" class="select select-bordered select-sm w-full">
+                  <option value="">Semua jenis</option>
+                  <option value="One Way" <?= $tripTypeFilter === 'One Way' ? 'selected' : '' ?>>Sehala</option>
+                  <option value="Return" <?= $tripTypeFilter === 'Return' ? 'selected' : '' ?>>Pergi Balik</option>
+                </select>
+              </div>
+              <div class="flex items-end gap-2">
+                <button type="submit" class="btn btn-sm text-white border-0" style="background:var(--ta-brand)">Tapis</button>
+                <?php if ($hasBookingFilters || $statusFilter !== 'All'): ?><a href="bookings.php<?= $search !== '' ? '?q=' . urlencode($search) : '' ?>" class="btn btn-sm btn-ghost">Set Semula</a><?php endif; ?>
+              </div>
+            </form>
+          </details>
         </div>
 
         <!-- Baris 2: Jadual Tempahan -->
@@ -815,7 +979,7 @@ include 'includes/layout_header.php';
                   <tr><td colspan="<?= $canManage ? 7 : 6 ?>" class="px-3 py-6 text-sm text-center text-slate-400">Tiada tempahan dijumpai.</td></tr>
                 <?php endif; ?>
                 <?php foreach ($bookings as $b): ?>
-                  <tr class="hover:bg-slate-50/70 transition-colors">
+                  <tr class="hover:bg-slate-50/70 transition-colors" data-href="view.php?id=<?= (int)$b['booking_id'] ?>&amp;from=<?= urlencode($_SERVER['QUERY_STRING'] ?? '') ?>">
                     <td class="px-3 py-3 text-sm border-b whitespace-nowrap font-semibold" style="border-color:var(--ta-border)"><?= htmlspecialchars($b['booking_no']) ?></td>
                     <?php if ($canManage): ?>
                     <td class="px-3 py-3 text-sm border-b whitespace-nowrap" style="border-color:var(--ta-border)"><?= htmlspecialchars($b['requester_name']) ?></td>
@@ -846,6 +1010,8 @@ include 'includes/layout_header.php';
                           onclick="openActionModal(<?= (int)$b['booking_id'] ?>, 'driver_accept', 'Terima tugasan untuk tempahan <?= htmlspecialchars(addslashes($b['booking_no'])) ?>?', 'Terima', false)">
                           <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75L9 17.25 19.5 6.75" /></svg>
                         </button>
+                      <?php endif; ?>
+                      <?php if ($role === 'User' && (int)($b['driver_user_id'] ?? 0) === $currentUserId && (($b['status'] === 'Pending' && $b['workflow_stage'] === 'DriverAssigned') || ($b['status'] === 'Approved' && $b['workflow_stage'] === 'AdminApproved'))): ?>
                         <button type="button" class="btn btn-ghost btn-xs text-error" title="Tolak Tugasan"
                           onclick="openActionModal(<?= (int)$b['booking_id'] ?>, 'driver_reject', 'Tolak tugasan untuk tempahan <?= htmlspecialchars(addslashes($b['booking_no'])) ?>?', 'Tolak', true)">
                           <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
@@ -862,7 +1028,7 @@ include 'includes/layout_header.php';
                         </button>
                       <?php endif; ?>
 
-                      <?php if ($canManage && $b['status'] === 'Approved'): ?>
+                      <?php if (($canManage || ($role === 'User' && (int)($b['driver_user_id'] ?? 0) === $currentUserId)) && $b['status'] === 'Approved'): ?>
                         <button type="button" class="btn btn-ghost btn-xs text-info" title="Tandakan Selesai"
                           onclick="openActionModal(<?= (int)$b['booking_id'] ?>, 'complete_booking', 'Tandakan tempahan <?= htmlspecialchars(addslashes($b['booking_no'])) ?> sebagai selesai?', 'Selesai', false)">
                           <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
@@ -874,6 +1040,12 @@ include 'includes/layout_header.php';
                           onclick="openActionModal(<?= (int)$b['booking_id'] ?>, 'cancel_booking', 'Batalkan tempahan <?= htmlspecialchars(addslashes($b['booking_no'])) ?>?', 'Batalkan', true)">
                           <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M18.364 18.364A9 9 0 105.636 5.636a9 9 0 0012.728 12.728z" /></svg>
                         </button>
+                      <?php endif; ?>
+                      <?php if ($canManage): ?>
+                        <button type="button" class="btn btn-ghost btn-xs text-error" title="Padam"
+                          onclick="openActionModal(<?= (int)$b['booking_id'] ?>, 'delete_booking', 'Padam tempahan <?= htmlspecialchars(addslashes($b['booking_no'])) ?>? Tindakan ini tidak boleh dibuat asal.', 'Padam', true)">
+                          <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0" /></svg>
+                      </button>
                       <?php endif; ?>
                     </td>
                   </tr>

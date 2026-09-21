@@ -51,16 +51,38 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         http_response_code(403);
         exit('Ralat Keselamatan: Token CSRF tidak sah atau telah tamat tempoh.');
     }
-    if (!$canManage) {
+    $action = $_POST['action'] ?? '';
+    $redirectPage = $_POST['redirect'] ?? 'drivers.php';
+    if (!in_array($redirectPage, ['drivers.php', 'dashboard.php'], true)) {
+      $redirectPage = 'drivers.php';
+    }
+
+    if (!$canManage && $action !== 'driver_update_self_status') {
         $_SESSION['flash'] = ['type' => 'error', 'msg' => 'Anda tidak mempunyai kebenaran untuk tindakan ini.'];
-        header("Location: drivers.php");
+      header("Location: {$redirectPage}");
         exit();
     }
 
-    $action = $_POST['action'] ?? '';
-
     try {
-        if ($action === 'add_driver') {
+        if ($action === 'driver_update_self_status') {
+          $status = $_POST['status'] ?? '';
+          if (!in_array($status, ['Available', 'Leave', 'Inactive'], true)) {
+            throw new RuntimeException('Status pemandu tidak sah.');
+          }
+
+          $stmt = $pdo->prepare("UPDATE drivers SET status = ? WHERE user_id = ?");
+          $stmt->execute([$status, $currentUserId]);
+          if ($stmt->rowCount() === 0) {
+            $check = $pdo->prepare("SELECT 1 FROM drivers WHERE user_id = ?");
+            $check->execute([$currentUserId]);
+            if (!$check->fetchColumn()) {
+              throw new RuntimeException('Akaun ini bukan akaun pemandu.');
+            }
+          }
+
+          $flash = ['type' => 'success', 'msg' => 'Status pemandu anda berjaya dikemaskini.'];
+
+        } elseif ($action === 'add_driver') {
             $uid     = (int)($_POST['user_id'] ?? 0);
             $license = trim($_POST['license'] ?? '');
             if ($license === '' || strlen($license) > 50) {
@@ -106,8 +128,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 throw new RuntimeException('Pemandu tidak sah.');
             }
 
+            $info = $pdo->prepare("SELECT u.fullname, dr.license FROM drivers dr JOIN users u ON u.user_id = dr.user_id WHERE dr.driver_id = ?");
+            $info->execute([$did]);
+            $driverRow = $info->fetch();
+
             $del = $pdo->prepare("DELETE FROM drivers WHERE driver_id = ?");
             $del->execute([$did]);
+
+            $driverLabel = $driverRow ? "{$driverRow['fullname']} (lesen {$driverRow['license']})" : "ID {$did}";
+            log_activity($pdo, $currentUserId, 'Pemandu', 'Padam', "Rekod pemandu {$driverLabel} telah dipadam.");
 
             $flash = ['type' => 'success', 'msg' => 'Rekod pemandu berjaya dipadam.'];
         }
@@ -122,7 +151,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 
     $_SESSION['flash'] = $flash;
-    header("Location: drivers.php" . (isset($_GET['q']) && $_GET['q'] !== '' ? '?q=' . urlencode($_GET['q']) : ''));
+    header("Location: {$redirectPage}" . ($redirectPage === 'drivers.php' && isset($_GET['q']) && $_GET['q'] !== '' ? '?q=' . urlencode($_GET['q']) : ''));
     exit();
 }
 
@@ -135,6 +164,9 @@ if (isset($_SESSION['flash'])) {
    Data Halaman
    ========================================================== */
 $search  = trim($_GET['q'] ?? '');
+$statusFilter = $_GET['status'] ?? '';
+$vehicleFilter = max(0, (int)($_GET['vehicle_id'] ?? 0));
+if (!in_array($statusFilter, ['Available', 'Leave', 'Inactive'], true)) $statusFilter = '';
 $perPage = 10;
 $page    = max(1, (int)($_GET['page'] ?? 1));
 $offset  = ($page - 1) * $perPage;
@@ -144,6 +176,8 @@ function buildDriversPageUrl(int $p, string $search): string {
     if ($search !== '') {
         $params['q'] = $search;
     }
+    if ($GLOBALS['statusFilter'] !== '') $params['status'] = $GLOBALS['statusFilter'];
+    if ($GLOBALS['vehicleFilter'] > 0) $params['vehicle_id'] = $GLOBALS['vehicleFilter'];
     return 'drivers.php?' . http_build_query($params);
 }
 
@@ -151,43 +185,28 @@ $baseFrom = "FROM drivers dr
              JOIN users u ON u.user_id = dr.user_id
              LEFT JOIN vehicles v ON v.driver_id = dr.driver_id";
 
-if ($search !== '') {
-    $like = "%{$search}%";
-
-    $countStmt = $pdo->prepare("SELECT COUNT(DISTINCT dr.driver_id) $baseFrom
-        WHERE u.fullname LIKE :like1 OR dr.license LIKE :like2");
-    $countStmt->execute([':like1' => $like, ':like2' => $like]);
-    $totalRows = (int)$countStmt->fetchColumn();
-
-    $stmt = $pdo->prepare(
-        "SELECT dr.driver_id, dr.license, dr.status, u.user_id, u.fullname, u.email, u.phone_no, u.profile_picture,
-                GROUP_CONCAT(DISTINCT v.plate_no SEPARATOR ', ') AS assigned_vehicles
-         $baseFrom
-         WHERE u.fullname LIKE :like1 OR dr.license LIKE :like2
-         GROUP BY dr.driver_id
-         ORDER BY FIELD(dr.status, 'Available', 'Leave', 'Inactive'), u.fullname
-         LIMIT :limit OFFSET :offset"
-    );
-    $stmt->bindValue(':like1', $like);
-    $stmt->bindValue(':like2', $like);
-    $stmt->bindValue(':limit', $perPage, PDO::PARAM_INT);
-    $stmt->bindValue(':offset', $offset, PDO::PARAM_INT);
-    $stmt->execute();
-} else {
-    $totalRows = (int)$pdo->query("SELECT COUNT(*) FROM drivers")->fetchColumn();
-
-    $stmt = $pdo->prepare(
-        "SELECT dr.driver_id, dr.license, dr.status, u.user_id, u.fullname, u.email, u.phone_no, u.profile_picture,
-                GROUP_CONCAT(DISTINCT v.plate_no SEPARATOR ', ') AS assigned_vehicles
-         $baseFrom
-         GROUP BY dr.driver_id
-         ORDER BY FIELD(dr.status, 'Available', 'Leave', 'Inactive'), u.fullname
-         LIMIT :limit OFFSET :offset"
-    );
-    $stmt->bindValue(':limit', $perPage, PDO::PARAM_INT);
-    $stmt->bindValue(':offset', $offset, PDO::PARAM_INT);
-    $stmt->execute();
-}
+$where = [];
+$params = [];
+if ($search !== '') { $where[] = '(u.fullname LIKE :like1 OR dr.license LIKE :like2)'; $like = "%{$search}%"; $params[':like1'] = $like; $params[':like2'] = $like; }
+if ($statusFilter !== '') { $where[] = 'dr.status = :status'; $params[':status'] = $statusFilter; }
+if ($vehicleFilter > 0) { $where[] = 'v.vehicle_id = :vehicle_id'; $params[':vehicle_id'] = $vehicleFilter; }
+$whereSql = $where ? 'WHERE ' . implode(' AND ', $where) : '';
+$countStmt = $pdo->prepare("SELECT COUNT(DISTINCT dr.driver_id) $baseFrom $whereSql");
+foreach ($params as $key => $value) $countStmt->bindValue($key, $value);
+$countStmt->execute();
+$totalRows = (int)$countStmt->fetchColumn();
+$stmt = $pdo->prepare(
+  "SELECT dr.driver_id, dr.license, dr.status, u.user_id, u.fullname, u.email, u.phone_no, u.profile_picture,
+      GROUP_CONCAT(DISTINCT v.plate_no SEPARATOR ', ') AS assigned_vehicles
+   $baseFrom $whereSql
+   GROUP BY dr.driver_id
+   ORDER BY FIELD(dr.status, 'Available', 'Leave', 'Inactive'), u.fullname
+   LIMIT :limit OFFSET :offset"
+);
+foreach ($params as $key => $value) $stmt->bindValue($key, $value);
+$stmt->bindValue(':limit', $perPage, PDO::PARAM_INT);
+$stmt->bindValue(':offset', $offset, PDO::PARAM_INT);
+$stmt->execute();
 $drivers = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
 $totalPages = max(1, (int)ceil($totalRows / $perPage));
@@ -203,6 +222,7 @@ $eligibleUsers = $pdo->query(
      WHERE dr.driver_id IS NULL
      ORDER BY u.fullname"
 )->fetchAll(PDO::FETCH_ASSOC);
+$filterVehicles = $pdo->query("SELECT vehicle_id, plate_no FROM vehicles ORDER BY plate_no")->fetchAll(PDO::FETCH_ASSOC);
 
 $statusCounts   = $pdo->query("SELECT status, COUNT(*) AS total FROM drivers GROUP BY status")
     ->fetchAll(PDO::FETCH_KEY_PAIR);
@@ -280,7 +300,7 @@ include 'includes/layout_header.php';
         <!-- Baris 1: Kad Statistik -->
         <div class="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-5">
           <div class="card p-5" data-href="drivers.php">
-            <div class="ta-icon-box mb-4">
+            <div class="ta-icon-box ta-icon-box-blue mb-4">
               <svg xmlns="http://www.w3.org/2000/svg" class="h-5.5 w-5.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.6"><path stroke-linecap="round" stroke-linejoin="round" d="M2.25 8.25h19.5M2.25 9h19.5m-16.5 5.25h6m-6 2.25h3m-3.75 3h15a2.25 2.25 0 002.25-2.25V6.75A2.25 2.25 0 0019.5 4.5h-15a2.25 2.25 0 00-2.25 2.25v10.5A2.25 2.25 0 004.5 19.5z" /></svg>
             </div>
             <p class="text-sm mb-1" style="color:var(--ta-muted)">Jumlah Pemandu</p>
@@ -288,7 +308,7 @@ include 'includes/layout_header.php';
           </div>
 
           <div class="card p-5" data-href="drivers.php?status=Available">
-            <div class="ta-icon-box mb-4">
+            <div class="ta-icon-box ta-icon-box-green mb-4">
               <svg xmlns="http://www.w3.org/2000/svg" class="h-5.5 w-5.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.6"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
             </div>
             <p class="text-sm mb-1" style="color:var(--ta-muted)">Boleh Bertugas</p>
@@ -296,7 +316,7 @@ include 'includes/layout_header.php';
           </div>
 
           <div class="card p-5" data-href="drivers.php?status=Leave">
-            <div class="ta-icon-box mb-4">
+            <div class="ta-icon-box ta-icon-box-purple mb-4">
               <svg xmlns="http://www.w3.org/2000/svg" class="h-5.5 w-5.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.6"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
             </div>
             <p class="text-sm mb-1" style="color:var(--ta-muted)">Cuti</p>
@@ -304,12 +324,25 @@ include 'includes/layout_header.php';
           </div>
 
           <div class="card p-5" data-href="drivers.php?status=Inactive">
-            <div class="ta-icon-box mb-4">
+            <div class="ta-icon-box ta-icon-box-orange mb-4">
               <svg xmlns="http://www.w3.org/2000/svg" class="h-5.5 w-5.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.6"><path stroke-linecap="round" stroke-linejoin="round" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" /></svg>
             </div>
             <p class="text-sm mb-1" style="color:var(--ta-muted)">Tidak Aktif</p>
             <h5 class="text-2xl font-bold"><?= $inactiveCount ?></h5>
           </div>
+        </div>
+
+        <?php $hasDriverFilters = $statusFilter !== '' || $vehicleFilter > 0; ?>
+        <div class="card p-5 mt-5">
+          <details class="rounded-xl border" style="border-color:var(--ta-border)" <?= $hasDriverFilters ? 'open' : '' ?>>
+            <summary class="cursor-pointer list-none px-4 py-3 text-sm font-semibold flex items-center justify-between gap-3"><span class="flex items-center gap-2"><svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M3.75 6.75h16.5M6.75 12h10.5m-7.5 5.25h4.5" /></svg>Penapis Lanjutan<?= $hasDriverFilters ? ' <span class="ta-badge badge badge-info">Aktif</span>' : '' ?></span><span class="text-xs text-slate-400">Status &amp; kenderaan ditugaskan</span></summary>
+            <form action="drivers.php" method="GET" class="grid grid-cols-1 sm:grid-cols-3 gap-3 px-4 pb-4">
+              <input type="hidden" name="q" value="<?= htmlspecialchars($search) ?>" />
+              <div><label class="text-xs font-medium block mb-1">Status</label><select name="status" class="select select-bordered select-sm w-full"><option value="">Semua status</option><option value="Available" <?= $statusFilter === 'Available' ? 'selected' : '' ?>>Boleh Bertugas</option><option value="Leave" <?= $statusFilter === 'Leave' ? 'selected' : '' ?>>Cuti</option><option value="Inactive" <?= $statusFilter === 'Inactive' ? 'selected' : '' ?>>Tidak Aktif</option></select></div>
+              <div><label class="text-xs font-medium block mb-1">Kenderaan</label><select name="vehicle_id" class="select select-bordered select-sm w-full"><option value="0">Semua kenderaan</option><?php foreach ($filterVehicles as $filterVehicle): ?><option value="<?= (int)$filterVehicle['vehicle_id'] ?>" <?= $vehicleFilter === (int)$filterVehicle['vehicle_id'] ? 'selected' : '' ?>><?= htmlspecialchars($filterVehicle['plate_no']) ?></option><?php endforeach; ?></select></div>
+              <div class="flex items-end gap-2"><button type="submit" class="btn btn-sm text-white border-0" style="background:var(--ta-brand)">Tapis</button><?php if ($hasDriverFilters): ?><a href="drivers.php<?= $search !== '' ? '?q=' . urlencode($search) : '' ?>" class="btn btn-sm btn-ghost">Set Semula</a><?php endif; ?></div>
+            </form>
+          </details>
         </div>
 
         <!-- Baris 2: Jadual Pemandu -->
@@ -345,7 +378,7 @@ include 'includes/layout_header.php';
                   <tr><td colspan="<?= $canManage ? 5 : 4 ?>" class="px-3 py-6 text-sm text-center text-slate-400">Tiada pemandu dijumpai.</td></tr>
                 <?php endif; ?>
                 <?php foreach ($drivers as $d): ?>
-                  <tr class="hover:bg-slate-50/70 transition-colors">
+                  <tr class="hover:bg-slate-50/70 transition-colors" data-href="view-driver.php?id=<?= (int)$d['driver_id'] ?>">
                     <td class="px-3 py-3 text-sm border-b whitespace-nowrap" style="border-color:var(--ta-border)">
                       <div class="flex items-center gap-2.5">
                         <?php
@@ -374,15 +407,9 @@ include 'includes/layout_header.php';
                     </td>
                     <?php if ($canManage): ?>
                     <td class="px-3 py-3 text-sm border-b text-center whitespace-nowrap" style="border-color:var(--ta-border)">
-                      <button type="button" class="btn btn-ghost btn-xs" title="Kemaskini"
-                        onclick='openEditModal(<?= json_encode([
-                            "driver_id" => (int)$d["driver_id"],
-                            "fullname"  => $d["fullname"],
-                            "license"   => $d["license"],
-                            "status"    => $d["status"],
-                        ], JSON_UNESCAPED_UNICODE | JSON_HEX_APOS | JSON_HEX_QUOT) ?>)'>
+                      <a href="view-driver.php?id=<?= (int)$d['driver_id'] ?>&amp;mode=edit" class="btn btn-ghost btn-xs" title="Kemaskini">
                         <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931z" /></svg>
-                      </button>
+                      </a>
                       <button type="button" class="btn btn-ghost btn-xs text-error" title="Padam"
                         onclick="openDeleteModal(<?= (int)$d['driver_id'] ?>, '<?= htmlspecialchars(addslashes($d['fullname'])) ?>')">
                         <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0" /></svg>
@@ -565,8 +592,5 @@ $extraJS = '
         })();
     </script>
 ';
-
-include 'includes/layout_header.php';
-include 'includes/top_nav.php';
 include 'includes/layout_footer.php';
 ?>

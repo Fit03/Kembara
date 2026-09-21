@@ -88,12 +88,17 @@
             if (clickableClass) el.classList.add(clickableClass);
             el.addEventListener('click', function (event) {
                 if (event.target.closest('a, button, input, select, textarea')) return;
-                window.location.href = el.dataset.href;
+                window.location.href = el.dataset.href || el.dataset.rowHref;
             });
             el.setAttribute('tabindex', '0');
             el.addEventListener('keypress', function (event) {
                 if (event.key === 'Enter') {
-                    el.click();
+                    event.preventDefault();
+                    window.location.href = el.dataset.href || el.dataset.rowHref;
+                }
+                if (event.key === ' ') {
+                    event.preventDefault();
+                    window.location.href = el.dataset.href || el.dataset.rowHref;
                 }
             });
         }
@@ -102,7 +107,7 @@
             makeClickable(card, 'clickable');
         });
 
-        document.querySelectorAll('tr[data-href]').forEach(function (row) {
+        document.querySelectorAll('tr[data-href], tr[data-row-href], li[data-href]').forEach(function (row) {
             makeClickable(row);
         });
     })();

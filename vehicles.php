@@ -232,6 +232,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $del = $pdo->prepare("DELETE FROM vehicles WHERE vehicle_id = ?");
             $del->execute([$vid]);
 
+            log_activity($pdo, $currentUserId, 'Kenderaan', 'Padam', "Kenderaan {$plateNo} telah dipadam."); 
+
             $oldRoadTaxAbsolutePath = is_string($vehicle['road_tax_document'])
               ? roadTaxAbsolutePath($vehicle['road_tax_document']) : null;
             if ($oldRoadTaxAbsolutePath && is_file($oldRoadTaxAbsolutePath)) {
@@ -276,6 +278,11 @@ if (isset($_SESSION['flash'])) {
    Data Halaman
    ========================================================== */
 $search  = trim($_GET['q'] ?? '');
+$statusFilter = $_GET['status'] ?? '';
+$driverFilter = max(0, (int)($_GET['driver_id'] ?? 0));
+$roadTaxFilter = $_GET['road_tax_status'] ?? '';
+if (!in_array($statusFilter, ['Available', 'Booked', 'Maintenance', 'Inactive'], true)) $statusFilter = '';
+if (!in_array($roadTaxFilter, ['expired', 'soon', 'current'], true)) $roadTaxFilter = '';
 $perPage = 10;
 $page    = max(1, (int)($_GET['page'] ?? 1));
 $offset  = ($page - 1) * $perPage;
@@ -285,6 +292,9 @@ function buildVehiclesPageUrl(int $p, string $search): string {
     if ($search !== '') {
         $params['q'] = $search;
     }
+  foreach (['status' => $GLOBALS['statusFilter'], 'driver_id' => $GLOBALS['driverFilter'], 'road_tax_status' => $GLOBALS['roadTaxFilter']] as $key => $value) {
+    if ($value !== '' && $value !== 0) $params[$key] = $value;
+  }
     return 'vehicles.php?' . http_build_query($params);
 }
 
@@ -301,51 +311,38 @@ $baseFrom = "FROM vehicles v
                  ORDER BY next_booking.depart_datetime ASC, next_booking.booking_id ASC
                  LIMIT 1
                )";
-
-if ($search !== '') {
-    $like = "%{$search}%";
-
-    $countStmt = $pdo->prepare("SELECT COUNT(*) $baseFrom
-        WHERE v.plate_no LIKE :like1 OR v.vehicle_name LIKE :like2 OR v.vehicle_type LIKE :like3");
-    $countStmt->execute([':like1' => $like, ':like2' => $like, ':like3' => $like]);
-    $totalRows = (int)$countStmt->fetchColumn();
-
-    $stmt = $pdo->prepare(
-        "SELECT v.*, u.fullname AS driver_name,
-          current_booking.booking_id AS active_booking_id,
-          current_booking.booking_no AS active_booking_no,
-                current_booking.workflow_stage AS active_booking_stage,
-                current_booking.depart_datetime AS active_depart_datetime,
-                current_booking.return_datetime AS active_return_datetime
-         $baseFrom
-         WHERE v.plate_no LIKE :like1 OR v.vehicle_name LIKE :like2 OR v.vehicle_type LIKE :like3
-         ORDER BY FIELD(v.status, 'Available', 'Booked', 'Maintenance', 'Inactive'), v.plate_no
-         LIMIT :limit OFFSET :offset"
-    );
-    $stmt->bindValue(':like1', $like);
-    $stmt->bindValue(':like2', $like);
-    $stmt->bindValue(':like3', $like);
-    $stmt->bindValue(':limit', $perPage, PDO::PARAM_INT);
-    $stmt->bindValue(':offset', $offset, PDO::PARAM_INT);
-    $stmt->execute();
-} else {
-    $totalRows = (int)$pdo->query("SELECT COUNT(*) FROM vehicles")->fetchColumn();
-
-    $stmt = $pdo->prepare(
-        "SELECT v.*, u.fullname AS driver_name,
-          current_booking.booking_id AS active_booking_id,
-          current_booking.booking_no AS active_booking_no,
-                current_booking.workflow_stage AS active_booking_stage,
-                current_booking.depart_datetime AS active_depart_datetime,
-                current_booking.return_datetime AS active_return_datetime
-         $baseFrom
-         ORDER BY FIELD(v.status, 'Available', 'Booked', 'Maintenance', 'Inactive'), v.plate_no
-         LIMIT :limit OFFSET :offset"
-    );
-    $stmt->bindValue(':limit', $perPage, PDO::PARAM_INT);
-    $stmt->bindValue(':offset', $offset, PDO::PARAM_INT);
-    $stmt->execute();
-}
+        $where = [];
+        $params = [];
+        if ($search !== '') {
+          $where[] = '(v.plate_no LIKE :like1 OR v.vehicle_name LIKE :like2 OR v.vehicle_type LIKE :like3)';
+          $like = "%{$search}%";
+          $params[':like1'] = $like; $params[':like2'] = $like; $params[':like3'] = $like;
+        }
+        if ($statusFilter !== '') { $where[] = 'v.status = :status'; $params[':status'] = $statusFilter; }
+        if ($driverFilter > 0) { $where[] = 'v.driver_id = :driver_id'; $params[':driver_id'] = $driverFilter; }
+        if ($roadTaxFilter === 'expired') $where[] = 'v.road_tax_expiry < CURRENT_DATE()';
+        if ($roadTaxFilter === 'soon') $where[] = 'v.road_tax_expiry BETWEEN CURRENT_DATE() AND DATE_ADD(CURRENT_DATE(), INTERVAL 30 DAY)';
+        if ($roadTaxFilter === 'current') $where[] = '(v.road_tax_expiry IS NULL OR v.road_tax_expiry > DATE_ADD(CURRENT_DATE(), INTERVAL 30 DAY))';
+        $whereSql = $where ? 'WHERE ' . implode(' AND ', $where) : '';
+        $countStmt = $pdo->prepare("SELECT COUNT(*) $baseFrom $whereSql");
+        foreach ($params as $key => $value) $countStmt->bindValue($key, $value);
+        $countStmt->execute();
+        $totalRows = (int)$countStmt->fetchColumn();
+        $stmt = $pdo->prepare(
+          "SELECT v.*, u.fullname AS driver_name,
+            current_booking.booking_id AS active_booking_id,
+            current_booking.booking_no AS active_booking_no,
+            current_booking.workflow_stage AS active_booking_stage,
+            current_booking.depart_datetime AS active_depart_datetime,
+            current_booking.return_datetime AS active_return_datetime
+           $baseFrom $whereSql
+           ORDER BY FIELD(v.status, 'Available', 'Booked', 'Maintenance', 'Inactive'), v.plate_no
+           LIMIT :limit OFFSET :offset"
+        );
+        foreach ($params as $key => $value) $stmt->bindValue($key, $value);
+        $stmt->bindValue(':limit', $perPage, PDO::PARAM_INT);
+        $stmt->bindValue(':offset', $offset, PDO::PARAM_INT);
+        $stmt->execute();
 $vehicles = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
 $totalPages = max(1, (int)ceil($totalRows / $perPage));
@@ -541,7 +538,7 @@ include 'includes/layout_header.php';
         <!-- Baris 1: Kad Statistik -->
         <div class="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-5">
           <div class="card p-5" data-href="vehicles.php">
-            <div class="ta-icon-box mb-4">
+            <div class="ta-icon-box ta-icon-box-blue mb-4">
               <svg xmlns="http://www.w3.org/2000/svg" class="h-5.5 w-5.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.6"><path stroke-linecap="round" stroke-linejoin="round" d="M8.25 18.75a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m3 0h6m-9 0H3.375a1.125 1.125 0 01-1.125-1.125V14.25m17.25 4.5a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m3 0h1.125c.621 0 1.129-.504 1.09-1.124a17.902 17.902 0 00-3.213-9.193 2.056 2.056 0 00-1.58-.86H14.25M16.5 18.75h-2.25m0-11.177v-.958c0-.568-.422-1.048-.987-1.106a48.554 48.554 0 00-10.026 0 1.106 1.106 0 00-.987 1.106v7.635m12-6.677v6.677m0 0h-12" /></svg>
             </div>
             <p class="text-sm mb-1" style="color:var(--ta-muted)">Jumlah Kenderaan</p>
@@ -549,7 +546,7 @@ include 'includes/layout_header.php';
           </div>
 
           <div class="card p-5" data-href="vehicles.php?status=Available">
-            <div class="ta-icon-box mb-4">
+            <div class="ta-icon-box ta-icon-box-green mb-4">
               <svg xmlns="http://www.w3.org/2000/svg" class="h-5.5 w-5.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.6"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
             </div>
             <p class="text-sm mb-1" style="color:var(--ta-muted)">Sedia Ada</p>
@@ -557,7 +554,7 @@ include 'includes/layout_header.php';
           </div>
 
           <div class="card p-5" data-href="vehicles.php?status=Booked">
-            <div class="ta-icon-box mb-4">
+            <div class="ta-icon-box ta-icon-box-purple mb-4">
               <svg xmlns="http://www.w3.org/2000/svg" class="h-5.5 w-5.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.6"><path stroke-linecap="round" stroke-linejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 012.25-2.25h13.5A2.25 2.25 0 0121 7.5v11.25m-18 0A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75m-18 0v-7.5A2.25 2.25 0 015.25 9h13.5A2.25 2.25 0 0121 11.25v7.5" /></svg>
             </div>
             <p class="text-sm mb-1" style="color:var(--ta-muted)">Sedang Digunakan</p>
@@ -565,12 +562,29 @@ include 'includes/layout_header.php';
           </div>
 
           <div class="card p-5" data-href="vehicles.php?status=Maintenance">
-            <div class="ta-icon-box mb-4">
+            <div class="ta-icon-box ta-icon-box-orange mb-4">
               <svg xmlns="http://www.w3.org/2000/svg" class="h-5.5 w-5.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.6"><path stroke-linecap="round" stroke-linejoin="round" d="M11.42 15.17L17.25 21A2.652 2.652 0 0021 17.25l-5.877-5.877M11.42 15.17l2.496-3.03c.317-.384.74-.626 1.208-.766M11.42 15.17l-4.655 5.653a2.548 2.548 0 11-3.586-3.586l6.837-5.63m5.108-.233c.55-.164 1.163-.188 1.743-.14a4.5 4.5 0 004.486-6.336l-3.276 3.277a3.004 3.004 0 01-2.25-2.25l3.276-3.276a4.5 4.5 0 00-6.336 4.486c.091 1.076-.071 2.264-.904 2.95l-.102.085m-1.745 1.437L5.909 7.5H4.5L2.25 3.75l1.5-1.5L7.5 4.5v1.409l4.26 4.26m-1.745 1.437l1.745-1.437m6.615 8.206L15.75 15.75M4.867 19.125h.008v.008h-.008v-.008z" /></svg>
             </div>
             <p class="text-sm mb-1" style="color:var(--ta-muted)">Penyelenggaraan</p>
             <h5 class="text-2xl font-bold"><?= $maintenanceCount ?></h5>
           </div>
+        </div>
+
+        <?php $hasVehicleFilters = $statusFilter !== '' || $driverFilter > 0 || $roadTaxFilter !== ''; ?>
+        <div class="card p-5 mt-5">
+          <details class="rounded-xl border" style="border-color:var(--ta-border)" <?= $hasVehicleFilters ? 'open' : '' ?>>
+            <summary class="cursor-pointer list-none px-4 py-3 text-sm font-semibold flex items-center justify-between gap-3">
+              <span class="flex items-center gap-2"><svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M3.75 6.75h16.5M6.75 12h10.5m-7.5 5.25h4.5" /></svg>Penapis Lanjutan<?= $hasVehicleFilters ? ' <span class="ta-badge badge badge-info">Aktif</span>' : '' ?></span>
+              <span class="text-xs text-slate-400">Status, pemandu &amp; road tax</span>
+            </summary>
+            <form action="vehicles.php" method="GET" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 px-4 pb-4">
+              <input type="hidden" name="q" value="<?= htmlspecialchars($search) ?>" />
+              <div><label class="text-xs font-medium block mb-1">Status</label><select name="status" class="select select-bordered select-sm w-full"><option value="">Semua status</option><?php foreach (['Available' => 'Sedia Ada', 'Booked' => 'Sedang Digunakan', 'Maintenance' => 'Penyelenggaraan', 'Inactive' => 'Tidak Aktif'] as $key => $label): ?><option value="<?= $key ?>" <?= $statusFilter === $key ? 'selected' : '' ?>><?= $label ?></option><?php endforeach; ?></select></div>
+              <div><label class="text-xs font-medium block mb-1">Pemandu</label><select name="driver_id" class="select select-bordered select-sm w-full"><option value="0">Semua pemandu</option><?php foreach ($driverOptions as $driverOption): ?><option value="<?= (int)$driverOption['driver_id'] ?>" <?= $driverFilter === (int)$driverOption['driver_id'] ? 'selected' : '' ?>><?= htmlspecialchars($driverOption['fullname']) ?></option><?php endforeach; ?></select></div>
+              <div><label class="text-xs font-medium block mb-1">Road tax</label><select name="road_tax_status" class="select select-bordered select-sm w-full"><option value="">Semua dokumen</option><option value="expired" <?= $roadTaxFilter === 'expired' ? 'selected' : '' ?>>Telah tamat</option><option value="soon" <?= $roadTaxFilter === 'soon' ? 'selected' : '' ?>>Tamat dalam 30 hari</option><option value="current" <?= $roadTaxFilter === 'current' ? 'selected' : '' ?>>Masih terkini</option></select></div>
+              <div class="flex items-end gap-2"><button type="submit" class="btn btn-sm text-white border-0" style="background:var(--ta-brand)">Tapis</button><?php if ($hasVehicleFilters): ?><a href="vehicles.php<?= $search !== '' ? '?q=' . urlencode($search) : '' ?>" class="btn btn-sm btn-ghost">Set Semula</a><?php endif; ?></div>
+            </form>
+          </details>
         </div>
 
         <!-- Baris 2: Jadual Kenderaan -->
@@ -616,59 +630,61 @@ include 'includes/layout_header.php';
                     $expired = $daysRemaining !== null && $daysRemaining < 0;
                     $soon    = $daysRemaining !== null && $daysRemaining >= 0 && $daysRemaining <= 30;
                   ?>
-                <tr class="hover:bg-slate-50/70 transition-colors cursor-pointer"
-                    data-row-href="view-vehicle.php?id=<?= (int)$v['vehicle_id'] ?>&amp;mode=view">
-                  <td class="px-3 py-3 text-sm border-b whitespace-nowrap" style="border-color:var(--ta-border)">
-                    <p class="mb-0 font-medium"><a href="view-vehicle.php?id=<?= (int)$v['vehicle_id'] ?>&amp;mode=view" class="link link-hover"><?= htmlspecialchars($v['plate_no']) ?></a></p>
-                    <p class="mb-0 text-xs text-slate-400"><?= htmlspecialchars($v['vehicle_name'] ?? '') ?: '—' ?></p>
-                  </td>
-                  <td class="px-3 py-3 text-sm border-b whitespace-nowrap" style="border-color:var(--ta-border)">
-                    <?= htmlspecialchars($v['vehicle_type'] ?? '—') ?>
-                    <?php if ($v['capacity']): ?><span class="text-slate-400">&middot; <?= (int)$v['capacity'] ?> penumpang</span><?php endif; ?>
-                  </td>
-                  <td class="px-3 py-3 text-sm border-b whitespace-nowrap" style="border-color:var(--ta-border)"><?= htmlspecialchars($v['driver_name'] ?? '—') ?></td>
-                  <td class="px-3 py-3 text-sm border-b whitespace-nowrap" style="border-color:var(--ta-border)">
-                    <?php if ($expired): ?>
-                      <span class="ta-badge badge badge-error">Telah Tamat (<?= abs($daysRemaining) ?> hari lalu)</span>
-                    <?php elseif ($soon): ?>
-                      <span class="ta-badge badge badge-warning"><?= $daysRemaining ?> hari lagi</span>
-                    <?php else: ?>
-                      <span class="text-slate-400 text-xs">Terkini</span>
-                    <?php endif; ?>
-                    <div class="mt-1 flex items-center gap-2 text-xs">
-                      <?php if (!empty($v['road_tax_document'])): ?>
-                        <a class="link link-primary" href="vehicles.php?road_tax=view&amp;vehicle_id=<?= (int)$v['vehicle_id'] ?>" target="_blank" rel="noopener">Lihat Dokumen</a>
-                        <a class="link link-secondary" href="vehicles.php?road_tax=download&amp;vehicle_id=<?= (int)$v['vehicle_id'] ?>">Muat Turun Dokumen</a>
+                  <tr class="hover:bg-slate-50/70 transition-colors">
+                    <td class="px-3 py-3 text-sm border-b whitespace-nowrap" style="border-color:var(--ta-border)">
+                      <p class="mb-0 font-medium"><a href="view-vehicle.php?id=<?= (int)$v['vehicle_id'] ?>&amp;mode=view" class="link link-hover"><?= htmlspecialchars($v['plate_no']) ?></a></p>
+                      <p class="mb-0 text-xs text-slate-400"><?= htmlspecialchars($v['vehicle_name'] ?? '') ?: '—' ?></p>
+                    </td>
+                    <td class="px-3 py-3 text-sm border-b whitespace-nowrap" style="border-color:var(--ta-border)">
+                      <?= htmlspecialchars($v['vehicle_type'] ?? '—') ?>
+                      <?php if ($v['capacity']): ?><span class="text-slate-400">&middot; <?= (int)$v['capacity'] ?> penumpang</span><?php endif; ?>
+                    </td>
+                    <td class="px-3 py-3 text-sm border-b whitespace-nowrap" style="border-color:var(--ta-border)"><?= htmlspecialchars($v['driver_name'] ?? '—') ?></td>
+                    <td class="px-3 py-3 text-sm border-b whitespace-nowrap" style="border-color:var(--ta-border)">
+                      <?php if ($expired): ?>
+                        <span class="ta-badge badge badge-error">Telah Tamat (<?= abs($daysRemaining) ?> hari lalu)</span>
+                      <?php elseif ($soon): ?>
+                        <span class="ta-badge badge badge-warning"><?= $daysRemaining ?> hari lagi</span>
                       <?php else: ?>
-                        <span class="text-slate-400">Tiada dokumen dimuat naik</span>
+                        <span class="text-slate-400 text-xs">Terkini</span>
                       <?php endif; ?>
-                    </div>
-                  </td>
-                  <td class="px-3 py-3 text-sm border-b text-center whitespace-nowrap" style="border-color:var(--ta-border)">
-                    <?php [$effectiveBadge, $effectiveLabel] = $activeVehicleStatus($v); ?>
-                    <?php $hasActiveBooking = !empty($v['active_booking_id']); ?>
-                    <span class="ta-badge <?= $effectiveBadge ?>"><?= htmlspecialchars($effectiveLabel) ?></span>
-                    <?php if ($hasActiveBooking): ?>
-                      <a href="view.php?id=<?= (int)$v['active_booking_id'] ?>" class="block text-xs text-primary hover:underline mt-1">
-                        <?= htmlspecialchars($v['active_booking_no']) ?>
-                        <?php if (!empty($v['active_depart_datetime'])): ?>
-                          · <?= htmlspecialchars(date('d/m/Y', strtotime($v['active_depart_datetime']))) ?>
+                      <div class="mt-1 flex items-center gap-2 text-xs">
+                        <?php if (!empty($v['road_tax_document'])): ?>
+                          <a class="link link-primary" href="vehicles.php?road_tax=view&amp;vehicle_id=<?= (int)$v['vehicle_id'] ?>" target="_blank" rel="noopener">Lihat Dokumen</a>
+                          <a class="link link-secondary" href="vehicles.php?road_tax=download&amp;vehicle_id=<?= (int)$v['vehicle_id'] ?>">Muat Turun Dokumen</a>
+                        <?php else: ?>
+                          <span class="text-slate-400">Tiada dokumen dimuat naik</span>
                         <?php endif; ?>
+                      </div>
+                    </td>
+                    <td class="px-3 py-3 text-sm border-b text-center whitespace-nowrap" style="border-color:var(--ta-border)">
+                      <?php [$effectiveBadge, $effectiveLabel] = $activeVehicleStatus($v); ?>
+                      <?php $hasActiveBooking = !empty($v['active_booking_id']); ?>
+                      <span class="ta-badge <?= $effectiveBadge ?>"><?= htmlspecialchars($effectiveLabel) ?></span>
+                      <?php if ($hasActiveBooking): ?>
+                        <a href="view.php?id=<?= (int)$v['active_booking_id'] ?>" class="block text-xs text-primary hover:underline mt-1">
+                          <?= htmlspecialchars($v['active_booking_no']) ?>
+                          <?php if (!empty($v['active_depart_datetime'])): ?>
+                            · <?= htmlspecialchars(date('d/m/Y', strtotime($v['active_depart_datetime']))) ?>
+                          <?php endif; ?>
+                        </a>
+                      <?php endif; ?>
+                    </td>
+                    <?php if ($canManage): ?>
+                    <td class="px-3 py-3 text-sm border-b text-center whitespace-nowrap" style="border-color:var(--ta-border)">
+                      <a href="view-vehicle.php?id=<?= (int)$v['vehicle_id'] ?>&amp;mode=view" class="btn btn-ghost btn-xs" title="Lihat">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M2.25 12s3.5-6.75 9.75-6.75S21.75 12 21.75 12s-3.5 6.75-9.75 6.75S2.25 12 2.25 12z" /><circle cx="12" cy="12" r="2.25" /></svg>
                       </a>
+                      <a href="view-vehicle.php?id=<?= (int)$v['vehicle_id'] ?>&amp;mode=edit" class="btn btn-ghost btn-xs" title="Kemaskini">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931z" /></svg>
+                      </a>
+                      <button type="button" class="btn btn-ghost btn-xs text-error" title="Padam"
+                        onclick="openDeleteModal(<?= (int)$v['vehicle_id'] ?>, '<?= htmlspecialchars(addslashes($v['plate_no'])) ?>')">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0" /></svg>
+                      </button>
+                    </td>
                     <?php endif; ?>
-                  </td>
-                  <?php if ($canManage): ?>
-                  <td class="px-3 py-3 text-sm border-b text-center whitespace-nowrap" style="border-color:var(--ta-border)">
-                    <a href="view-vehicle.php?id=<?= (int)$v['vehicle_id'] ?>&amp;mode=edit" class="btn btn-ghost btn-xs" title="Kemaskini">
-                      <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931z" /></svg>
-                    </a>
-                    <button type="button" class="btn btn-ghost btn-xs text-error" title="Padam"
-                      onclick="openDeleteModal(<?= (int)$v['vehicle_id'] ?>, '<?= htmlspecialchars(addslashes($v['plate_no'])) ?>')">
-                      <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0" /></svg>
-                    </button>
-                  </td>
-                  <?php endif; ?>
-                </tr>
+                  </tr>
                 <?php endforeach; ?>
               </tbody>
             </table>
